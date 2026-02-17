@@ -1,0 +1,815 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gosimov Chat Agent</title>
+  <style>
+    :root {
+      --bg-a: #f5f9ff;
+      --bg-b: #e8fff7;
+      --panel: #ffffff;
+      --line: #d8dee8;
+      --text: #1d2430;
+      --muted: #5f6d84;
+      --brand: #1570ef;
+      --ok-bg: #ebf5ff;
+      --ok-border: #7db4ff;
+      --tool-bg: #eefcf2;
+      --tool-border: #8bd89f;
+      --err-bg: #fff0f0;
+      --err-border: #ff9f9f;
+      --user-bg: #fff7e8;
+      --user-border: #f5c26b;
+    }
+    * { box-sizing: border-box; }
+    [x-cloak] { display: none !important; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background: radial-gradient(circle at top left, var(--bg-a), transparent 45%),
+                  radial-gradient(circle at top right, var(--bg-b), transparent 42%),
+                  #f7f9fc;
+      font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
+    }
+    .wrap {
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 24px 14px 40px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: 0 10px 32px rgba(22, 31, 49, 0.07);
+      overflow: hidden;
+    }
+    .top {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+      border-bottom: 1px solid var(--line);
+      flex-wrap: wrap;
+    }
+    .top h1 {
+      margin: 0;
+      font-size: 1.05rem;
+      letter-spacing: 0.3px;
+    }
+    .status {
+      margin-left: auto;
+      font-size: 0.82rem;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .tokens {
+      font-size: 0.8rem;
+      color: #36527a;
+      background: #eef4ff;
+      border: 1px solid #c9daf8;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .context-stats {
+      font-size: 0.78rem;
+      color: #4a5f82;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .session-picker {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .session-picker select {
+      min-width: 320px;
+      max-width: 420px;
+      border-radius: 8px;
+      border: 1px solid #c5cfde;
+      padding: 7px 9px;
+      font-size: 0.83rem;
+      color: #304563;
+      background: #fff;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    button {
+      appearance: none;
+      border: 1px solid #94bfff;
+      background: linear-gradient(180deg, #eff6ff, #dcecff);
+      color: #173a70;
+      border-radius: 9px;
+      padding: 8px 12px;
+      font-size: 0.84rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .button-link {
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid #94bfff;
+      background: linear-gradient(180deg, #eff6ff, #dcecff);
+      color: #173a70;
+      border-radius: 9px;
+      padding: 8px 12px;
+      font-size: 0.84rem;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .button-link.disabled {
+      opacity: 0.6;
+      pointer-events: none;
+    }
+    .stream {
+      min-height: 60vh;
+      max-height: 70vh;
+      overflow-y: auto;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+    }
+    .msg {
+      border-radius: 11px;
+      border: 1px solid;
+      padding: 10px 12px;
+      animation: in 130ms ease-out;
+    }
+    @keyframes in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    .msg .meta {
+      font-size: 0.74rem;
+      color: var(--muted);
+      margin-bottom: 6px;
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .user { background: var(--user-bg); border-color: var(--user-border); }
+    .llm { background: var(--ok-bg); border-color: var(--ok-border); }
+    .tool_result { background: var(--tool-bg); border-color: var(--tool-border); }
+    .tool_result.error { background: var(--err-bg); border-color: var(--err-border); }
+    .text { white-space: pre-wrap; font-size: 0.93rem; line-height: 1.45; }
+    .tools {
+      margin-top: 7px;
+      padding: 8px;
+      background: rgba(18, 35, 64, 0.04);
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .tool-result {
+      margin-top: 4px;
+      border: 1px solid #cdd9ec;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.65);
+      overflow: hidden;
+    }
+    .tool-result summary {
+      cursor: pointer;
+      padding: 8px 10px;
+      font-size: 0.82rem;
+      color: #334563;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      list-style: none;
+    }
+    .tool-result summary::-webkit-details-marker { display: none; }
+    .tool-result summary::before {
+      content: "+ ";
+      color: #4b6cb5;
+      font-weight: 700;
+    }
+    .tool-result[open] summary::before { content: "- "; }
+    .tool-result-body {
+      border-top: 1px solid #d6e0f0;
+      padding: 9px 10px;
+      white-space: pre-wrap;
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+    .small-spinner {
+      width: 12px;
+      height: 12px;
+      border: 2px solid #bfd2f5;
+      border-top-color: #2f6bc7;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      flex: 0 0 auto;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    form {
+      border-top: 1px solid var(--line);
+      display: flex;
+      gap: 10px;
+      padding: 28px 12px 12px;
+      position: relative;
+    }
+    .composer-status {
+      position: absolute;
+      top: 6px;
+      left: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.74rem;
+      color: #355992;
+      background: #eef4ff;
+      border: 1px solid #c9daf8;
+      border-radius: 999px;
+      padding: 2px 8px;
+    }
+    textarea {
+      flex: 1;
+      min-height: 80px;
+      border-radius: 10px;
+      border: 1px solid #c7cfdb;
+      padding: 10px;
+      font-family: inherit;
+      font-size: 0.95rem;
+      resize: vertical;
+    }
+    .hint {
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+    @media (max-width: 760px) {
+      .top { flex-wrap: wrap; }
+      .status { width: 100%; margin-left: 0; }
+      form { flex-direction: column; }
+    }
+  </style>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.9/dist/cdn.min.js"></script>
+  <script defer src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body x-data="chatAgent()" x-init="init()">
+  <div class="wrap">
+    <div class="panel">
+      <div class="top">
+        <h1>Gosimov Chat Agent</h1>
+        <button
+          hx-post="/api/sessions"
+          hx-swap="none"
+          hx-on::before-request="onSessionBeforeRequest(event)"
+          hx-on::after-request="onSessionAfterRequest(event)">
+          New Session
+        </button>
+        <form class="session-picker"
+          hx-post="/api/sessions/load"
+          hx-swap="none"
+          hx-on::before-request="onLoadBeforeRequest(event)"
+          hx-on::after-request="onLoadAfterRequest(event)">
+          <select name="session_id" x-model="selectedSessionId">
+            <option value="">Load old session...</option>
+            <template x-for="item in sessions" :key="item.id">
+              <option :value="item.id" x-text="item.id + ' · ' + item.created_at"></option>
+            </template>
+          </select>
+          <button type="submit" x-bind:disabled="!selectedSessionId">Load</button>
+        </form>
+        <form class="session-picker"
+          hx-post="/api/compact"
+          hx-swap="none"
+          hx-on::before-request="onCompactBeforeRequest(event)"
+          hx-on::after-request="onCompactAfterRequest(event)">
+          <input type="hidden" name="session_id" x-bind:value="sessionId" />
+          <button type="submit" x-bind:disabled="!sessionId || sending || compacting" x-text="compacting ? 'Compacting...' : 'Compact'"></button>
+        </form>
+        <a class="button-link" x-bind:class="!sessionId ? 'disabled' : ''" x-bind:href="sessionId ? ('/api/sessions/' + encodeURIComponent(sessionId) + '/export') : '#'">Export HTML</a>
+        <div class="tokens" x-text="tokenSummary()"></div>
+        <div class="context-stats" x-text="contextSummary"></div>
+        <div class="status" x-text="status"></div>
+      </div>
+
+      <div class="stream" x-ref="stream"></div>
+
+      <form
+        hx-post="/api/prompt"
+        hx-swap="none"
+        hx-on::before-request="onPromptBeforeRequest(event)"
+        hx-on::after-request="onPromptAfterRequest(event)">
+        <div class="composer-status" x-show="sending" x-cloak>
+          <span class="small-spinner"></span>
+          <span>thinking</span>
+        </div>
+        <input type="hidden" name="session_id" x-bind:value="sessionId" />
+        <textarea name="text" x-ref="promptInput" placeholder="Ask the agent to do something with tools (read/write files, run commands, etc.)"></textarea>
+        <button type="submit" x-bind:disabled="!sessionId || sending" x-text="sending ? 'Running...' : 'Send'"></button>
+        <button type="button" x-bind:disabled="(!sending && !compacting) || stopping" x-on:click="stopRun()" x-text="stopping ? 'Stopping...' : 'Stop'"></button>
+      </form>
+    </div>
+    <div class="hint">Messages are streamed from persisted storage events (subscriber wrapper + SSE).</div>
+  </div>
+
+  <script>
+    function chatAgent() {
+      return {
+        sessionId: "",
+        selectedSessionId: "",
+        sessions: [],
+        seenMessageIDs: new Set(),
+        source: null,
+        sending: false,
+        compacting: false,
+        stopping: false,
+        creatingSession: false,
+        status: "No session",
+        tokenInput: 0,
+        tokenOutput: 0,
+        tokenTotal: 0,
+        tokenCacheRead: 0,
+        tokenCacheWrite: 0,
+        contextSummary: "ctx: no request yet",
+        statusPollTimer: null,
+
+        init() {
+          window.chatAgent = this;
+          this.fetchSessions();
+        },
+
+        async fetchSessions() {
+          try {
+            const res = await fetch("/api/sessions");
+            if (!res.ok) return;
+            const data = await res.json();
+            this.sessions = Array.isArray(data.sessions) ? data.sessions : [];
+          } catch (_) {
+          }
+        },
+
+        async refreshContextStats() {
+          if (!this.sessionId) {
+            this.contextSummary = "ctx: no request yet";
+            return;
+          }
+
+          try {
+            const res = await fetch("/api/sessions/" + encodeURIComponent(this.sessionId) + "/context-stats");
+            if (!res.ok) {
+              return;
+            }
+
+            const data = await res.json();
+            if (!data.has_data || !data.conversation) {
+              this.contextSummary = "ctx: no request yet";
+              return;
+            }
+
+            const c = data.conversation;
+            this.contextSummary = "ctx sent " + (c.message_count || 0) +
+              " (user " + (c.user_count || 0) +
+              ", llm " + (c.llm_count || 0) +
+              ", tool " + (c.tool_count || 0) +
+              ", compact " + (c.compaction_count || 0) + ")";
+          } catch (_) {
+          }
+        },
+
+        beforeSessionRequest() {
+          this.creatingSession = true;
+          this.setStatus("Creating session...");
+        },
+
+        setStatus(msg) {
+          this.status = msg;
+        },
+
+        closeSource() {
+          if (this.source) {
+            this.source.close();
+            this.source = null;
+          }
+          if (this.statusPollTimer) {
+            clearInterval(this.statusPollTimer);
+            this.statusPollTimer = null;
+          }
+        },
+
+        async refreshSessionStatus() {
+          if (!this.sessionId) {
+            this.setStatus("No session");
+            return;
+          }
+
+          try {
+            const res = await fetch("/api/sessions/" + encodeURIComponent(this.sessionId) + "/status");
+            if (!res.ok) {
+              return;
+            }
+
+            const data = await res.json();
+            const running = !!data.running;
+            const operation = data.operation || "";
+            const turn = Number(data.turn || 0);
+            const session = data.session_id || this.sessionId;
+
+            const statusUsage = this.extractUsage(data.usage);
+            if (statusUsage.total > 0 || statusUsage.input > 0 || statusUsage.output > 0 || statusUsage.cacheRead > 0 || statusUsage.cacheWrite > 0) {
+              this.tokenInput = statusUsage.input;
+              this.tokenOutput = statusUsage.output;
+              this.tokenTotal = statusUsage.total;
+              this.tokenCacheRead = statusUsage.cacheRead;
+              this.tokenCacheWrite = statusUsage.cacheWrite;
+            }
+
+            this.sending = running && operation === "prompt";
+            this.compacting = running && operation === "compact";
+            this.setStatus("Session " + session + " · turn " + turn + (running ? (" · running " + operation) : " · idle"));
+          } catch (_) {
+          }
+        },
+
+        startStatusPolling() {
+          if (this.statusPollTimer) {
+            clearInterval(this.statusPollTimer);
+          }
+
+          this.refreshSessionStatus();
+          this.statusPollTimer = setInterval(() => {
+            this.refreshSessionStatus();
+          }, 1000);
+        },
+
+        pick(obj, lowerKey, upperKey) {
+          if (!obj || typeof obj !== "object") return undefined;
+          if (obj[lowerKey] !== undefined) return obj[lowerKey];
+          return obj[upperKey];
+        },
+
+        normalizeMessage(raw) {
+          const content = this.pick(raw, "content", "Content");
+          const toolCalls = this.pick(raw, "tool_call_requests", "ToolCallRequests");
+          const metadata = this.pick(raw, "metadata", "Metadata");
+          return {
+            id: this.pick(raw, "id", "ID") || "",
+            kind: this.pick(raw, "kind", "Kind") || "unknown",
+            content: Array.isArray(content) ? content : [],
+            toolCallRequests: Array.isArray(toolCalls) ? toolCalls : [],
+            toolCallID: this.pick(raw, "tool_call_id", "ToolCallID") || "",
+            isError: !!this.pick(raw, "is_error", "IsError"),
+            metadata: metadata && typeof metadata === "object" ? metadata : null,
+          };
+        },
+
+        extractUsage(meta) {
+          if (!meta || typeof meta !== "object") {
+            return { input: 0, output: 0, total: 0, cacheRead: 0, cacheWrite: 0 };
+          }
+
+          const usage = this.pick(meta, "usage", "Usage");
+          const src = (usage && typeof usage === "object") ? usage : meta;
+          if (!src || typeof src !== "object") {
+            return { input: 0, output: 0, total: 0, cacheRead: 0, cacheWrite: 0 };
+          }
+
+          const input = Number(this.pick(src, "input_tokens", "InputTokens") || 0);
+          const output = Number(this.pick(src, "output_tokens", "OutputTokens") || 0);
+          const cacheRead = Number(this.pick(src, "cache_read_tokens", "CacheReadTokens") || 0);
+          const cacheWrite = Number(this.pick(src, "cache_write_tokens", "CacheWriteTokens") || 0);
+          const totalRaw = Number(this.pick(src, "total_tokens", "TotalTokens") || 0);
+
+          const safeInput = Number.isFinite(input) ? input : 0;
+          const safeOutput = Number.isFinite(output) ? output : 0;
+          const safeCacheRead = Number.isFinite(cacheRead) ? cacheRead : 0;
+          const safeCacheWrite = Number.isFinite(cacheWrite) ? cacheWrite : 0;
+          const computedTotal = safeInput + safeOutput + safeCacheRead + safeCacheWrite;
+          const safeTotal = Number.isFinite(totalRaw) && totalRaw > 0 ? totalRaw : computedTotal;
+
+          return {
+            input: safeInput,
+            output: safeOutput,
+            total: safeTotal,
+            cacheRead: safeCacheRead,
+            cacheWrite: safeCacheWrite,
+          };
+        },
+
+        tokenSummary() {
+          const total = this.tokenTotal > 0 ? this.tokenTotal : (this.tokenInput + this.tokenOutput + this.tokenCacheRead + this.tokenCacheWrite);
+          if (total <= 0) {
+            return "tokens 0 total (0 in / 0 out)";
+          }
+
+          const inPct = Math.round((this.tokenInput / total) * 100);
+          const outPct = Math.round((this.tokenOutput / total) * 100);
+          const cacheReadPct = Math.round((this.tokenCacheRead / total) * 100);
+          const cacheWritePct = Math.round((this.tokenCacheWrite / total) * 100);
+          const hasCache = this.tokenCacheRead > 0 || this.tokenCacheWrite > 0;
+          if (hasCache) {
+            return "tokens " + total + " total (" + this.tokenInput + " in " + inPct + "% / " + this.tokenOutput + " out " + outPct + "%, cache r/w " + this.tokenCacheRead + "/" + this.tokenCacheWrite + " " + cacheReadPct + "%/" + cacheWritePct + "%)";
+          }
+          return "tokens " + total + " total (" + this.tokenInput + " in " + inPct + "% / " + this.tokenOutput + " out " + outPct + "%)";
+        },
+
+        textFromContent(content) {
+          if (!Array.isArray(content)) return "";
+          return content.map((part) => {
+            const type = this.pick(part, "type", "Type");
+            if (type === "text") return this.pick(part, "text", "Text") || "";
+            if (type === "image") return "[image]";
+            return "";
+          }).filter(Boolean).join("\n");
+        },
+
+        addMessage(rawMsg, replay) {
+          const msg = this.normalizeMessage(rawMsg);
+          if (msg.id && this.seenMessageIDs.has(msg.id)) {
+            return;
+          }
+
+          if (msg.id) {
+            this.seenMessageIDs.add(msg.id);
+          }
+
+          const u = this.extractUsage(msg.metadata);
+          this.tokenInput += u.input;
+          this.tokenOutput += u.output;
+          this.tokenTotal += u.total;
+          this.tokenCacheRead += u.cacheRead;
+          this.tokenCacheWrite += u.cacheWrite;
+
+          const card = document.createElement("div");
+          card.className = "msg " + msg.kind + (msg.kind === "tool_result" && msg.isError ? " error" : "");
+
+          const meta = document.createElement("div");
+          meta.className = "meta";
+          const tags = [msg.kind, msg.id || "", replay ? "replay" : "live"].filter(Boolean);
+          if (msg.toolCallID) tags.push("tool_call=" + msg.toolCallID);
+          meta.textContent = tags.join(" · ");
+          card.appendChild(meta);
+
+          const text = this.textFromContent(msg.content);
+          if (msg.kind === "tool_result") {
+            const details = document.createElement("details");
+            details.className = "tool-result";
+
+            const summary = document.createElement("summary");
+            summary.textContent = this.toolResultSummary(text, msg.isError);
+            details.appendChild(summary);
+
+            const body = document.createElement("div");
+            body.className = "tool-result-body";
+            body.textContent = text || "(no output)";
+            details.appendChild(body);
+
+            card.appendChild(details);
+          } else {
+            const body = document.createElement("div");
+            body.className = "text";
+            body.textContent = text;
+            card.appendChild(body);
+          }
+
+          if (msg.toolCallRequests.length > 0) {
+            const tools = document.createElement("div");
+            tools.className = "tools";
+            tools.textContent = msg.toolCallRequests.map((t) => {
+              const toolID = this.pick(t, "tool_id", "ToolID") || "unknown";
+              const args = this.pick(t, "arguments", "Arguments");
+              let argsText = "{}";
+              if (typeof args === "string") {
+                argsText = args;
+              } else if (args != null) {
+                try {
+                  argsText = JSON.stringify(args);
+                } catch (_) {
+                  argsText = "{}";
+                }
+              }
+              return toolID + "(" + argsText + ")";
+            }).join("\n");
+            card.appendChild(tools);
+          }
+
+          this.$refs.stream.appendChild(card);
+          this.$refs.stream.scrollTop = this.$refs.stream.scrollHeight;
+        },
+
+        toolResultSummary(text, isError) {
+          const firstLine = (text || "").split("\n")[0] || "(no output)";
+          const preview = firstLine.length > 90 ? firstLine.slice(0, 90) + "..." : firstLine;
+          return (isError ? "Tool error: " : "Tool result: ") + preview;
+        },
+
+        openSessionEvents(id) {
+          this.closeSource();
+          this.$refs.stream.innerHTML = "";
+          this.seenMessageIDs = new Set();
+          this.tokenInput = 0;
+          this.tokenOutput = 0;
+          this.tokenTotal = 0;
+          this.tokenCacheRead = 0;
+          this.tokenCacheWrite = 0;
+          this.contextSummary = "ctx: no request yet";
+          this.refreshContextStats();
+          this.startStatusPolling();
+
+          const source = new EventSource("/api/sessions/" + encodeURIComponent(id) + "/events");
+          this.source = source;
+
+          source.addEventListener("message", (event) => {
+            const payload = JSON.parse(event.data);
+            this.addMessage(payload.message, payload.replay);
+          });
+
+          source.onerror = () => {
+            this.setStatus("Session " + id + " (reconnecting...)");
+          };
+
+          source.onopen = () => {
+            this.refreshSessionStatus();
+          };
+        },
+
+        handleSessionResponse(event) {
+          this.creatingSession = false;
+          const xhr = event.detail.xhr;
+          if (!xhr || xhr.status < 200 || xhr.status >= 300) {
+            this.setStatus("Error creating session: " + (xhr ? xhr.responseText : "unknown"));
+            return;
+          }
+
+          try {
+            const data = JSON.parse(xhr.responseText);
+            this.sessionId = data.id;
+            this.selectedSessionId = data.id;
+            this.openSessionEvents(data.id);
+            this.fetchSessions();
+          } catch (_) {
+            this.setStatus("Error parsing session response");
+          }
+        },
+
+        beforeLoadRequest(event) {
+          if (!this.selectedSessionId) {
+            event.preventDefault();
+            return;
+          }
+          this.setStatus("Loading session " + this.selectedSessionId + "...");
+        },
+
+        handleLoadResponse(event) {
+          const xhr = event.detail.xhr;
+          if (!xhr || xhr.status < 200 || xhr.status >= 300) {
+            this.setStatus("Error loading session: " + (xhr ? xhr.responseText : "unknown"));
+            return;
+          }
+
+          try {
+            const data = JSON.parse(xhr.responseText);
+            this.sessionId = data.id;
+            this.selectedSessionId = data.id;
+            this.openSessionEvents(data.id);
+            this.fetchSessions();
+          } catch (_) {
+            this.setStatus("Error parsing load response");
+          }
+        },
+
+        beforePromptRequest(event) {
+          const text = (this.$refs.promptInput.value || "").trim();
+          if (!this.sessionId || this.sending || text === "") {
+            event.preventDefault();
+            return;
+          }
+
+          this.sending = true;
+        },
+
+        handlePromptResponse(event) {
+          this.sending = false;
+          this.stopping = false;
+          const xhr = event.detail.xhr;
+          if (!xhr || xhr.status < 200 || xhr.status >= 300) {
+            this.setStatus("Prompt failed: " + (xhr ? xhr.responseText : "unknown"));
+            return;
+          }
+
+          this.$refs.promptInput.value = "";
+          this.refreshContextStats();
+        },
+
+        beforeCompactRequest(event) {
+          if (!this.sessionId || this.compacting || this.sending) {
+            event.preventDefault();
+            return;
+          }
+
+          this.compacting = true;
+          this.setStatus("Compacting session " + this.sessionId + "...");
+        },
+
+        handleCompactResponse(event) {
+          this.compacting = false;
+          this.stopping = false;
+          const xhr = event.detail.xhr;
+          if (!xhr || xhr.status < 200 || xhr.status >= 300) {
+            this.setStatus("Compact failed: " + (xhr ? xhr.responseText : "unknown"));
+            return;
+          }
+
+          try {
+            const data = JSON.parse(xhr.responseText);
+            if (data.compacted) {
+              this.setStatus("Session " + this.sessionId + " compacted");
+            } else {
+              this.setStatus("Session " + this.sessionId + " compact requested (no changes)");
+            }
+          } catch (_) {
+            this.setStatus("Compact completed");
+          }
+
+          this.refreshContextStats();
+        },
+
+        async stopRun() {
+          if (!this.sessionId || this.stopping) {
+            return;
+          }
+
+          this.stopping = true;
+          this.setStatus("Stopping current operation...");
+
+          try {
+            const params = new URLSearchParams();
+            params.set("session_id", this.sessionId);
+
+            const res = await fetch("/api/stop", {
+              method: "POST",
+              headers: { "Content-Type": "application/x-www-form-urlencoded" },
+              body: params.toString(),
+            });
+
+            if (!res.ok) {
+              const text = await res.text();
+              this.setStatus("Stop failed: " + (text || "unknown"));
+              return;
+            }
+
+            const data = await res.json();
+            if (data.stopped) {
+              this.setStatus("Stop requested for " + (data.operation || "operation"));
+            } else {
+              this.setStatus("No running operation to stop");
+            }
+          } catch (err) {
+            this.setStatus("Stop failed: " + (err && err.message ? err.message : "unknown"));
+          } finally {
+            this.stopping = false;
+          }
+        },
+      };
+    }
+
+    function onSessionBeforeRequest(event) {
+      if (window.chatAgent) {
+        window.chatAgent.beforeSessionRequest(event);
+      }
+    }
+
+    function onSessionAfterRequest(event) {
+      if (window.chatAgent) {
+        window.chatAgent.handleSessionResponse(event);
+      }
+    }
+
+    function onPromptBeforeRequest(event) {
+      if (window.chatAgent) {
+        window.chatAgent.beforePromptRequest(event);
+      }
+    }
+
+    function onPromptAfterRequest(event) {
+      if (window.chatAgent) {
+        window.chatAgent.handlePromptResponse(event);
+      }
+    }
+
+    function onLoadBeforeRequest(event) {
+      if (window.chatAgent) {
+        window.chatAgent.beforeLoadRequest(event);
+      }
+    }
+
+    function onLoadAfterRequest(event) {
+      if (window.chatAgent) {
+        window.chatAgent.handleLoadResponse(event);
+      }
+    }
+
+    function onCompactBeforeRequest(event) {
+      if (window.chatAgent) {
+        window.chatAgent.beforeCompactRequest(event);
+      }
+    }
+
+    function onCompactAfterRequest(event) {
+      if (window.chatAgent) {
+        window.chatAgent.handleCompactResponse(event);
+      }
+    }
+  </script>
+</body>
+</html>

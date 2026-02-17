@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Gosimov Session {{.SessionID}}</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: "IBM Plex Sans", "Segoe UI", sans-serif; background: #f5f7fb; color: #1f2a3a; }
+    .wrap { max-width: 980px; margin: 0 auto; padding: 18px; }
+    .head { background: #fff; border: 1px solid #d8e0ee; border-radius: 12px; padding: 14px; margin-bottom: 14px; }
+    h1 { margin: 0 0 6px; font-size: 1.2rem; }
+    .meta { color: #60708a; font-size: 0.84rem; }
+    .msg { background: #fff; border: 1px solid #d8e0ee; border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+    .msg.user { border-left: 4px solid #e8b255; }
+    .msg.llm { border-left: 4px solid #67a0ff; }
+    .msg.tool_result { border-left: 4px solid #58c782; }
+    .msg.compaction { border-left: 4px solid #dc8a33; }
+    .msg-head { color: #5f6f87; font-size: 0.78rem; margin-bottom: 6px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .pill { background: #edf3ff; border: 1px solid #ccdbff; border-radius: 999px; padding: 1px 8px; }
+    .text { white-space: pre-wrap; font-size: 0.93rem; line-height: 1.46; }
+    .tools { margin-top: 8px; padding: 7px 9px; background: #f3f6fb; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8rem; white-space: pre-wrap; }
+    .error { color: #b42318; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="head">
+      <h1>Gosimov Session {{.SessionID}}</h1>
+      <div class="meta">Created: {{fmtTime .CreatedAt}} · Exported: {{fmtTime .ExportedAt}} · Messages: {{len .Messages}}</div>
+    </div>
+    {{range .Messages}}
+    <article class="msg {{.Kind}}">
+      <div class="msg-head">
+        <span class="pill">{{.Kind}}</span>
+        {{if .ToolCallID}}<span>tool_call={{.ToolCallID}}</span>{{end}}
+        {{if .IsError}}<span class="error">ERROR</span>{{end}}
+        <span>{{fmtTime .CreatedAt}}</span>
+      </div>
+      {{if .Text}}<div class="text">{{.Text}}</div>{{end}}
+      {{if .ToolCalls}}<div class="tools">{{range .ToolCalls}}{{.}}
+{{end}}</div>{{end}}
+    </article>
+    {{end}}
+  </div>
+</body>
+</html>

@@ -1,0 +1,16 @@
+all: false
+packages:
+  github.com/slok/gankler/pkg/tool:
+    interfaces:
+      Tool:
+        config:
+          dir: "pkg/tool/toolmock"
+          filename: "mocks.go"
+          pkgname: "toolmock"
+  github.com/slok/gankler/pkg/tool/shell:
+    interfaces:
+      Executor:
+        config:
+          dir: "pkg/tool/shell/shellmock"
+          filename: "mocks.go"
+          pkgname: "shellmock"

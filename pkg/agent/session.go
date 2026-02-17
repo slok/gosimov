@@ -1,0 +1,543 @@
+package agent
+
+import (
+	"context"
+	"fmt"
+	"sync"
+	"time"
+
+	"github.com/slok/gosimov/internal/utils/id"
+	agentcontext "github.com/slok/gosimov/pkg/agent/context"
+	"github.com/slok/gosimov/pkg/llm"
+	"github.com/slok/gosimov/pkg/model"
+	"github.com/slok/gosimov/pkg/pkgerrors"
+	"github.com/slok/gosimov/pkg/store"
+	"github.com/slok/gosimov/pkg/tool"
+)
+
+// SessionConfig configures a [Session].
+type SessionConfig struct {
+	// Provider is the LLM to call (required).
+	Provider llm.Provider
+	// SystemPrompt is sent to the LLM as the system instruction (optional).
+	SystemPrompt string
+	// Tools available for the LLM to call (optional).
+	Tools []tool.Tool
+	// MaxIterations limits how many LLM calls each turn can make.
+	// 0 means no limit.
+	MaxIterations int
+	// DisablePromptCache disables provider-side prompt caching.
+	// By default prompt caching is enabled.
+	DisablePromptCache bool
+	// SessionRepository persists session identity (optional).
+	// If set, the session is stored on creation via [store.SessionRepository.CreateSession].
+	SessionRepository store.SessionRepository
+	// MessageRepository persists messages (optional).
+	// If set, each message is persisted individually as it is produced:
+	// user messages before the turn, LLM responses and tool results during the turn.
+	MessageRepository store.MessageRepository
+	// Compactor manages context compaction within the agent loop (optional).
+	// If set, it runs on every LLM call within a turn before the context processor.
+	// It may create compaction checkpoints and filters messages based on those checkpoints.
+	Compactor agentcontext.Compactor
+	// ContextProcessor transforms messages before each LLM call (optional).
+	// If set, it is called on every LLM call within a turn (including iterations
+	// after tool results), after the compactor. The full conversation history is
+	// never mutated — only the messages sent to the LLM go through the processor.
+	ContextProcessor agentcontext.Processor
+}
+
+func (c *SessionConfig) defaults() error {
+	if c.Provider == nil {
+		return fmt.Errorf("provider is required: %w", pkgerrors.ErrNotValid)
+	}
+
+	if c.Compactor == nil {
+		c.Compactor = agentcontext.NoopCompactor{}
+	}
+
+	return nil
+}
+
+// LoadSessionConfig configures loading an existing persisted [Session].
+type LoadSessionConfig struct {
+	// SessionID identifies the existing session to load (required).
+	SessionID string
+	// Provider is the LLM to call (required).
+	Provider llm.Provider
+	// SystemPrompt is sent to the LLM as the system instruction (optional).
+	SystemPrompt string
+	// Tools available for the LLM to call (optional).
+	Tools []tool.Tool
+	// MaxIterations limits how many LLM calls each turn can make.
+	// 0 means no limit.
+	MaxIterations int
+	// DisablePromptCache disables provider-side prompt caching.
+	// By default prompt caching is enabled.
+	DisablePromptCache bool
+	// SessionRepository is used to load the existing session identity (required).
+	SessionRepository store.SessionRepository
+	// MessageRepository preloads message history if set (optional).
+	MessageRepository store.MessageRepository
+	// Compactor manages context compaction within the agent loop (optional).
+	Compactor agentcontext.Compactor
+	// ContextProcessor transforms messages before each LLM call (optional).
+	ContextProcessor agentcontext.Processor
+}
+
+// SessionOperation identifies which session operation is currently running.
+type SessionOperation string
+
+const (
+	SessionOperationNone     SessionOperation = ""
+	SessionOperationPrompt   SessionOperation = "prompt"
+	SessionOperationContinue SessionOperation = "continue"
+	SessionOperationCompact  SessionOperation = "compact"
+)
+
+// SessionState is a snapshot of the current session runtime state.
+type SessionState struct {
+	Session      model.Session
+	Running      bool
+	Operation    SessionOperation
+	Turn         int
+	MessageCount int
+	Usage        model.Usage
+}
+
+func (c *LoadSessionConfig) defaults() error {
+	if c.SessionID == "" {
+		return fmt.Errorf("session id is required: %w", pkgerrors.ErrNotValid)
+	}
+
+	if c.Provider == nil {
+		return fmt.Errorf("provider is required: %w", pkgerrors.ErrNotValid)
+	}
+
+	if c.SessionRepository == nil {
+		return fmt.Errorf("session repository is required: %w", pkgerrors.ErrNotValid)
+	}
+
+	if c.Compactor == nil {
+		c.Compactor = agentcontext.NoopCompactor{}
+	}
+
+	return nil
+}
+
+// Session manages a multi-turn conversation with an LLM.
+//
+// It accumulates messages across turns, tracks total usage, and delegates
+// each turn to [runTurn]. A session is the stateful wrapper that makes
+// multi-turn conversations ergonomic.
+//
+// Session is safe for concurrent access, but only one [Prompt] or [Continue]
+// call can be active at a time — concurrent calls return [ErrSessionBusy].
+type Session struct {
+	mu                 sync.Mutex
+	session            model.Session
+	provider           llm.Provider
+	systemPrompt       string
+	disablePromptCache bool
+	tools              []tool.Tool
+	maxIterations      int
+	messages           []model.Message
+	usage              model.Usage
+	running            bool
+	runningOperation   SessionOperation
+	sessionRepo        store.SessionRepository
+	messageRepo        store.MessageRepository
+	compactor          agentcontext.Compactor
+	contextProcessor   agentcontext.Processor
+}
+
+// NewSession creates a new session.
+//
+// If [SessionConfig.SessionRepository] is set, the session is persisted on creation.
+func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
+	if err := cfg.defaults(); err != nil {
+		return nil, fmt.Errorf("invalid session config: %w", err)
+	}
+
+	sess := model.Session{
+		ID:        id.NewULID(),
+		CreatedAt: time.Now(),
+	}
+
+	if cfg.SessionRepository != nil {
+		if err := cfg.SessionRepository.CreateSession(ctx, sess); err != nil {
+			return nil, fmt.Errorf("persisting session: %w", err)
+		}
+	}
+
+	s := &Session{
+		session:            sess,
+		provider:           cfg.Provider,
+		systemPrompt:       cfg.SystemPrompt,
+		disablePromptCache: cfg.DisablePromptCache,
+		tools:              cfg.Tools,
+		maxIterations:      cfg.MaxIterations,
+		sessionRepo:        cfg.SessionRepository,
+		messageRepo:        cfg.MessageRepository,
+		compactor:          cfg.Compactor,
+		contextProcessor:   cfg.ContextProcessor,
+	}
+
+	return s, nil
+}
+
+// LoadSession loads an existing persisted session.
+//
+// The session identity is loaded from SessionRepository. If MessageRepository is
+// set, historical messages are preloaded into memory before the returned session
+// can continue prompting.
+func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
+	if err := cfg.defaults(); err != nil {
+		return nil, fmt.Errorf("invalid load session config: %w", err)
+	}
+
+	existing, err := cfg.SessionRepository.GetSession(ctx, cfg.SessionID)
+	if err != nil {
+		return nil, fmt.Errorf("loading existing session: %w", err)
+	}
+
+	s := &Session{
+		session:            *existing,
+		provider:           cfg.Provider,
+		systemPrompt:       cfg.SystemPrompt,
+		disablePromptCache: cfg.DisablePromptCache,
+		tools:              cfg.Tools,
+		maxIterations:      cfg.MaxIterations,
+		sessionRepo:        cfg.SessionRepository,
+		messageRepo:        cfg.MessageRepository,
+		compactor:          cfg.Compactor,
+		contextProcessor:   cfg.ContextProcessor,
+	}
+
+	if cfg.MessageRepository != nil {
+		msgs, err := listAllMessages(ctx, cfg.MessageRepository, existing.ID)
+		if err != nil {
+			return nil, fmt.Errorf("loading existing messages: %w", err)
+		}
+		s.messages = msgs
+	}
+
+	return s, nil
+}
+
+func listAllMessages(ctx context.Context, repo store.MessageRepository, sessionID string) ([]model.Message, error) {
+	all := []model.Message{}
+	opts := store.ListOpts{Limit: 100}
+
+	for {
+		result, err := repo.ListMessages(ctx, sessionID, opts)
+		if err != nil {
+			return nil, err
+		}
+
+		all = append(all, result.Items...)
+
+		if result.NextCursor == "" {
+			return all, nil
+		}
+
+		opts.Cursor = result.NextCursor
+	}
+}
+
+// Prompt sends a user message and runs a full turn.
+//
+// It builds a [model.MessageKindUser] message from the given content,
+// appends it to the conversation, runs a turn via [runTurn], and
+// appends all generated messages to the session history.
+func (s *Session) Prompt(ctx context.Context, content []model.ContentPart) (*TurnResult, error) {
+	if err := s.beginRun(SessionOperationPrompt); err != nil {
+		return nil, err
+	}
+	defer s.endRun()
+
+	// Build the user message.
+	userMsg := model.Message{
+		ID:        id.NewULID(),
+		Kind:      model.MessageKindUser,
+		Content:   content,
+		CreatedAt: time.Now(),
+	}
+
+	// Persist user message eagerly (before running the turn).
+	if s.messageRepo != nil {
+		if err := s.messageRepo.StoreMessages(ctx, s.session.ID, []model.Message{userMsg}); err != nil {
+			return nil, fmt.Errorf("persisting user message: %w", err)
+		}
+	}
+
+	s.mu.Lock()
+	s.messages = append(s.messages, userMsg)
+	messages := make([]model.Message, len(s.messages))
+	copy(messages, s.messages)
+	s.mu.Unlock()
+
+	return s.runTurn(ctx, messages)
+}
+
+// Continue resumes the conversation from the current message history.
+//
+// Use this for retries after errors, or after manually appending messages
+// via [AppendMessage]. It calls [runTurn] with the current messages
+// without adding a new user message.
+func (s *Session) Continue(ctx context.Context) (*TurnResult, error) {
+	if err := s.beginRun(SessionOperationContinue); err != nil {
+		return nil, err
+	}
+	defer s.endRun()
+
+	s.mu.Lock()
+	if len(s.messages) == 0 {
+		s.mu.Unlock()
+		return nil, fmt.Errorf("cannot continue: no messages in session: %w", pkgerrors.ErrNotValid)
+	}
+
+	messages := make([]model.Message, len(s.messages))
+	copy(messages, s.messages)
+	s.mu.Unlock()
+
+	return s.runTurn(ctx, messages)
+}
+
+// runTurn executes a turn and updates session state with the results.
+//
+// Each message produced during the turn (LLM responses and tool results) is
+// persisted individually via the onMessages callback as it is created.
+func (s *Session) runTurn(ctx context.Context, messages []model.Message) (*TurnResult, error) {
+	result, err := runTurn(ctx, turnConfig{
+		session:            s.session,
+		provider:           s.provider,
+		systemPrompt:       s.systemPrompt,
+		disablePromptCache: s.disablePromptCache,
+		messages:           messages,
+		tools:              s.tools,
+		maxIterations:      s.maxIterations,
+		onMessages:         s.persistMessages,
+		compactor:          s.compactor,
+		contextProcessor:   s.contextProcessor,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	s.mu.Lock()
+	s.messages = append(s.messages, result.Messages...)
+	s.usage = addUsage(s.usage, &model.MessageMetadata{Usage: &result.Usage})
+	s.mu.Unlock()
+
+	return result, nil
+}
+
+// persistMessages is the onMessagesFn callback that persists messages to the store.
+// It is only wired when a MessageRepository is configured.
+func (s *Session) persistMessages(ctx context.Context, msgs []model.Message) error {
+	if s.messageRepo == nil {
+		return nil
+	}
+
+	return s.messageRepo.StoreMessages(ctx, s.session.ID, msgs)
+}
+
+// Messages returns a copy of the conversation history.
+func (s *Session) Messages() []model.Message {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	msgs := make([]model.Message, len(s.messages))
+	copy(msgs, s.messages)
+
+	return msgs
+}
+
+// Session returns the session identity (ID and creation time).
+func (s *Session) Session() model.Session {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.session
+}
+
+// Usage returns the aggregated token usage across all turns in the session.
+func (s *Session) Usage() model.Usage {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	return s.usage
+}
+
+// State returns a thread-safe snapshot of the session runtime state.
+func (s *Session) State() SessionState {
+	s.mu.Lock()
+	session := s.session
+	usage := s.usage
+	running := s.running
+	operation := s.runningOperation
+	messages := make([]model.Message, len(s.messages))
+	copy(messages, s.messages)
+	s.mu.Unlock()
+
+	return SessionState{
+		Session:      session,
+		Running:      running,
+		Operation:    operation,
+		Turn:         len(model.TurnsFromMessages(messages)),
+		MessageCount: len(messages),
+		Usage:        usage,
+	}
+}
+
+// SetSystemPrompt changes the system prompt for subsequent turns.
+// Returns [ErrSessionBusy] if a turn or compaction is running.
+func (s *Session) SetSystemPrompt(v string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running {
+		return pkgerrors.ErrSessionBusy
+	}
+
+	s.systemPrompt = v
+
+	return nil
+}
+
+// SetProvider changes the LLM provider for subsequent turns.
+// Returns [ErrSessionBusy] if a turn or compaction is running.
+func (s *Session) SetProvider(p llm.Provider) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running {
+		return pkgerrors.ErrSessionBusy
+	}
+
+	s.provider = p
+
+	return nil
+}
+
+// SetDisablePromptCache changes prompt-cache behavior for subsequent turns.
+// Returns [ErrSessionBusy] if a turn or compaction is running.
+func (s *Session) SetDisablePromptCache(disable bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running {
+		return pkgerrors.ErrSessionBusy
+	}
+
+	s.disablePromptCache = disable
+
+	return nil
+}
+
+// SetTools changes the available tools for subsequent turns.
+// Returns [ErrSessionBusy] if a turn or compaction is running.
+func (s *Session) SetTools(tools []tool.Tool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running {
+		return pkgerrors.ErrSessionBusy
+	}
+
+	s.tools = tools
+
+	return nil
+}
+
+// AppendMessage adds a message to the conversation history.
+//
+// Use this to inject messages (e.g., a user follow-up) before calling [Continue].
+func (s *Session) AppendMessage(m model.Message) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.messages = append(s.messages, m)
+}
+
+// ReplaceMessages replaces the entire conversation history.
+//
+// The provided slice is copied — the session does not retain a reference to it.
+func (s *Session) ReplaceMessages(msgs []model.Message) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.messages = make([]model.Message, len(msgs))
+	copy(s.messages, msgs)
+}
+
+// Compact forces a context compaction between turns.
+//
+// It delegates to [runCompaction] with [CompactOptions.Force] set to true.
+// If the compactor creates a compaction checkpoint message, it is appended to the
+// conversation history and persisted (persistence happens inside [runCompaction]).
+//
+// Returns the [CompactResult] so the caller can inspect the compaction message
+// and usage. If no compactor is configured (NoopCompactor), the result will have
+// a nil Message and the full message list.
+//
+// Cannot be called while a turn is running — returns [ErrSessionBusy].
+func (s *Session) Compact(ctx context.Context) (*agentcontext.CompactResult, error) {
+	if err := s.beginRun(SessionOperationCompact); err != nil {
+		return nil, err
+	}
+	defer s.endRun()
+
+	s.mu.Lock()
+	messages := make([]model.Message, len(s.messages))
+	copy(messages, s.messages)
+	s.mu.Unlock()
+
+	result, err := runCompaction(ctx, compactionConfig{
+		compactor:  s.compactor,
+		messages:   messages,
+		onMessages: s.persistMessages,
+		opts:       agentcontext.CompactOptions{Force: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Message != nil {
+		s.mu.Lock()
+		s.messages = append(s.messages, *result.Message)
+		s.usage = addUsage(s.usage, &model.MessageMetadata{Usage: &result.Usage})
+		s.mu.Unlock()
+	}
+
+	return result, nil
+}
+
+// Reset clears the conversation history and usage, returning the session
+// to its initial state. Configuration (provider, system prompt, tools) is preserved.
+func (s *Session) Reset() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.messages = nil
+	s.usage = model.Usage{}
+}
+
+func (s *Session) beginRun(op SessionOperation) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.running {
+		return pkgerrors.ErrSessionBusy
+	}
+
+	s.running = true
+	s.runningOperation = op
+
+	return nil
+}
+
+func (s *Session) endRun() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	s.running = false
+	s.runningOperation = SessionOperationNone
+}
