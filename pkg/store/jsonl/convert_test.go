@@ -187,7 +187,6 @@ func TestMessageRoundTrip(t *testing.T) {
 						CacheWriteTokens: 30,
 						TotalTokens:      380,
 						ReasoningTokens:  20,
-						CostUSD:          0.005,
 					},
 				},
 				CreatedAt: time.Date(2026, 2, 20, 16, 0, 7, 0, time.UTC),

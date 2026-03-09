@@ -655,7 +655,7 @@ func TestRunTurn(t *testing.T) {
 								},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonToolUse,
-									Usage:      &model.Usage{InputTokens: 100, OutputTokens: 50, CostUSD: 0.01},
+									Usage:      &model.Usage{InputTokens: 100, OutputTokens: 50},
 								},
 							},
 						}, nil
@@ -667,7 +667,7 @@ func TestRunTurn(t *testing.T) {
 							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "done"}},
 							Metadata: &model.MessageMetadata{
 								StopReason: model.StopReasonComplete,
-								Usage:      &model.Usage{InputTokens: 200, OutputTokens: 100, CostUSD: 0.02},
+								Usage:      &model.Usage{InputTokens: 200, OutputTokens: 100},
 							},
 						},
 					}, nil
@@ -692,7 +692,6 @@ func TestRunTurn(t *testing.T) {
 
 				assert.Equal(300, result.Usage.InputTokens)
 				assert.Equal(150, result.Usage.OutputTokens)
-				assert.InDelta(0.03, result.Usage.CostUSD, 0.001)
 			},
 		},
 

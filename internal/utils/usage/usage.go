@@ -12,10 +12,6 @@ func Normalize(raw model.Usage, inputIncludesCacheRead bool) model.Usage {
 	cacheRead := nonNegative(raw.CacheReadTokens)
 	cacheWrite := nonNegative(raw.CacheWriteTokens)
 	reasoning := nonNegative(raw.ReasoningTokens)
-	cost := raw.CostUSD
-	if cost < 0 {
-		cost = 0
-	}
 
 	if inputIncludesCacheRead {
 		input -= cacheRead
@@ -30,7 +26,6 @@ func Normalize(raw model.Usage, inputIncludesCacheRead bool) model.Usage {
 		CacheReadTokens:  cacheRead,
 		CacheWriteTokens: cacheWrite,
 		ReasoningTokens:  reasoning,
-		CostUSD:          cost,
 	}
 
 	u.TotalTokens = Total(u)
@@ -46,7 +41,6 @@ func Add(a model.Usage, b model.Usage) model.Usage {
 		CacheReadTokens:  nonNegative(a.CacheReadTokens) + nonNegative(b.CacheReadTokens),
 		CacheWriteTokens: nonNegative(a.CacheWriteTokens) + nonNegative(b.CacheWriteTokens),
 		ReasoningTokens:  nonNegative(a.ReasoningTokens) + nonNegative(b.ReasoningTokens),
-		CostUSD:          nonNegativeFloat(a.CostUSD) + nonNegativeFloat(b.CostUSD),
 	}
 
 	u.TotalTokens = Total(u)
@@ -66,14 +60,6 @@ func Total(u model.Usage) int {
 }
 
 func nonNegative(v int) int {
-	if v < 0 {
-		return 0
-	}
-
-	return v
-}
-
-func nonNegativeFloat(v float64) float64 {
 	if v < 0 {
 		return 0
 	}
