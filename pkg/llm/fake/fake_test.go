@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/llm/fake"
 	"github.com/slok/gosimov/pkg/model"
@@ -64,35 +67,23 @@ func TestProviderCall(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			p := fake.NewProvider(test.fn)
+			assert := assert.New(t)
+			require := require.New(t)
 
+			p := fake.NewProvider(test.fn)
 			got, err := p.Call(context.Background(), test.req)
 
 			if test.expErr {
-				if err == nil {
-					t.Error("expected error, got nil")
-				}
+				require.Error(err)
 				return
 			}
 
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
-			}
-
-			if got.Message.Kind != test.expResp.Message.Kind {
-				t.Errorf("expected kind %q, got %q", test.expResp.Message.Kind, got.Message.Kind)
-			}
-
-			if len(got.Message.Content) != len(test.expResp.Message.Content) {
-				t.Errorf("expected %d content parts, got %d", len(test.expResp.Message.Content), len(got.Message.Content))
-				return
-			}
+			require.NoError(err)
+			assert.Equal(test.expResp.Message.Kind, got.Message.Kind)
+			require.Len(got.Message.Content, len(test.expResp.Message.Content))
 
 			for i, part := range got.Message.Content {
-				if part.Text != test.expResp.Message.Content[i].Text {
-					t.Errorf("content[%d]: expected text %q, got %q", i, test.expResp.Message.Content[i].Text, part.Text)
-				}
+				assert.Equal(test.expResp.Message.Content[i].Text, part.Text)
 			}
 		})
 	}
@@ -143,46 +134,48 @@ func TestEchoProviderCall(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			p := fake.NewEchoProvider()
-
 			got, err := p.Call(context.Background(), test.req)
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(err)
 
-			if got.Message.Kind != model.MessageKindLLM {
-				t.Errorf("expected kind %q, got %q", model.MessageKindLLM, got.Message.Kind)
-			}
-
-			if got.Message.Metadata == nil || got.Message.Metadata.StopReason != model.StopReasonComplete {
-				t.Error("expected StopReasonComplete in metadata")
-			}
+			assert.Equal(model.MessageKindLLM, got.Message.Kind)
+			require.NotNil(got.Message.Metadata)
+			assert.Equal(model.StopReasonComplete, got.Message.Metadata.StopReason)
 
 			if test.expHasContent {
-				if len(got.Message.Content) == 0 {
-					t.Fatal("expected content, got none")
-				}
-				if got.Message.Content[0].Text != test.expContentText {
-					t.Errorf("expected text %q, got %q", test.expContentText, got.Message.Content[0].Text)
-				}
+				require.NotEmpty(got.Message.Content)
+				assert.Equal(test.expContentText, got.Message.Content[0].Text)
 			} else {
-				if len(got.Message.Content) != 0 {
-					t.Errorf("expected no content, got %d parts", len(got.Message.Content))
-				}
+				assert.Empty(got.Message.Content)
 			}
 		})
 	}
 }
 
 func TestProviderModelInfo(t *testing.T) {
-	exp := model.LLMModelInfo{ID: "fake-model", ContextWindow: 1234, MaxOutputTokens: 99}
+	tests := map[string]struct {
+		modelInfo    model.LLMModelInfo
+		expModelInfo model.LLMModelInfo
+	}{
+		"Should return the configured model info.": {
+			modelInfo:    model.LLMModelInfo{ID: "fake-model", ContextWindow: 1234, MaxOutputTokens: 99},
+			expModelInfo: model.LLMModelInfo{ID: "fake-model", ContextWindow: 1234, MaxOutputTokens: 99},
+		},
+	}
 
-	p := fake.NewProviderWithModelInfo(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
-		return &llm.Response{Message: model.Message{Kind: model.MessageKindLLM}}, nil
-	}, exp)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
 
-	got := p.ModelInfo()
-	if got.ID != exp.ID || got.ContextWindow != exp.ContextWindow || got.MaxOutputTokens != exp.MaxOutputTokens {
-		t.Fatalf("expected model info %+v, got %+v", exp, got)
+			p := fake.NewProviderWithModelInfo(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+				return &llm.Response{Message: model.Message{Kind: model.MessageKindLLM}}, nil
+			}, test.modelInfo)
+
+			got := p.ModelInfo()
+			assert.Equal(test.expModelInfo, got)
+		})
 	}
 }

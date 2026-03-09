@@ -74,8 +74,7 @@ func TestRunTurn(t *testing.T) {
 
 				return turnConfig{
 					provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
-						t.Fatal("provider should not be called when tool IDs are invalid")
-						return nil, nil
+						return nil, fmt.Errorf("provider should not be called when tool IDs are invalid")
 					}),
 					messages: []model.Message{
 						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
@@ -109,14 +108,15 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 
-				assert.Equal(t, "hello back", result.Message.Content[0].Text)
-				assert.Equal(t, model.MessageKindLLM, result.Message.Kind)
-				assert.NotEmpty(t, result.Message.ID)
-				assert.False(t, result.Message.CreatedAt.IsZero())
-				assert.Len(t, result.Messages, 1)
-				assert.Equal(t, 10, result.Usage.InputTokens)
-				assert.Equal(t, 5, result.Usage.OutputTokens)
+				assert.Equal("hello back", result.Message.Content[0].Text)
+				assert.Equal(model.MessageKindLLM, result.Message.Kind)
+				assert.NotEmpty(result.Message.ID)
+				assert.False(result.Message.CreatedAt.IsZero())
+				assert.Len(result.Messages, 1)
+				assert.Equal(10, result.Usage.InputTokens)
+				assert.Equal(5, result.Usage.OutputTokens)
 			},
 		},
 
@@ -142,8 +142,9 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 
-				assert.Equal(t, "be helpful", result.Message.Content[0].Text)
+				assert.Equal("be helpful", result.Message.Content[0].Text)
 			},
 		},
 
@@ -226,8 +227,9 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 
-				assert.Equal(t, "truncated", result.Message.Content[0].Text)
+				assert.Equal("truncated", result.Message.Content[0].Text)
 			},
 		},
 
@@ -300,19 +302,20 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 
-				assert.Equal(t, "The answer is 4", result.Message.Content[0].Text)
+				assert.Equal("The answer is 4", result.Message.Content[0].Text)
 				// Messages: LLM (tool use) + tool result + LLM (complete) = 3.
-				assert.Len(t, result.Messages, 3)
+				assert.Len(result.Messages, 3)
 				// Check tool result message.
-				assert.Equal(t, model.MessageKindToolResult, result.Messages[1].Kind)
-				assert.Equal(t, "tc1", result.Messages[1].ToolCallID)
-				assert.Equal(t, "4", result.Messages[1].Content[0].Text)
-				assert.False(t, result.Messages[1].IsError)
-				assert.NotEmpty(t, result.Messages[1].ID)
+				assert.Equal(model.MessageKindToolResult, result.Messages[1].Kind)
+				assert.Equal("tc1", result.Messages[1].ToolCallID)
+				assert.Equal("4", result.Messages[1].Content[0].Text)
+				assert.False(result.Messages[1].IsError)
+				assert.NotEmpty(result.Messages[1].ID)
 				// Usage should be aggregated.
-				assert.Equal(t, 30, result.Usage.InputTokens)
-				assert.Equal(t, 15, result.Usage.OutputTokens)
+				assert.Equal(30, result.Usage.InputTokens)
+				assert.Equal(15, result.Usage.OutputTokens)
 			},
 		},
 
@@ -365,14 +368,15 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 
-				assert.Equal(t, "done", result.Message.Content[0].Text)
+				assert.Equal("done", result.Message.Content[0].Text)
 				// Messages: LLM (tool use) + tool result a + tool result b + LLM (complete) = 4.
-				assert.Len(t, result.Messages, 4)
-				assert.Equal(t, "tc1", result.Messages[1].ToolCallID)
-				assert.Equal(t, "result-a", result.Messages[1].Content[0].Text)
-				assert.Equal(t, "tc2", result.Messages[2].ToolCallID)
-				assert.Equal(t, "result-b", result.Messages[2].Content[0].Text)
+				assert.Len(result.Messages, 4)
+				assert.Equal("tc1", result.Messages[1].ToolCallID)
+				assert.Equal("result-a", result.Messages[1].Content[0].Text)
+				assert.Equal("tc2", result.Messages[2].ToolCallID)
+				assert.Equal("result-b", result.Messages[2].Content[0].Text)
 			},
 		},
 
@@ -433,10 +437,11 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 
-				assert.Equal(t, "all done", result.Message.Content[0].Text)
+				assert.Equal("all done", result.Message.Content[0].Text)
 				// Messages: LLM1 + tool1 + LLM2 + tool2 + LLM3 = 5.
-				assert.Len(t, result.Messages, 5)
+				assert.Len(result.Messages, 5)
 			},
 		},
 
@@ -481,13 +486,14 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 
-				assert.Equal(t, "I see the error", result.Message.Content[0].Text)
+				assert.Equal("I see the error", result.Message.Content[0].Text)
 				// Messages: LLM (tool use) + error tool result + LLM (complete) = 3.
-				assert.Len(t, result.Messages, 3)
-				assert.True(t, result.Messages[1].IsError)
-				assert.Equal(t, "disk full", result.Messages[1].Content[0].Text)
-				assert.Equal(t, "tc1", result.Messages[1].ToolCallID)
+				assert.Len(result.Messages, 3)
+				assert.True(result.Messages[1].IsError)
+				assert.Equal("disk full", result.Messages[1].Content[0].Text)
+				assert.Equal("tc1", result.Messages[1].ToolCallID)
 			},
 		},
 
@@ -529,11 +535,12 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 
-				assert.Equal(t, "tool was missing", result.Message.Content[0].Text)
-				assert.Len(t, result.Messages, 3)
-				assert.True(t, result.Messages[1].IsError)
-				assert.Contains(t, result.Messages[1].Content[0].Text, "not found")
+				assert.Equal("tool was missing", result.Message.Content[0].Text)
+				assert.Len(result.Messages, 3)
+				assert.True(result.Messages[1].IsError)
+				assert.Contains(result.Messages[1].Content[0].Text, "not found")
 			},
 		},
 
@@ -627,9 +634,10 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 
-				assert.Equal(t, "no metadata", result.Message.Content[0].Text)
-				assert.Len(t, result.Messages, 1)
+				assert.Equal("no metadata", result.Message.Content[0].Text)
+				assert.Len(result.Messages, 1)
 			},
 		},
 
@@ -680,10 +688,11 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 
-				assert.Equal(t, 300, result.Usage.InputTokens)
-				assert.Equal(t, 150, result.Usage.OutputTokens)
-				assert.InDelta(t, 0.03, result.Usage.CostUSD, 0.001)
+				assert.Equal(300, result.Usage.InputTokens)
+				assert.Equal(150, result.Usage.OutputTokens)
+				assert.InDelta(0.03, result.Usage.CostUSD, 0.001)
 			},
 		},
 
@@ -734,9 +743,10 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 
 				// Second LLM call should see 3 messages: user + LLM (tool use) + tool result.
-				assert.Equal(t, "saw 3 messages", result.Message.Content[0].Text)
+				assert.Equal("saw 3 messages", result.Message.Content[0].Text)
 			},
 		},
 
@@ -781,10 +791,11 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 
-				assert.Len(t, result.Messages, 3)
-				assert.True(t, result.Messages[1].IsError)
-				assert.Equal(t, "validation failed: bad input", result.Messages[1].Content[0].Text)
+				assert.Len(result.Messages, 3)
+				assert.True(result.Messages[1].IsError)
+				assert.Equal("validation failed: bad input", result.Messages[1].Content[0].Text)
 			},
 		},
 
@@ -820,8 +831,9 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 				// LLM should have received 2 messages (injected + original).
-				assert.Equal(t, "saw 2 messages", result.Message.Content[0].Text)
+				assert.Equal("saw 2 messages", result.Message.Content[0].Text)
 			},
 		},
 
@@ -888,8 +900,9 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 				// Processor should have been called twice (once per LLM call).
-				assert.Equal(t, "processor called 2 times", result.Message.Content[0].Text)
+				assert.Equal("processor called 2 times", result.Message.Content[0].Text)
 			},
 		},
 
@@ -921,10 +934,11 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 				// LLM should see only 1 message (the filtered one), not 3.
-				assert.Equal(t, "llm saw 1", result.Message.Content[0].Text)
+				assert.Equal("llm saw 1", result.Message.Content[0].Text)
 				// But the result should still have 1 new message (the LLM response).
-				assert.Len(t, result.Messages, 1)
+				assert.Len(result.Messages, 1)
 			},
 		},
 
@@ -955,7 +969,8 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
-				assert.Equal(t, "saw 1 messages", result.Message.Content[0].Text)
+				assert := assert.New(t)
+				assert.Equal("saw 1 messages", result.Message.Content[0].Text)
 			},
 		},
 
@@ -1022,8 +1037,9 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 				// Compactor should have been called twice (once per LLM call).
-				assert.Equal(t, "compactor called 2 times", result.Message.Content[0].Text)
+				assert.Equal("compactor called 2 times", result.Message.Content[0].Text)
 			},
 		},
 
@@ -1067,8 +1083,9 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 				// Compactor: 3 → 2, then processor: 2 → 3. LLM sees 3.
-				assert.Equal(t, "saw 3 messages", result.Message.Content[0].Text)
+				assert.Equal("saw 3 messages", result.Message.Content[0].Text)
 			},
 		},
 
@@ -1095,7 +1112,8 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
-				assert.Equal(t, "saw 2 messages", result.Message.Content[0].Text)
+				assert := assert.New(t)
+				assert.Equal("saw 2 messages", result.Message.Content[0].Text)
 			},
 		},
 
@@ -1143,19 +1161,20 @@ func TestRunTurn(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
 				t.Helper()
+				assert := assert.New(t)
 
 				// LLM should see 1 message (the filtered "new").
-				assert.Equal(t, "saw 1 messages", result.Message.Content[0].Text)
+				assert.Equal("saw 1 messages", result.Message.Content[0].Text)
 
 				// Result should include: compaction message + LLM response = 2 new messages.
-				assert.Len(t, result.Messages, 2)
-				assert.Equal(t, model.MessageKindCompaction, result.Messages[0].Kind)
-				assert.Equal(t, "c1", result.Messages[0].ID)
-				assert.Equal(t, model.MessageKindLLM, result.Messages[1].Kind)
+				assert.Len(result.Messages, 2)
+				assert.Equal(model.MessageKindCompaction, result.Messages[0].Kind)
+				assert.Equal("c1", result.Messages[0].ID)
+				assert.Equal(model.MessageKindLLM, result.Messages[1].Kind)
 
 				// Compaction usage should be aggregated.
-				assert.Equal(t, 100, result.Usage.InputTokens)
-				assert.GreaterOrEqual(t, result.Usage.OutputTokens, 50)
+				assert.Equal(100, result.Usage.InputTokens)
+				assert.GreaterOrEqual(result.Usage.OutputTokens, 50)
 			},
 		},
 	}
@@ -1214,10 +1233,11 @@ func TestRunCompaction(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *agentcontext.CompactResult) {
 				t.Helper()
+				assert := assert.New(t)
 
-				assert.Nil(t, result.Message)
-				assert.Len(t, result.Messages, 1)
-				assert.Equal(t, "m1", result.Messages[0].ID)
+				assert.Nil(result.Message)
+				assert.Len(result.Messages, 1)
+				assert.Equal("m1", result.Messages[0].ID)
 			},
 		},
 
@@ -1250,14 +1270,16 @@ func TestRunCompaction(t *testing.T) {
 			}(),
 			expResp: func(t *testing.T, result *agentcontext.CompactResult) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
-				require.NotNil(t, result.Message)
-				assert.Equal(t, "c1", result.Message.ID)
-				assert.Equal(t, model.MessageKindCompaction, result.Message.Kind)
-				assert.Len(t, result.Messages, 1)
-				assert.Equal(t, "m2", result.Messages[0].ID)
-				assert.Equal(t, 100, result.Usage.InputTokens)
-				assert.Equal(t, 50, result.Usage.OutputTokens)
+				require.NotNil(result.Message)
+				assert.Equal("c1", result.Message.ID)
+				assert.Equal(model.MessageKindCompaction, result.Message.Kind)
+				assert.Len(result.Messages, 1)
+				assert.Equal("m2", result.Messages[0].ID)
+				assert.Equal(100, result.Usage.InputTokens)
+				assert.Equal(50, result.Usage.OutputTokens)
 			},
 		},
 
@@ -1277,9 +1299,10 @@ func TestRunCompaction(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *agentcontext.CompactResult) {
 				t.Helper()
+				assert := assert.New(t)
 
-				assert.Nil(t, result.Message)
-				assert.Len(t, result.Messages, 1)
+				assert.Nil(result.Message)
+				assert.Len(result.Messages, 1)
 			},
 		},
 
@@ -1322,15 +1345,18 @@ func TestRunCompaction(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			result, err := runCompaction(context.Background(), test.config)
 
 			if test.expErr {
-				assert.Error(t, err)
+				assert.Error(err)
 				return
 			}
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
+			require.NoError(err)
+			require.NotNil(result)
 
 			if test.expResp != nil {
 				test.expResp(t, result)
@@ -1340,18 +1366,33 @@ func TestRunCompaction(t *testing.T) {
 }
 
 func TestRunCompactionForwardsOptions(t *testing.T) {
-	var gotOpts agentcontext.CompactOptions
+	tests := map[string]struct {
+		opts agentcontext.CompactOptions
+	}{
+		"Compaction options should be forwarded to the compactor.": {
+			opts: agentcontext.CompactOptions{Force: true, CustomInstructions: "focus on auth"},
+		},
+	}
 
-	_, err := runCompaction(context.Background(), compactionConfig{
-		messages: []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
-		opts:     agentcontext.CompactOptions{Force: true, CustomInstructions: "focus on auth"},
-		compactor: compactorFunc(func(_ context.Context, msgs []model.Message, opts agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
-			gotOpts = opts
-			return &agentcontext.CompactResult{Messages: msgs}, nil
-		}),
-	})
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
 
-	require.NoError(t, err)
-	assert.True(t, gotOpts.Force)
-	assert.Equal(t, "focus on auth", gotOpts.CustomInstructions)
+			var gotOpts agentcontext.CompactOptions
+
+			_, err := runCompaction(context.Background(), compactionConfig{
+				messages: []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
+				opts:     test.opts,
+				compactor: compactorFunc(func(_ context.Context, msgs []model.Message, opts agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+					gotOpts = opts
+					return &agentcontext.CompactResult{Messages: msgs}, nil
+				}),
+			})
+
+			require.NoError(err)
+			assert.True(gotOpts.Force)
+			assert.Equal(test.opts.CustomInstructions, gotOpts.CustomInstructions)
+		})
+	}
 }

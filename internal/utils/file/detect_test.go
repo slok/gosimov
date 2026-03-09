@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/slok/gosimov/internal/utils/file"
 )
@@ -72,10 +73,12 @@ func TestDetectContent(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			result := file.DetectContent(test.data)
 
-			assert.Equal(t, test.expKind, result.Kind)
-			assert.Equal(t, test.expMime, result.MimeType)
+			assert.Equal(test.expKind, result.Kind)
+			assert.Equal(test.expMime, result.MimeType)
 		})
 	}
 }
@@ -83,13 +86,13 @@ func TestDetectContent(t *testing.T) {
 // encodePNG creates a minimal valid PNG image.
 func encodePNG(t *testing.T) []byte {
 	t.Helper()
+	require := require.New(t)
 
 	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
 
 	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		t.Fatalf("failed to encode PNG: %v", err)
-	}
+	err := png.Encode(&buf, img)
+	require.NoError(err, "failed to encode PNG")
 
 	return buf.Bytes()
 }
@@ -97,13 +100,13 @@ func encodePNG(t *testing.T) []byte {
 // encodeJPEG creates a minimal valid JPEG image.
 func encodeJPEG(t *testing.T) []byte {
 	t.Helper()
+	require := require.New(t)
 
 	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
 
 	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, img, nil); err != nil {
-		t.Fatalf("failed to encode JPEG: %v", err)
-	}
+	err := jpeg.Encode(&buf, img, nil)
+	require.NoError(err, "failed to encode JPEG")
 
 	return buf.Bytes()
 }
@@ -111,13 +114,13 @@ func encodeJPEG(t *testing.T) []byte {
 // encodeGIF creates a minimal valid GIF image.
 func encodeGIF(t *testing.T) []byte {
 	t.Helper()
+	require := require.New(t)
 
 	img := image.NewPaletted(image.Rect(0, 0, 1, 1), color.Palette{color.Black})
 
 	var buf bytes.Buffer
-	if err := gif.Encode(&buf, img, nil); err != nil {
-		t.Fatalf("failed to encode GIF: %v", err)
-	}
+	err := gif.Encode(&buf, img, nil)
+	require.NoError(err, "failed to encode GIF")
 
 	return buf.Bytes()
 }

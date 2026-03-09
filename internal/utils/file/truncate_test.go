@@ -165,10 +165,12 @@ func TestTruncateHead(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			output, result := file.TruncateHead(test.content, test.opts)
 
-			assert.Equal(t, test.expOutput, output)
-			assert.Equal(t, test.expResult, result)
+			assert.Equal(test.expOutput, output)
+			assert.Equal(test.expResult, result)
 		})
 	}
 }
@@ -188,7 +190,9 @@ func TestFormatSize(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, test.expStr, file.FormatSize(test.bytes))
+			assert := assert.New(t)
+
+			assert.Equal(test.expStr, file.FormatSize(test.bytes))
 		})
 	}
 }
@@ -349,42 +353,50 @@ func TestTruncateTail(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			output, result := file.TruncateTail(test.content, test.opts)
 
-			assert.Equal(t, test.expOutput, output)
-			assert.Equal(t, test.expResult, result)
+			assert.Equal(test.expOutput, output)
+			assert.Equal(test.expResult, result)
 		})
 	}
 }
 
-func TestTruncateTailLargeContent(t *testing.T) {
-	// Generate content that exceeds the byte limit.
-	lines := make([]string, 1000)
-	for i := range lines {
-		lines[i] = strings.Repeat("x", 100)
+func TestTruncateLargeContent(t *testing.T) {
+	tests := map[string]struct {
+		truncate func(content string, opts file.TruncateOpts) (string, file.TruncateResult)
+		checkEnd bool // true = check last line is preserved (tail), false = skip
+	}{
+		"TruncateTail with large content should keep the end and respect byte limit.": {
+			truncate: file.TruncateTail,
+			checkEnd: true,
+		},
+		"TruncateHead with large content should respect byte limit.": {
+			truncate: file.TruncateHead,
+			checkEnd: false,
+		},
 	}
-	content := strings.Join(lines, "\n")
 
-	output, result := file.TruncateTail(content, file.TruncateOpts{MaxBytes: 50 * 1024})
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
 
-	assert.True(t, result.Truncated)
-	assert.LessOrEqual(t, result.KeptBytes, 50*1024)
-	assert.Less(t, len(output), len(content))
-	// Should contain the last line.
-	assert.True(t, strings.HasSuffix(output, strings.Repeat("x", 100)))
-}
+			lines := make([]string, 1000)
+			for i := range lines {
+				lines[i] = strings.Repeat("x", 100)
+			}
+			content := strings.Join(lines, "\n")
 
-func TestTruncateHeadLargeContent(t *testing.T) {
-	// Generate content that exceeds the byte limit.
-	lines := make([]string, 1000)
-	for i := range lines {
-		lines[i] = strings.Repeat("x", 100)
+			output, result := test.truncate(content, file.TruncateOpts{MaxBytes: 50 * 1024})
+
+			assert.True(result.Truncated)
+			assert.LessOrEqual(result.KeptBytes, 50*1024)
+			assert.Less(len(output), len(content))
+
+			if test.checkEnd {
+				assert.True(strings.HasSuffix(output, strings.Repeat("x", 100)))
+			}
+		})
 	}
-	content := strings.Join(lines, "\n")
-
-	output, result := file.TruncateHead(content, file.TruncateOpts{MaxBytes: 50 * 1024})
-
-	assert.True(t, result.Truncated)
-	assert.LessOrEqual(t, result.KeptBytes, 50*1024)
-	assert.Less(t, len(output), len(content))
 }

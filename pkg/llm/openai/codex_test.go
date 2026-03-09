@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	gllm "github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/llm/openai"
@@ -44,16 +46,16 @@ func TestNewChatGPT(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			_, err := openai.NewChatGPT(test.cfg)
+
 			if test.expErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
+				assert.Error(err)
 				return
 			}
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+
+			assert.NoError(err)
 		})
 	}
 }
@@ -65,7 +67,7 @@ func TestCodexResponsesCall(t *testing.T) {
 		req           gllm.Request
 		expErr        bool
 		expErrIs      error
-		assert        func(t *testing.T, resp *gllm.Response)
+		assertResp    func(t *testing.T, resp *gllm.Response)
 		assertRequest func(t *testing.T, req *http.Request, body []byte)
 	}{
 		"Should map text response and set codex headers.": {
@@ -98,58 +100,38 @@ func TestCodexResponsesCall(t *testing.T) {
 			},
 			assertRequest: func(t *testing.T, req *http.Request, body []byte) {
 				t.Helper()
-				if req.URL.Path != "/codex/responses" {
-					t.Fatalf("expected /codex/responses path, got %s", req.URL.Path)
-				}
-				if req.Header.Get("Authorization") != "Bearer "+jwtWithAccount("acct-123") {
-					t.Fatalf("missing auth header")
-				}
-				if req.Header.Get("chatgpt-account-id") != "acct-123" {
-					t.Fatalf("missing chatgpt account id header")
-				}
-				if req.Header.Get("OpenAI-Beta") != "responses=experimental" {
-					t.Fatalf("missing OpenAI-Beta header")
-				}
-				if req.Header.Get("originator") != "pi" {
-					t.Fatalf("expected originator pi")
-				}
+				assert := assert.New(t)
+				require := require.New(t)
+
+				assert.Equal("/codex/responses", req.URL.Path)
+				assert.Equal("Bearer "+jwtWithAccount("acct-123"), req.Header.Get("Authorization"))
+				assert.Equal("acct-123", req.Header.Get("chatgpt-account-id"))
+				assert.Equal("responses=experimental", req.Header.Get("OpenAI-Beta"))
+				assert.Equal("pi", req.Header.Get("originator"))
 
 				var payload map[string]any
-				if err := json.Unmarshal(body, &payload); err != nil {
-					t.Fatalf("unmarshal body: %v", err)
-				}
-				if payload["model"] != "gpt-5.3-codex" {
-					t.Fatalf("expected model gpt-5.3-codex, got %v", payload["model"])
-				}
+				require.NoError(json.Unmarshal(body, &payload))
+				assert.Equal("gpt-5.3-codex", payload["model"])
 			},
-			assert: func(t *testing.T, resp *gllm.Response) {
+			assertResp: func(t *testing.T, resp *gllm.Response) {
 				t.Helper()
-				if len(resp.Message.Content) != 1 || resp.Message.Content[0].Text != "Hello from codex" {
-					t.Fatalf("unexpected content: %+v", resp.Message.Content)
-				}
-				if resp.Message.Metadata == nil {
-					t.Fatal("expected metadata")
-				}
-				if resp.Message.Metadata.Provider != "openai-codex" {
-					t.Fatalf("expected provider openai-codex, got %s", resp.Message.Metadata.Provider)
-				}
-				if resp.Message.Metadata.StopReason != model.StopReasonComplete {
-					t.Fatalf("unexpected stop reason: %s", resp.Message.Metadata.StopReason)
-				}
-				if resp.Message.Metadata.Usage == nil {
-					t.Fatalf("unexpected usage: %+v", resp.Message.Metadata.Usage)
-				}
-				if resp.Message.Metadata.Usage.InputTokens != 8 {
-					t.Fatalf("expected non-cached input tokens 8, got %d", resp.Message.Metadata.Usage.InputTokens)
-				}
-				if resp.Message.Metadata.Usage.CacheReadTokens != 2 {
-					t.Fatalf("expected cache read tokens 2, got %d", resp.Message.Metadata.Usage.CacheReadTokens)
-				}
-				if resp.Message.Metadata.Usage.TotalTokens != 15 {
-					t.Fatalf("expected total tokens 15, got %d", resp.Message.Metadata.Usage.TotalTokens)
-				}
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.Len(resp.Message.Content, 1)
+				assert.Equal("Hello from codex", resp.Message.Content[0].Text)
+
+				require.NotNil(resp.Message.Metadata)
+				assert.Equal("openai-codex", resp.Message.Metadata.Provider)
+				assert.Equal(model.StopReasonComplete, resp.Message.Metadata.StopReason)
+
+				require.NotNil(resp.Message.Metadata.Usage)
+				assert.Equal(8, resp.Message.Metadata.Usage.InputTokens)
+				assert.Equal(2, resp.Message.Metadata.Usage.CacheReadTokens)
+				assert.Equal(15, resp.Message.Metadata.Usage.TotalTokens)
 			},
 		},
+
 		"Should map function call output as tool use.": {
 			token: jwtWithAccount("acct-123"),
 			serverHandler: jsonHandler(200, map[string]any{
@@ -163,16 +145,18 @@ func TestCodexResponsesCall(t *testing.T) {
 				}},
 			}),
 			req: gllm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "read main.go"}}}}},
-			assert: func(t *testing.T, resp *gllm.Response) {
+			assertResp: func(t *testing.T, resp *gllm.Response) {
 				t.Helper()
-				if resp.Message.Metadata == nil || resp.Message.Metadata.StopReason != model.StopReasonToolUse {
-					t.Fatalf("expected tool_use stop reason")
-				}
-				if len(resp.Message.ToolCallRequests) != 1 || resp.Message.ToolCallRequests[0].ToolID != "read" {
-					t.Fatalf("unexpected tool calls: %+v", resp.Message.ToolCallRequests)
-				}
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.NotNil(resp.Message.Metadata)
+				assert.Equal(model.StopReasonToolUse, resp.Message.Metadata.StopReason)
+				require.Len(resp.Message.ToolCallRequests, 1)
+				assert.Equal("read", resp.Message.ToolCallRequests[0].ToolID)
 			},
 		},
+
 		"Should include prompt cache key in request.": {
 			token: jwtWithAccount("acct-123"),
 			serverHandler: jsonHandler(200, map[string]any{
@@ -194,23 +178,19 @@ func TestCodexResponsesCall(t *testing.T) {
 			},
 			assertRequest: func(t *testing.T, _ *http.Request, body []byte) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				var payload struct {
 					PromptCacheKey       string `json:"prompt_cache_key"`
 					PromptCacheRetention string `json:"prompt_cache_retention"`
 				}
-				if err := json.Unmarshal(body, &payload); err != nil {
-					t.Fatalf("unmarshal body: %v", err)
-				}
-
-				if payload.PromptCacheKey != "gosimov-sess-s_123" {
-					t.Fatalf("expected prompt_cache_key gosimov-sess-s_123, got %q", payload.PromptCacheKey)
-				}
-				if payload.PromptCacheRetention != "" {
-					t.Fatalf("expected empty prompt_cache_retention on chatgpt backend, got %q", payload.PromptCacheRetention)
-				}
+				require.NoError(json.Unmarshal(body, &payload))
+				assert.Equal("gosimov-sess-s_123", payload.PromptCacheKey)
+				assert.Empty(payload.PromptCacheRetention)
 			},
 		},
+
 		"Should parse SSE completed event response.": {
 			token: jwtWithAccount("acct-123"),
 			serverHandler: func(w http.ResponseWriter, _ *http.Request) {
@@ -221,13 +201,16 @@ func TestCodexResponsesCall(t *testing.T) {
 				_, _ = w.Write([]byte("data: [DONE]\n\n"))
 			},
 			req: gllm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}}}},
-			assert: func(t *testing.T, resp *gllm.Response) {
+			assertResp: func(t *testing.T, resp *gllm.Response) {
 				t.Helper()
-				if len(resp.Message.Content) != 1 || resp.Message.Content[0].Text != "SSE works" {
-					t.Fatalf("unexpected content: %+v", resp.Message.Content)
-				}
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.Len(resp.Message.Content, 1)
+				assert.Equal("SSE works", resp.Message.Content[0].Text)
 			},
 		},
+
 		"Missing account ID in token should fail.": {
 			token:         "abc.def.ghi",
 			serverHandler: jsonHandler(200, map[string]any{"model": "gpt-5.3-codex", "status": "completed", "output": []any{}}),
@@ -235,6 +218,7 @@ func TestCodexResponsesCall(t *testing.T) {
 			expErr:        true,
 			expErrIs:      pkgerrors.ErrNotValid,
 		},
+
 		"API error should wrap llm error.": {
 			token: jwtWithAccount("acct-123"),
 			serverHandler: jsonHandler(429, map[string]any{
@@ -248,6 +232,9 @@ func TestCodexResponsesCall(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			var capturedReq *http.Request
 			var capturedBody []byte
 
@@ -270,53 +257,55 @@ func TestCodexResponsesCall(t *testing.T) {
 				Model:       "gpt-5.3-codex",
 				Client:      server.Client(),
 			})
-			if err != nil {
-				t.Fatalf("new provider: %v", err)
-			}
+			require.NoError(err)
 
 			resp, err := provider.Call(context.Background(), test.req)
+
 			if test.expErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				if test.expErrIs != nil && !errors.Is(err, test.expErrIs) {
-					t.Fatalf("expected wrapped error %v, got %v", test.expErrIs, err)
+				assert.Error(err)
+				if test.expErrIs != nil {
+					assert.ErrorIs(err, test.expErrIs)
 				}
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(err)
 
 			if test.assertRequest != nil {
 				test.assertRequest(t, capturedReq, capturedBody)
 			}
-			if test.assert != nil {
-				test.assert(t, resp)
+			if test.assertResp != nil {
+				test.assertResp(t, resp)
 			}
 		})
 	}
 }
 
 func TestChatGPTProviderModelInfo(t *testing.T) {
-	provider, err := openai.NewChatGPT(openai.ChatGPTConfig{
-		TokenSource: fakeTokenSource{token: jwtWithAccount("acct-123")},
-		Model:       "gpt-5.3-codex",
-	})
-	if err != nil {
-		t.Fatalf("new provider: %v", err)
+	tests := map[string]struct {
+		model string
+	}{
+		"Should return model info with correct ID and positive values.": {
+			model: "gpt-5.3-codex",
+		},
 	}
 
-	info := provider.ModelInfo()
-	if info.ID != "gpt-5.3-codex" {
-		t.Fatalf("expected model id gpt-5.3-codex, got %q", info.ID)
-	}
-	if info.ContextWindow <= 0 {
-		t.Fatalf("expected positive context window, got %d", info.ContextWindow)
-	}
-	if info.MaxOutputTokens <= 0 {
-		t.Fatalf("expected positive max output tokens, got %d", info.MaxOutputTokens)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
+			provider, err := openai.NewChatGPT(openai.ChatGPTConfig{
+				TokenSource: fakeTokenSource{token: jwtWithAccount("acct-123")},
+				Model:       test.model,
+			})
+			require.NoError(err)
+
+			info := provider.ModelInfo()
+			assert.Equal(test.model, info.ID)
+			assert.Greater(info.ContextWindow, 0)
+			assert.Greater(info.MaxOutputTokens, 0)
+		})
 	}
 }
 

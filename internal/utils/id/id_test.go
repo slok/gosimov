@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/oklog/ulid/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/slok/gosimov/internal/utils/id"
 )
@@ -14,30 +16,30 @@ func TestNewULID(t *testing.T) {
 	}{
 		"Generated ULID should not be empty.": {
 			check: func(t *testing.T) {
+				assert := assert.New(t)
+
 				got := id.NewULID()
-				if got == "" {
-					t.Error("expected non-empty ULID")
-				}
+				assert.NotEmpty(got)
 			},
 		},
 
 		"Generated ULID should be valid ULID format.": {
 			check: func(t *testing.T) {
+				require := require.New(t)
+
 				got := id.NewULID()
 				_, err := ulid.Parse(got)
-				if err != nil {
-					t.Errorf("expected valid ULID format, got %q: %v", got, err)
-				}
+				require.NoError(err, "expected valid ULID format for %q", got)
 			},
 		},
 
 		"Two generated ULIDs should be unique.": {
 			check: func(t *testing.T) {
+				assert := assert.New(t)
+
 				a := id.NewULID()
 				b := id.NewULID()
-				if a == b {
-					t.Errorf("expected unique ULIDs, got %q twice", a)
-				}
+				assert.NotEqual(a, b)
 			},
 		},
 	}

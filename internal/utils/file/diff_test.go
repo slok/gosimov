@@ -222,8 +222,10 @@ func TestFormatUnifiedDiff(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			got := file.FormatUnifiedDiff(test.path, test.oldContent, test.newContent, test.replacements, test.contextLines)
-			assert.Equal(t, test.expDiff, got)
+			assert.Equal(test.expDiff, got)
 		})
 	}
 }
@@ -261,8 +263,10 @@ func TestSplitLines(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			got := file.SplitLines(test.input)
-			assert.Equal(t, test.exp, got)
+			assert.Equal(test.exp, got)
 		})
 	}
 }
@@ -306,8 +310,10 @@ func TestByteOffsetToLine(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			got := file.ByteOffsetToLine(test.content, test.offset)
-			assert.Equal(t, test.expLine, got)
+			assert.Equal(test.expLine, got)
 		})
 	}
 }

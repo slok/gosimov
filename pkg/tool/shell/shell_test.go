@@ -41,17 +41,20 @@ func TestNew(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			tool, err := shell.New(test.config)
 
 			if test.expErr {
-				assert.Error(t, err)
-				assert.Nil(t, tool)
+				assert.Error(err)
+				assert.Nil(tool)
 			} else {
-				assert.NoError(t, err)
-				require.NotNil(t, tool)
-				assert.Equal(t, "shell", tool.ID())
-				assert.NotEmpty(t, tool.Description())
-				assert.NotEmpty(t, tool.Schema())
+				assert.NoError(err)
+				require.NotNil(tool)
+				assert.Equal("shell", tool.ID())
+				assert.NotEmpty(tool.Description())
+				assert.NotEmpty(tool.Schema())
 			}
 		})
 	}
@@ -73,9 +76,11 @@ func TestExecute(t *testing.T) {
 			},
 			expContent: func(t *testing.T, parts []model.ContentPart) {
 				t.Helper()
-				require.Len(t, parts, 1)
-				assert.Equal(t, model.ContentPartTypeText, parts[0].Type)
-				assert.Equal(t, "hello", parts[0].Text)
+				assert := assert.New(t)
+				require := require.New(t)
+				require.Len(parts, 1)
+				assert.Equal(model.ContentPartTypeText, parts[0].Type)
+				assert.Equal("hello", parts[0].Text)
 			},
 		},
 
@@ -87,9 +92,11 @@ func TestExecute(t *testing.T) {
 			},
 			expContent: func(t *testing.T, parts []model.ContentPart) {
 				t.Helper()
-				require.Len(t, parts, 1)
-				assert.Contains(t, parts[0].Text, "out")
-				assert.Contains(t, parts[0].Text, "err")
+				assert := assert.New(t)
+				require := require.New(t)
+				require.Len(parts, 1)
+				assert.Contains(parts[0].Text, "out")
+				assert.Contains(parts[0].Text, "err")
 			},
 		},
 
@@ -101,8 +108,10 @@ func TestExecute(t *testing.T) {
 			},
 			expContent: func(t *testing.T, parts []model.ContentPart) {
 				t.Helper()
-				require.Len(t, parts, 1)
-				assert.Contains(t, parts[0].Text, "[Exit code: 42]")
+				assert := assert.New(t)
+				require := require.New(t)
+				require.Len(parts, 1)
+				assert.Contains(parts[0].Text, "[Exit code: 42]")
 			},
 		},
 
@@ -114,9 +123,11 @@ func TestExecute(t *testing.T) {
 			},
 			expContent: func(t *testing.T, parts []model.ContentPart) {
 				t.Helper()
-				require.Len(t, parts, 1)
-				assert.Contains(t, parts[0].Text, "[Command timed out]")
-				assert.NotContains(t, parts[0].Text, "[Exit code:")
+				assert := assert.New(t)
+				require := require.New(t)
+				require.Len(parts, 1)
+				assert.Contains(parts[0].Text, "[Command timed out]")
+				assert.NotContains(parts[0].Text, "[Exit code:")
 			},
 		},
 
@@ -128,8 +139,10 @@ func TestExecute(t *testing.T) {
 			},
 			expContent: func(t *testing.T, parts []model.ContentPart) {
 				t.Helper()
-				require.Len(t, parts, 1)
-				assert.Contains(t, parts[0].Text, "(no output)")
+				assert := assert.New(t)
+				require := require.New(t)
+				require.Len(parts, 1)
+				assert.Contains(parts[0].Text, "(no output)")
 			},
 		},
 
@@ -141,8 +154,10 @@ func TestExecute(t *testing.T) {
 			},
 			expContent: func(t *testing.T, parts []model.ContentPart) {
 				t.Helper()
-				require.Len(t, parts, 1)
-				assert.Contains(t, parts[0].Text, "file.txt")
+				assert := assert.New(t)
+				require := require.New(t)
+				require.Len(parts, 1)
+				assert.Contains(parts[0].Text, "file.txt")
 			},
 		},
 
@@ -179,6 +194,9 @@ func TestExecute(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			me := shellmock.NewMockExecutor(t)
 			test.mock(me)
 
@@ -186,59 +204,74 @@ func TestExecute(t *testing.T) {
 				CWD:      "/work",
 				Executor: me,
 			})
-			require.NoError(t, err)
+			require.NoError(err)
 
 			var args json.RawMessage
 			if test.args != nil {
 				args, err = json.Marshal(test.args)
-				require.NoError(t, err)
+				require.NoError(err)
 			}
 
 			result, err := tool.Execute(context.Background(), args)
 
 			if test.expErr {
-				assert.Error(t, err)
+				assert.Error(err)
 				if test.expErrMsg != "" {
-					assert.Contains(t, err.Error(), test.expErrMsg)
+					assert.Contains(err.Error(), test.expErrMsg)
 				}
 				return
 			}
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
+			require.NoError(err)
+			require.NotNil(result)
 			test.expContent(t, result.Content)
 		})
 	}
 }
 
 func TestExecuteTruncation(t *testing.T) {
-	// Generate more than 5 lines of output.
-	lines := make([]string, 20)
-	for i := range lines {
-		lines[i] = fmt.Sprintf("line%d", i+1)
+	tests := map[string]struct {
+		run func(t *testing.T)
+	}{
+		"Output exceeding MaxLines should be tail-truncated with notice.": {
+			run: func(t *testing.T) {
+				assert := assert.New(t)
+				require := require.New(t)
+
+				lines := make([]string, 20)
+				for i := range lines {
+					lines[i] = fmt.Sprintf("line%d", i+1)
+				}
+				bigOutput := strings.Join(lines, "\n") + "\n"
+
+				me := shellmock.NewMockExecutor(t)
+				me.On("Exec", mock.Anything, "generate", "/work", 120*time.Second).
+					Return(&shell.Result{Stdout: bigOutput}, nil)
+
+				tool, err := shell.New(shell.Config{
+					CWD:      "/work",
+					Executor: me,
+					MaxLines: 5,
+				})
+				require.NoError(err)
+
+				args, _ := json.Marshal(map[string]any{"command": "generate"})
+				result, err := tool.Execute(context.Background(), args)
+				require.NoError(err)
+				require.Len(result.Content, 1)
+
+				text := result.Content[0].Text
+				assert.Contains(text, "Showing last 5 of 20 lines")
+				assert.Contains(text, "Full output:")
+				assert.Contains(text, "line20")
+				assert.NotContains(text, "line1\n")
+			},
+		},
 	}
-	bigOutput := strings.Join(lines, "\n") + "\n"
 
-	me := shellmock.NewMockExecutor(t)
-	me.On("Exec", mock.Anything, "generate", "/work", 120*time.Second).
-		Return(&shell.Result{Stdout: bigOutput}, nil)
-
-	tool, err := shell.New(shell.Config{
-		CWD:      "/work",
-		Executor: me,
-		MaxLines: 5,
-	})
-	require.NoError(t, err)
-
-	args, _ := json.Marshal(map[string]any{"command": "generate"})
-	result, err := tool.Execute(context.Background(), args)
-	require.NoError(t, err)
-	require.Len(t, result.Content, 1)
-
-	text := result.Content[0].Text
-	assert.Contains(t, text, "Showing last 5 of 20 lines")
-	assert.Contains(t, text, "Full output:")
-	// Should contain the last lines, not the first.
-	assert.Contains(t, text, "line20")
-	assert.NotContains(t, text, "line1\n")
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			test.run(t)
+		})
+	}
 }

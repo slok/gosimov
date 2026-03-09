@@ -62,13 +62,15 @@ func TestSanitizePath(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			result, err := file.SanitizePath(test.path)
 
 			if test.expErr {
-				assert.Error(t, err)
+				assert.Error(err)
 			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, test.expPath, result)
+				assert.NoError(err)
+				assert.Equal(test.expPath, result)
 			}
 		})
 	}

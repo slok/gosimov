@@ -3,6 +3,8 @@ package model_test
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/slok/gosimov/pkg/model"
 )
 
@@ -112,16 +114,15 @@ func TestTurnsFromMessages(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			got := model.TurnsFromMessages(test.messages)
 
-			if len(got) != test.expTurnCount {
-				t.Errorf("expected %d turns, got %d", test.expTurnCount, len(got))
-				return
-			}
+			assert.Len(got, test.expTurnCount)
 
 			for i, turn := range got {
-				if i < len(test.expTurnMsgCounts) && len(turn.Messages) != test.expTurnMsgCounts[i] {
-					t.Errorf("turn %d: expected %d messages, got %d", i, test.expTurnMsgCounts[i], len(turn.Messages))
+				if i < len(test.expTurnMsgCounts) {
+					assert.Len(turn.Messages, test.expTurnMsgCounts[i], "turn %d message count", i)
 				}
 			}
 		})

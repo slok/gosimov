@@ -2,8 +2,10 @@ package anthropic_test
 
 import (
 	"context"
-	"errors"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/slok/gosimov/pkg/llm/anthropic"
 	"github.com/slok/gosimov/pkg/pkgerrors"
@@ -29,26 +31,22 @@ func TestNewAPIKeyTokenSource(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			ts := anthropic.NewAPIKeyTokenSource(test.apiKey)
 			tok, err := ts.Token(context.Background())
 
 			if test.expErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				if test.expErrIs != nil && !errors.Is(err, test.expErrIs) {
-					t.Fatalf("expected wrapped error %v, got %v", test.expErrIs, err)
+				require.Error(err)
+				if test.expErrIs != nil {
+					assert.ErrorIs(err, test.expErrIs)
 				}
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if tok != test.expToken {
-				t.Fatalf("expected token %q, got %q", test.expToken, tok)
-			}
+			require.NoError(err)
+			assert.Equal(test.expToken, tok)
 		})
 	}
 }

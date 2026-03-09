@@ -39,18 +39,21 @@ func TestNew(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			c, err := New(test.cfg)
 			if test.expErr {
-				require.Error(t, err)
+				require.Error(err)
 				return
 			}
 
-			require.NoError(t, err)
-			require.NotNil(t, c)
-			assert.Equal(t, defaultContextWindowTokens, c.contextWindowTokens)
-			assert.Equal(t, defaultReserveTokens, c.reserveTokens)
-			assert.Equal(t, defaultKeepRecentTokens, c.keepRecentTokens)
-			assert.Equal(t, defaultMaxSummaryTokens, c.maxSummaryTokens)
+			require.NoError(err)
+			require.NotNil(c)
+			assert.Equal(defaultContextWindowTokens, c.contextWindowTokens)
+			assert.Equal(defaultReserveTokens, c.reserveTokens)
+			assert.Equal(defaultKeepRecentTokens, c.keepRecentTokens)
+			assert.Equal(defaultMaxSummaryTokens, c.maxSummaryTokens)
 		})
 	}
 }
@@ -73,10 +76,13 @@ func TestCompactorCompact(t *testing.T) {
 				{ID: "m2", Kind: model.MessageKindLLM, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
 			},
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
-				assert.Nil(t, got.Message)
-				require.Len(t, got.Messages, 2)
-				assert.Equal(t, "m1", got.Messages[0].ID)
-				assert.Equal(t, "m2", got.Messages[1].ID)
+				assert := assert.New(t)
+				require := require.New(t)
+
+				assert.Nil(got.Message)
+				require.Len(got.Messages, 2)
+				assert.Equal("m1", got.Messages[0].ID)
+				assert.Equal("m2", got.Messages[1].ID)
 			},
 		},
 		"Force false above threshold should compact automatically.": {
@@ -102,12 +108,15 @@ func TestCompactorCompact(t *testing.T) {
 				{ID: "m3", Kind: model.MessageKindUser, Content: textContent("1234")},
 			},
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
-				require.NotNil(t, got.Message)
-				assert.Equal(t, model.MessageKindCompaction, got.Message.Kind)
-				assert.Equal(t, "m2", got.Message.Compaction.FirstKeptID)
-				require.Len(t, got.Messages, 3)
-				assert.Equal(t, 11, got.Usage.InputTokens)
-				assert.Equal(t, 7, got.Usage.OutputTokens)
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.NotNil(got.Message)
+				assert.Equal(model.MessageKindCompaction, got.Message.Kind)
+				assert.Equal("m2", got.Message.Compaction.FirstKeptID)
+				require.Len(got.Messages, 3)
+				assert.Equal(11, got.Usage.InputTokens)
+				assert.Equal(7, got.Usage.OutputTokens)
 			},
 		},
 		"Force false should filter by latest checkpoint.": {
@@ -123,11 +132,14 @@ func TestCompactorCompact(t *testing.T) {
 				{ID: "m4", Kind: model.MessageKindLLM, Content: textContent("new reply")},
 			},
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
-				assert.Nil(t, got.Message)
-				require.Len(t, got.Messages, 3)
-				assert.Equal(t, "c1", got.Messages[0].ID)
-				assert.Equal(t, "m3", got.Messages[1].ID)
-				assert.Equal(t, "m4", got.Messages[2].ID)
+				assert := assert.New(t)
+				require := require.New(t)
+
+				assert.Nil(got.Message)
+				require.Len(got.Messages, 3)
+				assert.Equal("c1", got.Messages[0].ID)
+				assert.Equal("m3", got.Messages[1].ID)
+				assert.Equal("m4", got.Messages[2].ID)
 			},
 		},
 		"Force true should create checkpoint and return compacted context.": {
@@ -149,15 +161,18 @@ func TestCompactorCompact(t *testing.T) {
 			},
 			opts: agentcontext.CompactOptions{Force: true},
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
-				require.NotNil(t, got.Message)
-				assert.Equal(t, model.MessageKindCompaction, got.Message.Kind)
-				assert.Equal(t, "m2", got.Message.Compaction.FirstKeptID)
-				require.Len(t, got.Messages, 3)
-				assert.Equal(t, model.MessageKindCompaction, got.Messages[0].Kind)
-				assert.Equal(t, "m2", got.Messages[1].ID)
-				assert.Equal(t, "m3", got.Messages[2].ID)
-				assert.Equal(t, 10, got.Usage.InputTokens)
-				assert.Equal(t, 5, got.Usage.OutputTokens)
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.NotNil(got.Message)
+				assert.Equal(model.MessageKindCompaction, got.Message.Kind)
+				assert.Equal("m2", got.Message.Compaction.FirstKeptID)
+				require.Len(got.Messages, 3)
+				assert.Equal(model.MessageKindCompaction, got.Messages[0].Kind)
+				assert.Equal("m2", got.Messages[1].ID)
+				assert.Equal("m3", got.Messages[2].ID)
+				assert.Equal(10, got.Usage.InputTokens)
+				assert.Equal(5, got.Usage.OutputTokens)
 			},
 		},
 		"Force true should avoid cutting at tool result.": {
@@ -176,12 +191,15 @@ func TestCompactorCompact(t *testing.T) {
 			},
 			opts: agentcontext.CompactOptions{Force: true},
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
-				require.NotNil(t, got.Message)
-				assert.Equal(t, "m2", got.Message.Compaction.FirstKeptID)
-				require.Len(t, got.Messages, 4)
-				assert.Equal(t, "m2", got.Messages[1].ID)
-				assert.Equal(t, "m3", got.Messages[2].ID)
-				assert.Equal(t, "m4", got.Messages[3].ID)
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.NotNil(got.Message)
+				assert.Equal("m2", got.Message.Compaction.FirstKeptID)
+				require.Len(got.Messages, 4)
+				assert.Equal("m2", got.Messages[1].ID)
+				assert.Equal("m3", got.Messages[2].ID)
+				assert.Equal("m4", got.Messages[3].ID)
 			},
 		},
 		"Force true should include custom instructions in summary prompt.": {
@@ -202,7 +220,9 @@ func TestCompactorCompact(t *testing.T) {
 			},
 			opts: agentcontext.CompactOptions{Force: true, CustomInstructions: "focus on auth"},
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
-				require.NotNil(t, got.Message)
+				require := require.New(t)
+
+				require.NotNil(got.Message)
 			},
 		},
 		"Compactor should propagate summarization errors.": {
@@ -224,16 +244,18 @@ func TestCompactorCompact(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			require := require.New(t)
+
 			c := test.mock()
 
 			got, err := c.Compact(context.Background(), test.msgs, test.opts)
 			if test.expErr {
-				require.Error(t, err)
+				require.Error(err)
 				return
 			}
 
-			require.NoError(t, err)
-			require.NotNil(t, got)
+			require.NoError(err)
+			require.NotNil(got)
 			if test.assert != nil {
 				test.assert(t, got)
 			}
@@ -282,8 +304,10 @@ func TestSerializeMessage(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			got := serializeMessage(test.msg)
-			assert.Equal(t, test.exp, got)
+			assert.Equal(test.exp, got)
 		})
 	}
 }
@@ -309,8 +333,10 @@ func TestCompactJSON(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			got := compactJSON(test.raw)
-			assert.Equal(t, test.exp, got)
+			assert.Equal(test.exp, got)
 		})
 	}
 }
@@ -340,8 +366,10 @@ func TestEstimateMessageTokens(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			got := estimateMessageTokens(test.msg)
-			assert.Equal(t, test.exp, got)
+			assert.Equal(test.exp, got)
 		})
 	}
 }
@@ -358,10 +386,13 @@ func TestApplyLatestCheckpoint(t *testing.T) {
 				{ID: "m2", Kind: model.MessageKindLLM},
 			},
 			assert: func(t *testing.T, got []model.Message) {
-				require.Len(t, got, 3)
-				assert.Equal(t, "m1", got[0].ID)
-				assert.Equal(t, "c1", got[1].ID)
-				assert.Equal(t, "m2", got[2].ID)
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.Len(got, 3)
+				assert.Equal("m1", got[0].ID)
+				assert.Equal("c1", got[1].ID)
+				assert.Equal("m2", got[2].ID)
 			},
 		},
 		"Unknown FirstKeptID should return original messages.": {
@@ -371,10 +402,13 @@ func TestApplyLatestCheckpoint(t *testing.T) {
 				{ID: "m2", Kind: model.MessageKindLLM},
 			},
 			assert: func(t *testing.T, got []model.Message) {
-				require.Len(t, got, 3)
-				assert.Equal(t, "m1", got[0].ID)
-				assert.Equal(t, "c1", got[1].ID)
-				assert.Equal(t, "m2", got[2].ID)
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.Len(got, 3)
+				assert.Equal("m1", got[0].ID)
+				assert.Equal("c1", got[1].ID)
+				assert.Equal("m2", got[2].ID)
 			},
 		},
 	}
@@ -418,8 +452,10 @@ func TestCompactorShouldCompact(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			got := test.compactor.shouldCompact(test.msgs)
-			assert.Equal(t, test.exp, got)
+			assert.Equal(test.exp, got)
 		})
 	}
 }

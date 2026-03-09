@@ -39,26 +39,44 @@ func TestNew(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			tool, err := read.New(test.config)
 
 			if test.expErr {
-				assert.Error(t, err)
-				assert.Nil(t, tool)
+				assert.Error(err)
+				assert.Nil(tool)
 			} else {
-				assert.NoError(t, err)
-				require.NotNil(t, tool)
+				assert.NoError(err)
+				require.NotNil(tool)
 			}
 		})
 	}
 }
 
 func TestToolMetadata(t *testing.T) {
-	tool, err := read.New(read.Config{CWD: "/tmp", FS: fstest.MapFS{}})
-	require.NoError(t, err)
+	tests := map[string]struct {
+		expID string
+	}{
+		"Should return correct tool ID, description and valid schema.": {
+			expID: "read",
+		},
+	}
 
-	assert.Equal(t, "read", tool.ID())
-	assert.NotEmpty(t, tool.Description())
-	assert.True(t, json.Valid(tool.Schema()))
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
+			tool, err := read.New(read.Config{CWD: "/tmp", FS: fstest.MapFS{}})
+			require.NoError(err)
+
+			assert.Equal(test.expID, tool.ID())
+			assert.NotEmpty(tool.Description())
+			assert.True(json.Valid(tool.Schema()))
+		})
+	}
 }
 
 var testMtime = time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
@@ -300,34 +318,37 @@ func TestToolExecuteText(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			config := test.config(test.fsys)
 			tool, err := read.New(config)
-			require.NoError(t, err)
+			require.NoError(err)
 
 			result, err := tool.Execute(context.Background(), test.args)
 
 			if test.expErr {
-				require.Error(t, err)
-				assert.Nil(t, result)
+				require.Error(err)
+				assert.Nil(result)
 
 				errText := err.Error()
 				for _, substr := range test.contains {
-					assert.Contains(t, errText, substr)
+					assert.Contains(errText, substr)
 				}
 
 				return
 			}
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
+			require.NoError(err)
+			require.NotNil(result)
 
 			// Text results should have a single text content part.
-			require.Len(t, result.Content, 1)
-			assert.Equal(t, model.ContentPartTypeText, result.Content[0].Type)
+			require.Len(result.Content, 1)
+			assert.Equal(model.ContentPartTypeText, result.Content[0].Type)
 
 			text := result.Content[0].Text
 			for _, substr := range test.contains {
-				assert.Contains(t, text, substr)
+				assert.Contains(text, substr)
 			}
 		})
 	}
@@ -374,26 +395,29 @@ func TestToolExecuteImage(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			tool, err := read.New(read.Config{CWD: "/project", FS: test.fsys})
-			require.NoError(t, err)
+			require.NoError(err)
 
 			result, err := tool.Execute(context.Background(), test.args)
-			require.NoError(t, err)
-			require.NotNil(t, result)
+			require.NoError(err)
+			require.NotNil(result)
 
 			// Should have two content parts: text note + image data.
-			require.Len(t, result.Content, 2)
+			require.Len(result.Content, 2)
 
 			// First part: text note with mime type and mtime.
-			assert.Equal(t, model.ContentPartTypeText, result.Content[0].Type)
-			assert.Contains(t, result.Content[0].Text, test.expMime)
-			assert.Contains(t, result.Content[0].Text, "modified")
+			assert.Equal(model.ContentPartTypeText, result.Content[0].Type)
+			assert.Contains(result.Content[0].Text, test.expMime)
+			assert.Contains(result.Content[0].Text, "modified")
 
 			// Second part: image data.
-			assert.Equal(t, model.ContentPartTypeImage, result.Content[1].Type)
-			require.NotNil(t, result.Content[1].Image)
-			assert.Equal(t, test.expMime, result.Content[1].Image.MimeType)
-			assert.NotEmpty(t, result.Content[1].Image.Data)
+			assert.Equal(model.ContentPartTypeImage, result.Content[1].Type)
+			require.NotNil(result.Content[1].Image)
+			assert.Equal(test.expMime, result.Content[1].Image.MimeType)
+			assert.NotEmpty(result.Content[1].Image.Data)
 		})
 	}
 }
@@ -429,16 +453,19 @@ func TestToolExecuteBinary(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			tool, err := read.New(read.Config{CWD: "/project", FS: test.fsys})
-			require.NoError(t, err)
+			require.NoError(err)
 
 			result, err := tool.Execute(context.Background(), test.args)
-			require.Error(t, err)
-			assert.Nil(t, result)
+			require.Error(err)
+			assert.Nil(result)
 
 			errText := err.Error()
 			for _, substr := range test.contains {
-				assert.Contains(t, errText, substr)
+				assert.Contains(errText, substr)
 			}
 		})
 	}
@@ -448,12 +475,13 @@ func TestToolExecuteBinary(t *testing.T) {
 func encodePNG(t *testing.T) []byte {
 	t.Helper()
 
+	require := require.New(t)
+
 	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
 
 	var buf bytes.Buffer
-	if err := png.Encode(&buf, img); err != nil {
-		t.Fatalf("failed to encode PNG: %v", err)
-	}
+	err := png.Encode(&buf, img)
+	require.NoError(err, "failed to encode PNG")
 
 	return buf.Bytes()
 }
@@ -462,12 +490,13 @@ func encodePNG(t *testing.T) []byte {
 func encodeJPEG(t *testing.T) []byte {
 	t.Helper()
 
+	require := require.New(t)
+
 	img := image.NewRGBA(image.Rect(0, 0, 1, 1))
 
 	var buf bytes.Buffer
-	if err := jpeg.Encode(&buf, img, nil); err != nil {
-		t.Fatalf("failed to encode JPEG: %v", err)
-	}
+	err := jpeg.Encode(&buf, img, nil)
+	require.NoError(err, "failed to encode JPEG")
 
 	return buf.Bytes()
 }
@@ -476,12 +505,13 @@ func encodeJPEG(t *testing.T) []byte {
 func encodeGIF(t *testing.T) []byte {
 	t.Helper()
 
+	require := require.New(t)
+
 	img := image.NewPaletted(image.Rect(0, 0, 1, 1), color.Palette{color.Black})
 
 	var buf bytes.Buffer
-	if err := gif.Encode(&buf, img, nil); err != nil {
-		t.Fatalf("failed to encode GIF: %v", err)
-	}
+	err := gif.Encode(&buf, img, nil)
+	require.NoError(err, "failed to encode GIF")
 
 	return buf.Bytes()
 }
