@@ -31,28 +31,44 @@ func TestNew(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			tool, err := ls.New(test.config)
 
 			if test.expErr {
-				assert.Error(t, err)
-				assert.Nil(t, tool)
+				assert.Error(err)
+				assert.Nil(tool)
 			} else {
-				assert.NoError(t, err)
-				require.NotNil(t, tool)
+				assert.NoError(err)
+				require.NotNil(tool)
 			}
 		})
 	}
 }
 
 func TestToolMetadata(t *testing.T) {
-	tool, err := ls.New(ls.Config{CWD: "/tmp", FS: fstest.MapFS{}})
-	require.NoError(t, err)
+	tests := map[string]struct {
+		expID string
+	}{
+		"Should return correct tool ID, description and valid schema.": {
+			expID: "ls",
+		},
+	}
 
-	assert.Equal(t, "ls", tool.ID())
-	assert.NotEmpty(t, tool.Description())
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
 
-	// Schema should be valid JSON.
-	assert.True(t, json.Valid(tool.Schema()))
+			tool, err := ls.New(ls.Config{CWD: "/tmp", FS: fstest.MapFS{}})
+			require.NoError(err)
+
+			assert.Equal(test.expID, tool.ID())
+			assert.NotEmpty(tool.Description())
+			assert.True(json.Valid(tool.Schema()))
+		})
+	}
 }
 
 func TestToolExecute(t *testing.T) {
@@ -333,35 +349,38 @@ func TestToolExecute(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			config := test.config(test.fsys)
 			tool, err := ls.New(config)
-			require.NoError(t, err)
+			require.NoError(err)
 
 			result, err := tool.Execute(context.Background(), test.args)
 
 			if test.expErr {
-				require.Error(t, err)
-				assert.Nil(t, result)
+				require.Error(err)
+				assert.Nil(result)
 
 				errText := err.Error()
 				for _, substr := range test.contains {
-					assert.Contains(t, errText, substr, "expected %q in error, got: %s", substr, errText)
+					assert.Contains(errText, substr, "expected %q in error, got: %s", substr, errText)
 				}
 
 				return
 			}
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
+			require.NoError(err)
+			require.NotNil(result)
 
 			text := result.Content[0].Text
 
 			if test.expText != "" {
-				assert.Equal(t, test.expText, text)
+				assert.Equal(test.expText, text)
 			}
 
 			for _, substr := range test.contains {
-				assert.Contains(t, text, substr, "expected %q in output, got: %s", substr, text)
+				assert.Contains(text, substr, "expected %q in output, got: %s", substr, text)
 			}
 		})
 	}

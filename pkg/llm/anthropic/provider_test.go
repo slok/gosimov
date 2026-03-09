@@ -3,12 +3,13 @@ package anthropic_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/llm/anthropic"
@@ -41,18 +42,16 @@ func TestNewAnthropic(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			_, err := anthropic.NewAnthropic(test.cfg)
 
 			if test.expErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
+				assert.Error(err)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			assert.NoError(err)
 		})
 	}
 }
@@ -63,7 +62,7 @@ func TestAnthropicProviderCall(t *testing.T) {
 		req           llm.Request
 		expErr        bool
 		expErrIs      error
-		assert        func(t *testing.T, resp *llm.Response)
+		assertResp    func(t *testing.T, resp *llm.Response)
 		assertRequest func(t *testing.T, req *http.Request, body []byte)
 	}{
 		"Text response should map correctly.": {
@@ -82,54 +81,39 @@ func TestAnthropicProviderCall(t *testing.T) {
 				},
 			}),
 			req: llm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}}}},
-			assert: func(t *testing.T, resp *llm.Response) {
+			assertResp: func(t *testing.T, resp *llm.Response) {
 				t.Helper()
-				if len(resp.Message.Content) != 1 || resp.Message.Content[0].Text != "Hello from Claude" {
-					t.Fatalf("unexpected content: %+v", resp.Message.Content)
-				}
-				if resp.Message.Metadata == nil {
-					t.Fatal("expected metadata")
-				}
-				if resp.Message.Metadata.Provider != "anthropic" {
-					t.Fatalf("expected provider anthropic, got %q", resp.Message.Metadata.Provider)
-				}
-				if resp.Message.Metadata.StopReason != model.StopReasonComplete {
-					t.Fatalf("expected complete stop reason, got %q", resp.Message.Metadata.StopReason)
-				}
-				if resp.Message.Metadata.Usage == nil {
-					t.Fatalf("unexpected usage: %+v", resp.Message.Metadata.Usage)
-				}
-				if resp.Message.Metadata.Usage.InputTokens != 11 {
-					t.Fatalf("expected input tokens 11, got %d", resp.Message.Metadata.Usage.InputTokens)
-				}
-				if resp.Message.Metadata.Usage.CacheReadTokens != 2 || resp.Message.Metadata.Usage.CacheWriteTokens != 3 {
-					t.Fatalf("unexpected cache usage: %+v", resp.Message.Metadata.Usage)
-				}
-				if resp.Message.Metadata.Usage.TotalTokens != 23 {
-					t.Fatalf("expected total tokens 23, got %d", resp.Message.Metadata.Usage.TotalTokens)
-				}
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.Len(resp.Message.Content, 1)
+				assert.Equal("Hello from Claude", resp.Message.Content[0].Text)
+
+				require.NotNil(resp.Message.Metadata)
+				assert.Equal("anthropic", resp.Message.Metadata.Provider)
+				assert.Equal(model.StopReasonComplete, resp.Message.Metadata.StopReason)
+
+				require.NotNil(resp.Message.Metadata.Usage)
+				assert.Equal(11, resp.Message.Metadata.Usage.InputTokens)
+				assert.Equal(2, resp.Message.Metadata.Usage.CacheReadTokens)
+				assert.Equal(3, resp.Message.Metadata.Usage.CacheWriteTokens)
+				assert.Equal(23, resp.Message.Metadata.Usage.TotalTokens)
 			},
 			assertRequest: func(t *testing.T, req *http.Request, body []byte) {
 				t.Helper()
-				if req.Header.Get("x-api-key") != "sk-ant-test" {
-					t.Fatalf("expected x-api-key header")
-				}
-				if req.Header.Get("anthropic-version") == "" {
-					t.Fatalf("missing anthropic-version header")
-				}
+				assert := assert.New(t)
+				require := require.New(t)
+
+				assert.Equal("sk-ant-test", req.Header.Get("x-api-key"))
+				assert.NotEmpty(req.Header.Get("anthropic-version"))
 
 				var payload map[string]any
-				if err := json.Unmarshal(body, &payload); err != nil {
-					t.Fatalf("unmarshal body: %v", err)
-				}
-				if payload["model"] != anthropic.ModelClaudeSonnet46 {
-					t.Fatalf("unexpected model: %v", payload["model"])
-				}
-				if _, ok := payload["max_tokens"]; !ok {
-					t.Fatalf("expected max_tokens in payload")
-				}
+				require.NoError(json.Unmarshal(body, &payload))
+				assert.Equal(anthropic.ModelClaudeSonnet46, payload["model"])
+				assert.Contains(payload, "max_tokens")
 			},
 		},
+
 		"Tool use response should map correctly.": {
 			serverHandler: jsonHandler(200, map[string]any{
 				"model":       anthropic.ModelClaudeSonnet46,
@@ -142,19 +126,18 @@ func TestAnthropicProviderCall(t *testing.T) {
 				}},
 			}),
 			req: llm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "read main.go"}}}}},
-			assert: func(t *testing.T, resp *llm.Response) {
+			assertResp: func(t *testing.T, resp *llm.Response) {
 				t.Helper()
-				if resp.Message.Metadata == nil || resp.Message.Metadata.StopReason != model.StopReasonToolUse {
-					t.Fatalf("expected tool_use stop reason")
-				}
-				if len(resp.Message.ToolCallRequests) != 1 {
-					t.Fatalf("expected one tool call, got %d", len(resp.Message.ToolCallRequests))
-				}
-				if resp.Message.ToolCallRequests[0].ToolID != "read" {
-					t.Fatalf("expected tool ID read, got %s", resp.Message.ToolCallRequests[0].ToolID)
-				}
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.NotNil(resp.Message.Metadata)
+				assert.Equal(model.StopReasonToolUse, resp.Message.Metadata.StopReason)
+				require.Len(resp.Message.ToolCallRequests, 1)
+				assert.Equal("read", resp.Message.ToolCallRequests[0].ToolID)
 			},
 		},
+
 		"Cache retention should add anthropic cache controls.": {
 			serverHandler: jsonHandler(200, map[string]any{
 				"model":       anthropic.ModelClaudeSonnet46,
@@ -174,6 +157,8 @@ func TestAnthropicProviderCall(t *testing.T) {
 			},
 			assertRequest: func(t *testing.T, _ *http.Request, body []byte) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				var payload struct {
 					System []struct {
@@ -196,31 +181,19 @@ func TestAnthropicProviderCall(t *testing.T) {
 						} `json:"content"`
 					} `json:"messages"`
 				}
-				if err := json.Unmarshal(body, &payload); err != nil {
-					t.Fatalf("unmarshal body: %v", err)
-				}
+				require.NoError(json.Unmarshal(body, &payload))
 
-				if len(payload.System) != 1 {
-					t.Fatalf("expected one system block, got %d", len(payload.System))
-				}
-				if payload.System[0].CacheControl.Type != "ephemeral" {
-					t.Fatalf("expected system cache control ephemeral, got %+v", payload.System[0].CacheControl)
-				}
-				if payload.System[0].CacheControl.TTL != "" {
-					t.Fatalf("expected system cache control ttl to be empty on non-anthropic base url, got %+v", payload.System[0].CacheControl)
-				}
+				require.Len(payload.System, 1)
+				assert.Equal("ephemeral", payload.System[0].CacheControl.Type)
+				assert.Empty(payload.System[0].CacheControl.TTL)
 
-				if len(payload.Messages) != 1 || payload.Messages[0].Role != "user" {
-					t.Fatalf("expected one user message, got %+v", payload.Messages)
-				}
-				if len(payload.Messages[0].Content) != 1 {
-					t.Fatalf("expected one user content block, got %+v", payload.Messages[0].Content)
-				}
-				if payload.Messages[0].Content[0].CacheControl.Type != "ephemeral" {
-					t.Fatalf("expected user cache control ephemeral, got %+v", payload.Messages[0].Content[0].CacheControl)
-				}
+				require.Len(payload.Messages, 1)
+				assert.Equal("user", payload.Messages[0].Role)
+				require.Len(payload.Messages[0].Content, 1)
+				assert.Equal("ephemeral", payload.Messages[0].Content[0].CacheControl.Type)
 			},
 		},
+
 		"API error should wrap llm error.": {
 			serverHandler: jsonHandler(429, map[string]any{
 				"type": "error",
@@ -237,6 +210,9 @@ func TestAnthropicProviderCall(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			var capturedReq *http.Request
 			var capturedBody []byte
 
@@ -259,30 +235,25 @@ func TestAnthropicProviderCall(t *testing.T) {
 				Model:       anthropic.ModelClaudeSonnet46,
 				Client:      server.Client(),
 			})
-			if err != nil {
-				t.Fatalf("new provider: %v", err)
-			}
+			require.NoError(err)
 
 			resp, err := provider.Call(context.Background(), test.req)
+
 			if test.expErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				if test.expErrIs != nil && !errors.Is(err, test.expErrIs) {
-					t.Fatalf("expected wrapped error %v, got %v", test.expErrIs, err)
+				assert.Error(err)
+				if test.expErrIs != nil {
+					assert.ErrorIs(err, test.expErrIs)
 				}
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			require.NoError(err)
 
 			if test.assertRequest != nil {
 				test.assertRequest(t, capturedReq, capturedBody)
 			}
-			if test.assert != nil {
-				test.assert(t, resp)
+			if test.assertResp != nil {
+				test.assertResp(t, resp)
 			}
 		})
 	}
@@ -308,137 +279,144 @@ func TestNewClaude(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			_, err := anthropic.NewClaude(test.cfg)
+
 			if test.expErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
+				assert.Error(err)
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
+			assert.NoError(err)
 		})
 	}
 }
 
 func TestClaudeProviderCall(t *testing.T) {
-	readTool := staticTool{
-		id:          "read",
-		description: "Read a file",
-		schema:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`),
+	tests := map[string]struct {
+		run func(t *testing.T)
+	}{
+		"Should use bearer auth, send Claude headers, normalize tool names, and restore tool IDs.": {
+			run: func(t *testing.T) {
+				assert := assert.New(t)
+				require := require.New(t)
+
+				readTool := staticTool{
+					id:          "read",
+					description: "Read a file",
+					schema:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`),
+				}
+
+				var capturedReq *http.Request
+				var capturedBody []byte
+
+				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					capturedReq = r.Clone(r.Context())
+					capturedBody, _ = io.ReadAll(r.Body)
+
+					_ = json.NewEncoder(w).Encode(map[string]any{
+						"model":       anthropic.ModelClaudeSonnet46,
+						"stop_reason": "tool_use",
+						"content": []map[string]any{{
+							"type":  "tool_use",
+							"id":    "tool_1",
+							"name":  "Read",
+							"input": map[string]any{"path": "main.go"},
+						}},
+					})
+				}))
+				defer server.Close()
+
+				provider, err := anthropic.NewClaude(anthropic.ClaudeConfig{
+					TokenSource: fakeTokenSource{token: "oauth-token"},
+					BaseURL:     server.URL,
+					Model:       anthropic.ModelClaudeSonnet46,
+					Tools:       []tool.Tool{readTool},
+					Client:      server.Client(),
+				})
+				require.NoError(err)
+
+				resp, err := provider.Call(context.Background(), llm.Request{
+					SystemPrompt: "Keep it short",
+					Messages: []model.Message{{
+						Kind:    model.MessageKindUser,
+						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "read main.go"}},
+					}},
+				})
+				require.NoError(err)
+
+				assert.Equal("Bearer oauth-token", capturedReq.Header.Get("Authorization"))
+				assert.NotEmpty(capturedReq.Header.Get("anthropic-beta"))
+				assert.Equal("cli", capturedReq.Header.Get("x-app"))
+
+				var payload struct {
+					System string `json:"system"`
+					Tools  []struct {
+						Name string `json:"name"`
+					} `json:"tools"`
+				}
+				require.NoError(json.Unmarshal(capturedBody, &payload))
+				assert.NotEmpty(payload.System)
+				assert.Contains(payload.System, "Claude Code")
+				require.Len(payload.Tools, 1)
+				assert.Equal("Read", payload.Tools[0].Name)
+
+				require.Len(resp.Message.ToolCallRequests, 1)
+				assert.Equal("read", resp.Message.ToolCallRequests[0].ToolID)
+				require.NotNil(resp.Message.Metadata)
+				assert.Equal("anthropic-claude", resp.Message.Metadata.Provider)
+			},
+		},
 	}
 
-	var capturedReq *http.Request
-	var capturedBody []byte
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedReq = r.Clone(r.Context())
-		capturedBody, _ = io.ReadAll(r.Body)
-
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"model":       anthropic.ModelClaudeSonnet46,
-			"stop_reason": "tool_use",
-			"content": []map[string]any{{
-				"type":  "tool_use",
-				"id":    "tool_1",
-				"name":  "Read",
-				"input": map[string]any{"path": "main.go"},
-			}},
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			test.run(t)
 		})
-	}))
-	defer server.Close()
-
-	provider, err := anthropic.NewClaude(anthropic.ClaudeConfig{
-		TokenSource: fakeTokenSource{token: "oauth-token"},
-		BaseURL:     server.URL,
-		Model:       anthropic.ModelClaudeSonnet46,
-		Tools:       []tool.Tool{readTool},
-		Client:      server.Client(),
-	})
-	if err != nil {
-		t.Fatalf("new provider: %v", err)
-	}
-
-	resp, err := provider.Call(context.Background(), llm.Request{
-		SystemPrompt: "Keep it short",
-		Messages: []model.Message{{
-			Kind:    model.MessageKindUser,
-			Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "read main.go"}},
-		}},
-	})
-	if err != nil {
-		t.Fatalf("call: %v", err)
-	}
-
-	if capturedReq.Header.Get("Authorization") != "Bearer oauth-token" {
-		t.Fatalf("expected bearer auth header")
-	}
-	if capturedReq.Header.Get("anthropic-beta") == "" {
-		t.Fatalf("expected anthropic-beta header")
-	}
-	if capturedReq.Header.Get("x-app") != "cli" {
-		t.Fatalf("expected x-app=cli")
-	}
-
-	var payload struct {
-		System string `json:"system"`
-		Tools  []struct {
-			Name string `json:"name"`
-		} `json:"tools"`
-	}
-	if err := json.Unmarshal(capturedBody, &payload); err != nil {
-		t.Fatalf("unmarshal payload: %v", err)
-	}
-	if payload.System == "" || !strings.Contains(payload.System, "Claude Code") {
-		t.Fatalf("expected Claude identity in system prompt")
-	}
-	if len(payload.Tools) != 1 || payload.Tools[0].Name != "Read" {
-		t.Fatalf("expected normalized tool name Read, got %+v", payload.Tools)
-	}
-
-	if len(resp.Message.ToolCallRequests) != 1 || resp.Message.ToolCallRequests[0].ToolID != "read" {
-		t.Fatalf("expected restored tool ID read, got %+v", resp.Message.ToolCallRequests)
-	}
-	if resp.Message.Metadata == nil || resp.Message.Metadata.Provider != "anthropic-claude" {
-		t.Fatalf("unexpected provider metadata: %+v", resp.Message.Metadata)
 	}
 }
 
 func TestAnthropicProviderModelInfo(t *testing.T) {
-	provider, err := anthropic.NewAnthropic(anthropic.Config{
-		TokenSource: anthropic.NewAPIKeyTokenSource("sk-ant-test"),
-		Model:       anthropic.ModelClaudeSonnet46,
-	})
-	if err != nil {
-		t.Fatalf("new provider: %v", err)
+	tests := map[string]struct {
+		newProvider func(t *testing.T) llm.Provider
+		expModelID  string
+	}{
+		"Anthropic provider should return correct model info.": {
+			newProvider: func(t *testing.T) llm.Provider {
+				t.Helper()
+				p, err := anthropic.NewAnthropic(anthropic.Config{
+					TokenSource: anthropic.NewAPIKeyTokenSource("sk-ant-test"),
+					Model:       anthropic.ModelClaudeSonnet46,
+				})
+				require.New(t).NoError(err)
+				return p
+			},
+			expModelID: anthropic.ModelClaudeSonnet46,
+		},
+		"Claude provider should return correct model info.": {
+			newProvider: func(t *testing.T) llm.Provider {
+				t.Helper()
+				p, err := anthropic.NewClaude(anthropic.ClaudeConfig{
+					TokenSource: fakeTokenSource{token: "oauth"},
+					Model:       anthropic.ModelClaudeSonnet46,
+				})
+				require.New(t).NoError(err)
+				return p
+			},
+			expModelID: anthropic.ModelClaudeSonnet46,
+		},
 	}
 
-	info := provider.ModelInfo()
-	if info.ID != anthropic.ModelClaudeSonnet46 {
-		t.Fatalf("expected model id %q, got %q", anthropic.ModelClaudeSonnet46, info.ID)
-	}
-	if info.ContextWindow <= 0 {
-		t.Fatalf("expected positive context window, got %d", info.ContextWindow)
-	}
-}
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
 
-func TestClaudeProviderModelInfo(t *testing.T) {
-	provider, err := anthropic.NewClaude(anthropic.ClaudeConfig{
-		TokenSource: fakeTokenSource{token: "oauth"},
-		Model:       anthropic.ModelClaudeSonnet46,
-	})
-	if err != nil {
-		t.Fatalf("new provider: %v", err)
-	}
-
-	info := provider.ModelInfo()
-	if info.ID != anthropic.ModelClaudeSonnet46 {
-		t.Fatalf("expected model id %q, got %q", anthropic.ModelClaudeSonnet46, info.ID)
-	}
-	if info.ContextWindow <= 0 {
-		t.Fatalf("expected positive context window, got %d", info.ContextWindow)
+			provider := test.newProvider(t)
+			info := provider.ModelInfo()
+			assert.Equal(test.expModelID, info.ID)
+			assert.Greater(info.ContextWindow, 0)
+		})
 	}
 }
 

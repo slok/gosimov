@@ -32,26 +32,44 @@ func TestNew(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			tool, err := edit.New(test.config)
 
 			if test.expErr {
-				assert.Error(t, err)
-				assert.Nil(t, tool)
+				assert.Error(err)
+				assert.Nil(tool)
 			} else {
-				assert.NoError(t, err)
-				require.NotNil(t, tool)
+				assert.NoError(err)
+				require.NotNil(tool)
 			}
 		})
 	}
 }
 
 func TestToolMetadata(t *testing.T) {
-	tool, err := edit.New(edit.Config{CWD: "/tmp", FS: newMemFS()})
-	require.NoError(t, err)
+	tests := map[string]struct {
+		expID string
+	}{
+		"Should return correct tool ID, description and valid schema.": {
+			expID: "edit",
+		},
+	}
 
-	assert.Equal(t, "edit", tool.ID())
-	assert.NotEmpty(t, tool.Description())
-	assert.True(t, json.Valid(tool.Schema()))
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
+			tool, err := edit.New(edit.Config{CWD: "/tmp", FS: newMemFS()})
+			require.NoError(err)
+
+			assert.Equal(test.expID, tool.ID())
+			assert.NotEmpty(tool.Description())
+			assert.True(json.Valid(tool.Schema()))
+		})
+	}
 }
 
 var testMtime = time.Date(2025, 6, 15, 10, 30, 0, 0, time.UTC)
@@ -217,43 +235,46 @@ func TestToolExecute(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			mfs := newMemFS()
 			if test.setup != nil {
 				test.setup(mfs)
 			}
 
 			tool, err := edit.New(edit.Config{CWD: "/project", FS: mfs})
-			require.NoError(t, err)
+			require.NoError(err)
 
 			result, err := tool.Execute(context.Background(), test.args)
 
 			if test.expErr {
-				require.Error(t, err)
-				assert.Nil(t, result)
+				require.Error(err)
+				assert.Nil(result)
 
 				errText := err.Error()
 				for _, substr := range test.contains {
-					assert.Contains(t, errText, substr)
+					assert.Contains(errText, substr)
 				}
 
 				return
 			}
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
+			require.NoError(err)
+			require.NotNil(result)
 
-			require.Len(t, result.Content, 1)
-			assert.Equal(t, model.ContentPartTypeText, result.Content[0].Type)
+			require.Len(result.Content, 1)
+			assert.Equal(model.ContentPartTypeText, result.Content[0].Type)
 
 			text := result.Content[0].Text
 			for _, substr := range test.contains {
-				assert.Contains(t, text, substr)
+				assert.Contains(text, substr)
 			}
 
 			if test.expFile != "" {
 				data, err := mfs.ReadFile(extractPath(t, test.args))
-				require.NoError(t, err)
-				assert.Equal(t, test.expFile, string(data))
+				require.NoError(err)
+				assert.Equal(test.expFile, string(data))
 			}
 		})
 	}
@@ -263,11 +284,13 @@ func TestToolExecute(t *testing.T) {
 func extractPath(t *testing.T, raw json.RawMessage) string {
 	t.Helper()
 
+	require := require.New(t)
+
 	var m map[string]any
-	require.NoError(t, json.Unmarshal(raw, &m))
+	require.NoError(json.Unmarshal(raw, &m))
 
 	p, ok := m["path"].(string)
-	require.True(t, ok)
+	require.True(ok)
 
 	return p
 }

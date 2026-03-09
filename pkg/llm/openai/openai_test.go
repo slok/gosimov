@@ -3,7 +3,6 @@ package openai_test
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -54,34 +53,36 @@ func TestNewOpenAI(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			_, err := openai.NewOpenAI(test.cfg)
 
 			if test.expErr {
-				if err == nil {
-					t.Error("expected error, got nil")
-				}
+				assert.Error(err)
 				return
 			}
 
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-			}
+			assert.NoError(err)
 		})
 	}
 }
 
 func TestProviderCall(t *testing.T) {
 	tests := map[string]struct {
+		// tokenSource overrides the default API key token source when set.
+		tokenSource openai.TokenSource
 		// serverHandler is the HTTP handler for the mock server.
 		serverHandler http.HandlerFunc
 		// req is the LLM request to send.
 		req func() gllm.Request
+		// cancelCtx when true, the context is cancelled before calling the provider.
+		cancelCtx bool
 		// expErr is true if Call should return an error.
 		expErr bool
 		// expErrIs is the sentinel error to check with errors.Is.
 		expErrIs error
-		// assert runs custom assertions on the response.
-		assert func(t *testing.T, resp *gllm.Response)
+		// assertResp runs custom assertions on the response.
+		assertResp func(t *testing.T, resp *gllm.Response)
 		// assertRequest runs assertions on the HTTP request received by the server.
 		assertRequest func(t *testing.T, httpReq *http.Request, body []byte)
 	}{
@@ -105,52 +106,24 @@ func TestProviderCall(t *testing.T) {
 					},
 				}
 			},
-			assert: func(t *testing.T, resp *gllm.Response) {
+			assertResp: func(t *testing.T, resp *gllm.Response) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
-				if resp.Message.Kind != model.MessageKindLLM {
-					t.Errorf("expected kind %q, got %q", model.MessageKindLLM, resp.Message.Kind)
-				}
+				assert.Equal(model.MessageKindLLM, resp.Message.Kind)
+				require.Len(resp.Message.Content, 1)
+				assert.Equal("Hello! How can I help?", resp.Message.Content[0].Text)
 
-				if len(resp.Message.Content) != 1 {
-					t.Fatalf("expected 1 content part, got %d", len(resp.Message.Content))
-				}
+				require.NotNil(resp.Message.Metadata)
+				assert.Equal(model.StopReasonComplete, resp.Message.Metadata.StopReason)
+				assert.Equal("glm-5-free", resp.Message.Metadata.Model)
+				assert.Equal("openai", resp.Message.Metadata.Provider)
 
-				if resp.Message.Content[0].Text != "Hello! How can I help?" {
-					t.Errorf("expected text %q, got %q", "Hello! How can I help?", resp.Message.Content[0].Text)
-				}
-
-				if resp.Message.Metadata == nil {
-					t.Fatal("expected metadata")
-				}
-
-				if resp.Message.Metadata.StopReason != model.StopReasonComplete {
-					t.Errorf("expected stop reason %q, got %q", model.StopReasonComplete, resp.Message.Metadata.StopReason)
-				}
-
-				if resp.Message.Metadata.Model != "glm-5-free" {
-					t.Errorf("expected model %q, got %q", "glm-5-free", resp.Message.Metadata.Model)
-				}
-
-				if resp.Message.Metadata.Provider != "openai" {
-					t.Errorf("expected provider %q, got %q", "openai", resp.Message.Metadata.Provider)
-				}
-
-				if resp.Message.Metadata.Usage == nil {
-					t.Fatal("expected usage")
-				}
-
-				if resp.Message.Metadata.Usage.InputTokens != 15 {
-					t.Errorf("expected input tokens 15, got %d", resp.Message.Metadata.Usage.InputTokens)
-				}
-
-				if resp.Message.Metadata.Usage.OutputTokens != 8 {
-					t.Errorf("expected output tokens 8, got %d", resp.Message.Metadata.Usage.OutputTokens)
-				}
-
-				if resp.Message.Metadata.Usage.TotalTokens != 23 {
-					t.Errorf("expected total tokens 23, got %d", resp.Message.Metadata.Usage.TotalTokens)
-				}
+				require.NotNil(resp.Message.Metadata.Usage)
+				assert.Equal(15, resp.Message.Metadata.Usage.InputTokens)
+				assert.Equal(8, resp.Message.Metadata.Usage.OutputTokens)
+				assert.Equal(23, resp.Message.Metadata.Usage.TotalTokens)
 			},
 		},
 
@@ -176,14 +149,17 @@ func TestProviderCall(t *testing.T) {
 					},
 				}
 			},
-			assert: func(t *testing.T, resp *gllm.Response) {
+			assertResp: func(t *testing.T, resp *gllm.Response) {
 				t.Helper()
-				require.NotNil(t, resp.Message.Metadata)
-				require.NotNil(t, resp.Message.Metadata.Usage)
-				assert.Equal(t, 14, resp.Message.Metadata.Usage.InputTokens)
-				assert.Equal(t, 9, resp.Message.Metadata.Usage.OutputTokens)
-				assert.Equal(t, 6, resp.Message.Metadata.Usage.CacheReadTokens)
-				assert.Equal(t, 29, resp.Message.Metadata.Usage.TotalTokens)
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.NotNil(resp.Message.Metadata)
+				require.NotNil(resp.Message.Metadata.Usage)
+				assert.Equal(14, resp.Message.Metadata.Usage.InputTokens)
+				assert.Equal(9, resp.Message.Metadata.Usage.OutputTokens)
+				assert.Equal(6, resp.Message.Metadata.Usage.CacheReadTokens)
+				assert.Equal(29, resp.Message.Metadata.Usage.TotalTokens)
 			},
 		},
 
@@ -212,32 +188,21 @@ func TestProviderCall(t *testing.T) {
 					},
 				}
 			},
-			assert: func(t *testing.T, resp *gllm.Response) {
+			assertResp: func(t *testing.T, resp *gllm.Response) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
-				if resp.Message.Metadata.StopReason != model.StopReasonToolUse {
-					t.Errorf("expected stop reason %q, got %q", model.StopReasonToolUse, resp.Message.Metadata.StopReason)
-				}
-
-				if len(resp.Message.ToolCallRequests) != 1 {
-					t.Fatalf("expected 1 tool call, got %d", len(resp.Message.ToolCallRequests))
-				}
+				assert.Equal(model.StopReasonToolUse, resp.Message.Metadata.StopReason)
+				require.Len(resp.Message.ToolCallRequests, 1)
 
 				tc := resp.Message.ToolCallRequests[0]
-				if tc.ID != "call_abc123" {
-					t.Errorf("expected tool call id %q, got %q", "call_abc123", tc.ID)
-				}
-				if tc.ToolID != "read" {
-					t.Errorf("expected tool id %q, got %q", "read", tc.ToolID)
-				}
+				assert.Equal("call_abc123", tc.ID)
+				assert.Equal("read", tc.ToolID)
 
 				var args map[string]string
-				if err := json.Unmarshal(tc.Arguments, &args); err != nil {
-					t.Fatalf("expected valid JSON arguments: %v", err)
-				}
-				if args["path"] != "main.go" {
-					t.Errorf("expected path %q, got %q", "main.go", args["path"])
-				}
+				require.NoError(json.Unmarshal(tc.Arguments, &args))
+				assert.Equal("main.go", args["path"])
 			},
 		},
 
@@ -256,31 +221,23 @@ func TestProviderCall(t *testing.T) {
 			},
 			assertRequest: func(t *testing.T, httpReq *http.Request, body []byte) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
-				if httpReq.Header.Get("Authorization") != "Bearer sk-test-key" {
-					t.Errorf("expected authorization header, got %q", httpReq.Header.Get("Authorization"))
-				}
-
-				if httpReq.Header.Get("Content-Type") != "application/json" {
-					t.Errorf("expected content-type application/json, got %q", httpReq.Header.Get("Content-Type"))
-				}
+				assert.Equal("Bearer sk-test-key", httpReq.Header.Get("Authorization"))
+				assert.Equal("application/json", httpReq.Header.Get("Content-Type"))
 
 				var reqBody map[string]json.RawMessage
-				if err := json.Unmarshal(body, &reqBody); err != nil {
-					t.Fatalf("failed to unmarshal body: %v", err)
-				}
+				require.NoError(json.Unmarshal(body, &reqBody))
 
 				var reqModel string
-				if err := json.Unmarshal(reqBody["model"], &reqModel); err != nil {
-					t.Fatalf("failed to unmarshal model: %v", err)
-				}
-				if reqModel != "gpt-4o" {
-					t.Errorf("expected model %q, got %q", "gpt-4o", reqModel)
-				}
+				require.NoError(json.Unmarshal(reqBody["model"], &reqModel))
+				assert.Equal("gpt-4o", reqModel)
 			},
 		},
 
 		"Request should use OAuth token source authorization header.": {
+			tokenSource: fakeTokenSource{token: "oauth-token"},
 			serverHandler: jsonHandler(200, map[string]any{
 				"model":   "test",
 				"choices": []map[string]any{},
@@ -294,9 +251,8 @@ func TestProviderCall(t *testing.T) {
 			},
 			assertRequest: func(t *testing.T, httpReq *http.Request, _ []byte) {
 				t.Helper()
-				if httpReq.Header.Get("Authorization") != "Bearer oauth-token" {
-					t.Errorf("expected authorization header with oauth token, got %q", httpReq.Header.Get("Authorization"))
-				}
+				assert := assert.New(t)
+				assert.Equal("Bearer oauth-token", httpReq.Header.Get("Authorization"))
 			},
 		},
 
@@ -315,20 +271,15 @@ func TestProviderCall(t *testing.T) {
 			},
 			assertRequest: func(t *testing.T, _ *http.Request, body []byte) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				var reqBody map[string]json.RawMessage
-				if err := json.Unmarshal(body, &reqBody); err != nil {
-					t.Fatalf("failed to unmarshal body: %v", err)
-				}
+				require.NoError(json.Unmarshal(body, &reqBody))
 
 				var maxTokens int
-				if err := json.Unmarshal(reqBody["max_tokens"], &maxTokens); err != nil {
-					t.Fatalf("failed to unmarshal max_tokens: %v", err)
-				}
-
-				if maxTokens != 123 {
-					t.Errorf("expected max_tokens %d, got %d", 123, maxTokens)
-				}
+				require.NoError(json.Unmarshal(reqBody["max_tokens"], &maxTokens))
+				assert.Equal(123, maxTokens)
 			},
 		},
 
@@ -348,20 +299,15 @@ func TestProviderCall(t *testing.T) {
 			},
 			assertRequest: func(t *testing.T, _ *http.Request, body []byte) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				var reqBody map[string]json.RawMessage
-				if err := json.Unmarshal(body, &reqBody); err != nil {
-					t.Fatalf("failed to unmarshal body: %v", err)
-				}
+				require.NoError(json.Unmarshal(body, &reqBody))
 
 				var promptCacheKey string
-				if err := json.Unmarshal(reqBody["prompt_cache_key"], &promptCacheKey); err != nil {
-					t.Fatalf("failed to unmarshal prompt_cache_key: %v", err)
-				}
-
-				if promptCacheKey != "gosimov-sess-s_abc123" {
-					t.Errorf("expected prompt_cache_key %q, got %q", "gosimov-sess-s_abc123", promptCacheKey)
-				}
+				require.NoError(json.Unmarshal(reqBody["prompt_cache_key"], &promptCacheKey))
+				assert.Equal("gosimov-sess-s_abc123", promptCacheKey)
 			},
 		},
 
@@ -430,20 +376,16 @@ func TestProviderCall(t *testing.T) {
 					},
 				}
 			},
-			assert: func(t *testing.T, resp *gllm.Response) {
+			assertResp: func(t *testing.T, resp *gllm.Response) {
 				t.Helper()
-
-				if resp.Message.Kind != model.MessageKindLLM {
-					t.Errorf("expected kind %q, got %q", model.MessageKindLLM, resp.Message.Kind)
-				}
-
-				if len(resp.Message.Content) != 0 {
-					t.Errorf("expected no content, got %d parts", len(resp.Message.Content))
-				}
+				assert := assert.New(t)
+				assert.Equal(model.MessageKindLLM, resp.Message.Kind)
+				assert.Empty(resp.Message.Content)
 			},
 		},
 
 		"Context cancellation should return error.": {
+			cancelCtx: true,
 			serverHandler: jsonHandler(200, map[string]any{
 				"model":   "test",
 				"choices": []map[string]any{},
@@ -455,12 +397,15 @@ func TestProviderCall(t *testing.T) {
 					},
 				}
 			},
-			// This test is handled specially below.
+			expErr: true,
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			var (
 				capturedReq  *http.Request
 				capturedBody []byte
@@ -468,7 +413,6 @@ func TestProviderCall(t *testing.T) {
 
 			handler := test.serverHandler
 			if test.assertRequest != nil {
-				// Wrap handler to capture the request for assertion.
 				original := handler
 				handler = func(w http.ResponseWriter, r *http.Request) {
 					capturedReq = r.Clone(r.Context())
@@ -480,56 +424,40 @@ func TestProviderCall(t *testing.T) {
 			server := httptest.NewServer(handler)
 			defer server.Close()
 
-			cfg := openai.OpenAIConfig{
-				TokenSource: openai.NewAPIKeyTokenSource("sk-test-key"),
+			tokenSource := openai.TokenSource(openai.NewAPIKeyTokenSource("sk-test-key"))
+			if test.tokenSource != nil {
+				tokenSource = test.tokenSource
+			}
+
+			provider, err := openai.NewOpenAI(openai.OpenAIConfig{
+				TokenSource: tokenSource,
 				BaseURL:     server.URL,
 				Model:       "gpt-4o",
 				Client:      server.Client(),
-			}
-			if name == "Request should use OAuth token source authorization header." {
-				cfg.TokenSource = fakeTokenSource{token: "oauth-token"}
-			}
-
-			provider, err := openai.NewOpenAI(cfg)
-			if err != nil {
-				t.Fatalf("failed to create provider: %v", err)
-			}
+			})
+			require.NoError(err)
 
 			ctx := context.Background()
-
-			// Special case: test context cancellation.
-			if name == "Context cancellation should return error." {
+			if test.cancelCtx {
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithCancel(ctx)
-				cancel() // Cancel immediately.
+				cancel()
 			}
 
 			resp, err := provider.Call(ctx, test.req())
 
 			if test.expErr {
-				if err == nil {
-					t.Fatal("expected error, got nil")
-				}
-				if test.expErrIs != nil && !errors.Is(err, test.expErrIs) {
-					t.Errorf("expected error to wrap %v, got: %v", test.expErrIs, err)
+				assert.Error(err)
+				if test.expErrIs != nil {
+					assert.ErrorIs(err, test.expErrIs)
 				}
 				return
 			}
 
-			// Context cancellation test.
-			if name == "Context cancellation should return error." {
-				if err == nil {
-					t.Fatal("expected error from cancelled context, got nil")
-				}
-				return
-			}
+			require.NoError(err)
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if test.assert != nil {
-				test.assert(t, resp)
+			if test.assertResp != nil {
+				test.assertResp(t, resp)
 			}
 
 			if test.assertRequest != nil {
@@ -540,16 +468,31 @@ func TestProviderCall(t *testing.T) {
 }
 
 func TestOpenAIProviderModelInfo(t *testing.T) {
-	provider, err := openai.NewOpenAI(openai.OpenAIConfig{
-		TokenSource: openai.NewAPIKeyTokenSource("sk-test"),
-		Model:       "gpt-4o",
-	})
-	require.NoError(t, err)
+	tests := map[string]struct {
+		model string
+	}{
+		"Should return model info with correct ID and positive values.": {
+			model: "gpt-4o",
+		},
+	}
 
-	info := provider.ModelInfo()
-	assert.Equal(t, "gpt-4o", info.ID)
-	assert.Greater(t, info.ContextWindow, 0)
-	assert.Greater(t, info.MaxOutputTokens, 0)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
+			provider, err := openai.NewOpenAI(openai.OpenAIConfig{
+				TokenSource: openai.NewAPIKeyTokenSource("sk-test"),
+				Model:       test.model,
+			})
+			require.NoError(err)
+
+			info := provider.ModelInfo()
+			assert.Equal(test.model, info.ID)
+			assert.Greater(info.ContextWindow, 0)
+			assert.Greater(info.MaxOutputTokens, 0)
+		})
+	}
 }
 
 type fakeTokenSource struct {
@@ -559,8 +502,6 @@ type fakeTokenSource struct {
 func (f fakeTokenSource) Token(_ context.Context) (string, error) {
 	return f.token, nil
 }
-
-// --- Test helpers ---
 
 // jsonHandler creates an HTTP handler that responds with the given status and JSON body.
 func jsonHandler(status int, body any) http.HandlerFunc {

@@ -32,26 +32,44 @@ func TestNew(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			tool, err := write.New(test.config)
 
 			if test.expErr {
-				assert.Error(t, err)
-				assert.Nil(t, tool)
+				assert.Error(err)
+				assert.Nil(tool)
 			} else {
-				assert.NoError(t, err)
-				require.NotNil(t, tool)
+				assert.NoError(err)
+				require.NotNil(tool)
 			}
 		})
 	}
 }
 
 func TestToolMetadata(t *testing.T) {
-	tool, err := write.New(write.Config{CWD: "/tmp", FS: newMemFS()})
-	require.NoError(t, err)
+	tests := map[string]struct {
+		expID string
+	}{
+		"Should return correct tool ID, description and valid schema.": {
+			expID: "write",
+		},
+	}
 
-	assert.Equal(t, "write", tool.ID())
-	assert.NotEmpty(t, tool.Description())
-	assert.True(t, json.Valid(tool.Schema()))
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
+			tool, err := write.New(write.Config{CWD: "/tmp", FS: newMemFS()})
+			require.NoError(err)
+
+			assert.Equal(test.expID, tool.ID())
+			assert.NotEmpty(tool.Description())
+			assert.True(json.Valid(tool.Schema()))
+		})
+	}
 }
 
 func TestToolExecute(t *testing.T) {
@@ -67,7 +85,8 @@ func TestToolExecute(t *testing.T) {
 			contains: []string{"Created", "hello.txt", "11 bytes"},
 			check: func(t *testing.T, mfs *memFS) {
 				t.Helper()
-				assert.Equal(t, []byte("hello world"), mfs.files["hello.txt"])
+				assert := assert.New(t)
+				assert.Equal([]byte("hello world"), mfs.files["hello.txt"])
 			},
 		},
 
@@ -79,7 +98,8 @@ func TestToolExecute(t *testing.T) {
 			contains: []string{"Overwrote", "existing.txt", "11 bytes"},
 			check: func(t *testing.T, mfs *memFS) {
 				t.Helper()
-				assert.Equal(t, []byte("new content"), mfs.files["existing.txt"])
+				assert := assert.New(t)
+				assert.Equal([]byte("new content"), mfs.files["existing.txt"])
 			},
 		},
 
@@ -88,8 +108,9 @@ func TestToolExecute(t *testing.T) {
 			contains: []string{"Created", "src/main.go", "12 bytes"},
 			check: func(t *testing.T, mfs *memFS) {
 				t.Helper()
-				assert.Equal(t, []byte("package main"), mfs.files["src/main.go"])
-				assert.Contains(t, mfs.dirs, "src")
+				assert := assert.New(t)
+				assert.Equal([]byte("package main"), mfs.files["src/main.go"])
+				assert.Contains(mfs.dirs, "src")
 			},
 		},
 
@@ -98,8 +119,9 @@ func TestToolExecute(t *testing.T) {
 			contains: []string{"Created", "a/b/c/file.txt", "4 bytes"},
 			check: func(t *testing.T, mfs *memFS) {
 				t.Helper()
-				assert.Equal(t, []byte("deep"), mfs.files["a/b/c/file.txt"])
-				assert.Contains(t, mfs.dirs, "a/b/c")
+				assert := assert.New(t)
+				assert.Equal([]byte("deep"), mfs.files["a/b/c/file.txt"])
+				assert.Contains(mfs.dirs, "a/b/c")
 			},
 		},
 
@@ -108,7 +130,8 @@ func TestToolExecute(t *testing.T) {
 			contains: []string{"Created", "empty.txt", "0 bytes"},
 			check: func(t *testing.T, mfs *memFS) {
 				t.Helper()
-				assert.Equal(t, []byte(""), mfs.files["empty.txt"])
+				assert := assert.New(t)
+				assert.Equal([]byte(""), mfs.files["empty.txt"])
 			},
 		},
 
@@ -141,45 +164,49 @@ func TestToolExecute(t *testing.T) {
 			contains: []string{"Created", "root.txt"},
 			check: func(t *testing.T, mfs *memFS) {
 				t.Helper()
-				assert.Equal(t, []byte("data"), mfs.files["root.txt"])
-				assert.Empty(t, mfs.dirs)
+				assert := assert.New(t)
+				assert.Equal([]byte("data"), mfs.files["root.txt"])
+				assert.Empty(mfs.dirs)
 			},
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			mfs := newMemFS()
 			if test.setup != nil {
 				test.setup(mfs)
 			}
 
 			tool, err := write.New(write.Config{CWD: "/project", FS: mfs})
-			require.NoError(t, err)
+			require.NoError(err)
 
 			result, err := tool.Execute(context.Background(), test.args)
 
 			if test.expErr {
-				require.Error(t, err)
-				assert.Nil(t, result)
+				require.Error(err)
+				assert.Nil(result)
 
 				errText := err.Error()
 				for _, substr := range test.contains {
-					assert.Contains(t, errText, substr)
+					assert.Contains(errText, substr)
 				}
 
 				return
 			}
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
+			require.NoError(err)
+			require.NotNil(result)
 
-			require.Len(t, result.Content, 1)
-			assert.Equal(t, model.ContentPartTypeText, result.Content[0].Type)
+			require.Len(result.Content, 1)
+			assert.Equal(model.ContentPartTypeText, result.Content[0].Type)
 
 			text := result.Content[0].Text
 			for _, substr := range test.contains {
-				assert.Contains(t, text, substr)
+				assert.Contains(text, substr)
 			}
 
 			if test.check != nil {

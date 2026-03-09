@@ -39,8 +39,10 @@ func TestNormalize(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			got := Normalize(test.raw, test.inputIncludesCacheRead)
-			assert.Equal(t, test.exp, got)
+			assert.Equal(test.exp, got)
 		})
 	}
 }
@@ -66,18 +68,33 @@ func TestAdd(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			got := Add(test.a, test.b)
-			assert.InDelta(t, test.exp.CostUSD, got.CostUSD, 0.0000001)
+			assert.InDelta(test.exp.CostUSD, got.CostUSD, 0.0000001)
 			got.CostUSD = test.exp.CostUSD
-			assert.Equal(t, test.exp, got)
+			assert.Equal(test.exp, got)
 		})
 	}
 }
 
 func TestWithTotal(t *testing.T) {
-	u := model.Usage{InputTokens: 11, OutputTokens: 7, CacheReadTokens: 2, CacheWriteTokens: 3, TotalTokens: 999}
+	tests := map[string]struct {
+		input    model.Usage
+		expTotal int
+	}{
+		"Should recalculate total from component tokens.": {
+			input:    model.Usage{InputTokens: 11, OutputTokens: 7, CacheReadTokens: 2, CacheWriteTokens: 3, TotalTokens: 999},
+			expTotal: 23,
+		},
+	}
 
-	got := WithTotal(u)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
 
-	assert.Equal(t, 23, got.TotalTokens)
+			got := WithTotal(test.input)
+			assert.Equal(test.expTotal, got.TotalTokens)
+		})
+	}
 }

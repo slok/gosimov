@@ -31,40 +31,53 @@ func TestSessionRoundTrip(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
 			line := sessionToLine(test.session)
 			got := lineToSession(line)
 
-			assert.Equal(t, test.session.ID, got.ID)
-			assert.Equal(t, test.session.CreatedAt.Unix(), got.CreatedAt.Unix())
+			assert.Equal(test.session.ID, got.ID)
+			assert.Equal(test.session.CreatedAt.Unix(), got.CreatedAt.Unix())
 
 			// Verify the line type is set.
-			assert.Equal(t, lineTypeSession, line.Type)
+			assert.Equal(lineTypeSession, line.Type)
 		})
 	}
 }
 
 func TestSessionLineJSON(t *testing.T) {
-	session := model.Session{
-		ID:        "01KHXABC",
-		CreatedAt: time.Date(2026, 2, 20, 16, 0, 0, 0, time.UTC),
+	tests := map[string]struct {
+		session model.Session
+	}{
+		"Session line should marshal to JSON with correct type and round-trip.": {
+			session: model.Session{
+				ID:        "01KHXABC",
+				CreatedAt: time.Date(2026, 2, 20, 16, 0, 0, 0, time.UTC),
+			},
+		},
 	}
 
-	line := sessionToLine(session)
-	data, err := json.Marshal(line)
-	require.NoError(t, err)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
 
-	// Verify it contains expected fields.
-	var raw map[string]any
-	require.NoError(t, json.Unmarshal(data, &raw))
-	assert.Equal(t, "session", raw["type"])
-	assert.Equal(t, "01KHXABC", raw["id"])
-	assert.NotEmpty(t, raw["created_at"])
+			line := sessionToLine(test.session)
+			data, err := json.Marshal(line)
+			require.NoError(err)
 
-	// Round-trip through JSON.
-	var parsed sessionLine
-	require.NoError(t, json.Unmarshal(data, &parsed))
-	got := lineToSession(parsed)
-	assert.Equal(t, session.ID, got.ID)
+			var raw map[string]any
+			require.NoError(json.Unmarshal(data, &raw))
+			assert.Equal("session", raw["type"])
+			assert.Equal(test.session.ID, raw["id"])
+			assert.NotEmpty(raw["created_at"])
+
+			var parsed sessionLine
+			require.NoError(json.Unmarshal(data, &parsed))
+			got := lineToSession(parsed)
+			assert.Equal(test.session.ID, got.ID)
+		})
+	}
 }
 
 func TestMessageRoundTrip(t *testing.T) {
@@ -217,146 +230,168 @@ func TestMessageRoundTrip(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			// Convert to line and back.
 			line := messageToLine(test.msg)
 			got := lineToMessage(line)
 
 			// Verify type is set.
-			assert.Equal(t, lineTypeMessage, line.Type)
+			assert.Equal(lineTypeMessage, line.Type)
 
 			// Core fields.
-			assert.Equal(t, test.msg.ID, got.ID)
-			assert.Equal(t, test.msg.Kind, got.Kind)
-			assert.Equal(t, test.msg.ToolCallID, got.ToolCallID)
-			assert.Equal(t, test.msg.IsError, got.IsError)
-			assert.Equal(t, test.msg.CreatedAt.Unix(), got.CreatedAt.Unix())
+			assert.Equal(test.msg.ID, got.ID)
+			assert.Equal(test.msg.Kind, got.Kind)
+			assert.Equal(test.msg.ToolCallID, got.ToolCallID)
+			assert.Equal(test.msg.IsError, got.IsError)
+			assert.Equal(test.msg.CreatedAt.Unix(), got.CreatedAt.Unix())
 
 			// Content.
-			require.Len(t, got.Content, len(test.msg.Content))
+			require.Len(got.Content, len(test.msg.Content))
 			for i, cp := range got.Content {
-				assert.Equal(t, test.msg.Content[i].Type, cp.Type)
-				assert.Equal(t, test.msg.Content[i].Text, cp.Text)
+				assert.Equal(test.msg.Content[i].Type, cp.Type)
+				assert.Equal(test.msg.Content[i].Text, cp.Text)
 				if test.msg.Content[i].Image != nil {
-					require.NotNil(t, cp.Image)
-					assert.Equal(t, test.msg.Content[i].Image.Data, cp.Image.Data)
-					assert.Equal(t, test.msg.Content[i].Image.MimeType, cp.Image.MimeType)
+					require.NotNil(cp.Image)
+					assert.Equal(test.msg.Content[i].Image.Data, cp.Image.Data)
+					assert.Equal(test.msg.Content[i].Image.MimeType, cp.Image.MimeType)
 				}
 			}
 
 			// Tool call requests.
-			require.Len(t, got.ToolCallRequests, len(test.msg.ToolCallRequests))
+			require.Len(got.ToolCallRequests, len(test.msg.ToolCallRequests))
 			for i, tc := range got.ToolCallRequests {
-				assert.Equal(t, test.msg.ToolCallRequests[i].ID, tc.ID)
-				assert.Equal(t, test.msg.ToolCallRequests[i].ToolID, tc.ToolID)
-				assert.JSONEq(t, string(test.msg.ToolCallRequests[i].Arguments), string(tc.Arguments))
+				assert.Equal(test.msg.ToolCallRequests[i].ID, tc.ID)
+				assert.Equal(test.msg.ToolCallRequests[i].ToolID, tc.ToolID)
+				assert.JSONEq(string(test.msg.ToolCallRequests[i].Arguments), string(tc.Arguments))
 			}
 
 			// Metadata.
 			if test.msg.Metadata != nil {
-				require.NotNil(t, got.Metadata)
-				assert.Equal(t, test.msg.Metadata.StopReason, got.Metadata.StopReason)
-				assert.Equal(t, test.msg.Metadata.Model, got.Metadata.Model)
-				assert.Equal(t, test.msg.Metadata.Provider, got.Metadata.Provider)
+				require.NotNil(got.Metadata)
+				assert.Equal(test.msg.Metadata.StopReason, got.Metadata.StopReason)
+				assert.Equal(test.msg.Metadata.Model, got.Metadata.Model)
+				assert.Equal(test.msg.Metadata.Provider, got.Metadata.Provider)
 
 				if test.msg.Metadata.Usage != nil {
-					require.NotNil(t, got.Metadata.Usage)
-					assert.Equal(t, *test.msg.Metadata.Usage, *got.Metadata.Usage)
+					require.NotNil(got.Metadata.Usage)
+					assert.Equal(*test.msg.Metadata.Usage, *got.Metadata.Usage)
 				}
 			} else {
-				assert.Nil(t, got.Metadata)
+				assert.Nil(got.Metadata)
 			}
 
 			// Compaction data.
 			if test.msg.Compaction != nil {
-				require.NotNil(t, got.Compaction)
-				assert.Equal(t, test.msg.Compaction.FirstKeptID, got.Compaction.FirstKeptID)
-				assert.Equal(t, test.msg.Compaction.TokensBefore, got.Compaction.TokensBefore)
+				require.NotNil(got.Compaction)
+				assert.Equal(test.msg.Compaction.FirstKeptID, got.Compaction.FirstKeptID)
+				assert.Equal(test.msg.Compaction.TokensBefore, got.Compaction.TokensBefore)
 			} else {
-				assert.Nil(t, got.Compaction)
+				assert.Nil(got.Compaction)
 			}
 		})
 	}
 }
 
 func TestMessageLineJSONRoundTrip(t *testing.T) {
-	msg := model.Message{
-		ID:      "m1",
-		Kind:    model.MessageKindLLM,
-		Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}},
-		ToolCallRequests: []model.ToolCallRequest{
-			{ID: "tc1", ToolID: "read", Arguments: json.RawMessage(`{"path":"foo"}`)},
+	tests := map[string]struct {
+		msg        model.Message
+		expType    string
+		expKind    string
+		assertJSON func(t *testing.T, raw map[string]any)
+		assertMsg  func(t *testing.T, got model.Message)
+	}{
+		"LLM message with tool calls should round-trip through JSON.": {
+			msg: model.Message{
+				ID:      "m1",
+				Kind:    model.MessageKindLLM,
+				Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}},
+				ToolCallRequests: []model.ToolCallRequest{
+					{ID: "tc1", ToolID: "read", Arguments: json.RawMessage(`{"path":"foo"}`)},
+				},
+				Metadata: &model.MessageMetadata{
+					StopReason: model.StopReasonToolUse,
+					Model:      "test",
+					Usage:      &model.Usage{InputTokens: 10, OutputTokens: 5, TotalTokens: 15},
+				},
+				CreatedAt: time.Date(2026, 2, 20, 16, 0, 0, 0, time.UTC),
+			},
+			expType: "message",
+			expKind: "llm",
+			assertMsg: func(t *testing.T, got model.Message) {
+				t.Helper()
+				require := require.New(t)
+				assert := assert.New(t)
+				require.Len(got.ToolCallRequests, 1)
+				assert.Equal("tc1", got.ToolCallRequests[0].ID)
+			},
 		},
-		Metadata: &model.MessageMetadata{
-			StopReason: model.StopReasonToolUse,
-			Model:      "test",
-			Usage:      &model.Usage{InputTokens: 10, OutputTokens: 5, TotalTokens: 15},
+
+		"Compaction message should preserve compaction data through JSON.": {
+			msg: model.Message{
+				ID:      "c1",
+				Kind:    model.MessageKindCompaction,
+				Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "Summary of conversation"}},
+				Compaction: &model.CompactionData{
+					FirstKeptID:  "m5",
+					TokensBefore: 3500,
+				},
+				CreatedAt: time.Date(2026, 2, 20, 16, 0, 0, 0, time.UTC),
+			},
+			expType: "message",
+			expKind: "compaction",
+			assertJSON: func(t *testing.T, raw map[string]any) {
+				t.Helper()
+				require := require.New(t)
+				assert := assert.New(t)
+				compaction, ok := raw["compaction"].(map[string]any)
+				require.True(ok, "compaction field should be present in JSON")
+				assert.Equal("m5", compaction["first_kept_id"])
+				assert.Equal(float64(3500), compaction["tokens_before"])
+			},
+			assertMsg: func(t *testing.T, got model.Message) {
+				t.Helper()
+				require := require.New(t)
+				assert := assert.New(t)
+				require.NotNil(got.Compaction)
+				assert.Equal("m5", got.Compaction.FirstKeptID)
+				assert.Equal(3500, got.Compaction.TokensBefore)
+				require.Len(got.Content, 1)
+				assert.Equal("Summary of conversation", got.Content[0].Text)
+			},
 		},
-		CreatedAt: time.Date(2026, 2, 20, 16, 0, 0, 0, time.UTC),
 	}
 
-	// Marshal to JSON.
-	line := messageToLine(msg)
-	data, err := json.Marshal(line)
-	require.NoError(t, err)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
 
-	// Verify JSON structure.
-	var raw map[string]any
-	require.NoError(t, json.Unmarshal(data, &raw))
-	assert.Equal(t, "message", raw["type"])
-	assert.Equal(t, "m1", raw["id"])
-	assert.Equal(t, "llm", raw["kind"])
+			line := messageToLine(test.msg)
+			data, err := json.Marshal(line)
+			require.NoError(err)
 
-	// Unmarshal back and convert.
-	var parsed messageLine
-	require.NoError(t, json.Unmarshal(data, &parsed))
-	got := lineToMessage(parsed)
+			var raw map[string]any
+			require.NoError(json.Unmarshal(data, &raw))
+			assert.Equal(test.expType, raw["type"])
+			assert.Equal(test.msg.ID, raw["id"])
+			assert.Equal(test.expKind, raw["kind"])
 
-	assert.Equal(t, msg.ID, got.ID)
-	assert.Equal(t, msg.Kind, got.Kind)
-	require.Len(t, got.ToolCallRequests, 1)
-	assert.Equal(t, "tc1", got.ToolCallRequests[0].ID)
-}
+			if test.assertJSON != nil {
+				test.assertJSON(t, raw)
+			}
 
-func TestCompactionMessageLineJSONRoundTrip(t *testing.T) {
-	msg := model.Message{
-		ID:      "c1",
-		Kind:    model.MessageKindCompaction,
-		Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "Summary of conversation"}},
-		Compaction: &model.CompactionData{
-			FirstKeptID:  "m5",
-			TokensBefore: 3500,
-		},
-		CreatedAt: time.Date(2026, 2, 20, 16, 0, 0, 0, time.UTC),
+			var parsed messageLine
+			require.NoError(json.Unmarshal(data, &parsed))
+			got := lineToMessage(parsed)
+
+			assert.Equal(test.msg.ID, got.ID)
+			assert.Equal(test.msg.Kind, got.Kind)
+
+			if test.assertMsg != nil {
+				test.assertMsg(t, got)
+			}
+		})
 	}
-
-	// Marshal to JSON.
-	line := messageToLine(msg)
-	data, err := json.Marshal(line)
-	require.NoError(t, err)
-
-	// Verify JSON structure.
-	var raw map[string]any
-	require.NoError(t, json.Unmarshal(data, &raw))
-	assert.Equal(t, "message", raw["type"])
-	assert.Equal(t, "c1", raw["id"])
-	assert.Equal(t, "compaction", raw["kind"])
-
-	// Verify compaction field in JSON.
-	compaction, ok := raw["compaction"].(map[string]any)
-	require.True(t, ok, "compaction field should be present in JSON")
-	assert.Equal(t, "m5", compaction["first_kept_id"])
-	assert.Equal(t, float64(3500), compaction["tokens_before"])
-
-	// Unmarshal back and convert.
-	var parsed messageLine
-	require.NoError(t, json.Unmarshal(data, &parsed))
-	got := lineToMessage(parsed)
-
-	assert.Equal(t, msg.ID, got.ID)
-	assert.Equal(t, msg.Kind, got.Kind)
-	require.NotNil(t, got.Compaction)
-	assert.Equal(t, "m5", got.Compaction.FirstKeptID)
-	assert.Equal(t, 3500, got.Compaction.TokensBefore)
-	require.Len(t, got.Content, 1)
-	assert.Equal(t, "Summary of conversation", got.Content[0].Text)
 }

@@ -52,19 +52,22 @@ func TestNewSession(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			s, err := agent.NewSession(context.Background(), test.config)
 
 			if test.expErr {
-				assert.Error(t, err)
-				assert.Nil(t, s)
+				assert.Error(err)
+				assert.Nil(s)
 			} else {
-				assert.NoError(t, err)
-				require.NotNil(t, s)
+				assert.NoError(err)
+				require.NotNil(s)
 
 				// Every session must have a non-empty identity.
 				sess := s.Session()
-				assert.NotEmpty(t, sess.ID)
-				assert.False(t, sess.CreatedAt.IsZero())
+				assert.NotEmpty(sess.ID)
+				assert.False(sess.CreatedAt.IsZero())
 			}
 		})
 	}
@@ -80,16 +83,17 @@ func TestLoadSession(t *testing.T) {
 		"Valid config should load existing session and message history.": {
 			prepare: func(t *testing.T) agent.LoadSessionConfig {
 				t.Helper()
+				require := require.New(t)
 
 				repo := memory.NewRepository()
 				sess := model.Session{ID: "s-load-1", CreatedAt: time.Now().Add(-1 * time.Hour).UTC()}
-				require.NoError(t, repo.CreateSession(context.Background(), sess))
+				require.NoError(repo.CreateSession(context.Background(), sess))
 
 				msgs := []model.Message{
 					{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
 					{ID: "m2", Kind: model.MessageKindLLM, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
 				}
-				require.NoError(t, repo.StoreMessages(context.Background(), sess.ID, msgs))
+				require.NoError(repo.StoreMessages(context.Background(), sess.ID, msgs))
 
 				return agent.LoadSessionConfig{
 					SessionID:         sess.ID,
@@ -100,26 +104,29 @@ func TestLoadSession(t *testing.T) {
 			},
 			assert: func(t *testing.T, s *agent.Session) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
-				require.NotNil(t, s)
-				assert.Equal(t, "s-load-1", s.Session().ID)
-				assert.False(t, s.Session().CreatedAt.IsZero())
+				require.NotNil(s)
+				assert.Equal("s-load-1", s.Session().ID)
+				assert.False(s.Session().CreatedAt.IsZero())
 
 				msgs := s.Messages()
-				require.Len(t, msgs, 2)
-				assert.Equal(t, "m1", msgs[0].ID)
-				assert.Equal(t, "hello", msgs[0].Content[0].Text)
-				assert.Equal(t, "m2", msgs[1].ID)
-				assert.Equal(t, "hi", msgs[1].Content[0].Text)
+				require.Len(msgs, 2)
+				assert.Equal("m1", msgs[0].ID)
+				assert.Equal("hello", msgs[0].Content[0].Text)
+				assert.Equal("m2", msgs[1].ID)
+				assert.Equal("hi", msgs[1].Content[0].Text)
 			},
 		},
 
 		"Message repository should be optional when loading existing session.": {
 			prepare: func(t *testing.T) agent.LoadSessionConfig {
 				t.Helper()
+				require := require.New(t)
 
 				repo := memory.NewRepository()
-				require.NoError(t, repo.CreateSession(context.Background(), model.Session{ID: "s-load-no-msg-repo", CreatedAt: time.Now().UTC()}))
+				require.NoError(repo.CreateSession(context.Background(), model.Session{ID: "s-load-no-msg-repo", CreatedAt: time.Now().UTC()}))
 
 				return agent.LoadSessionConfig{
 					SessionID:         "s-load-no-msg-repo",
@@ -129,25 +136,28 @@ func TestLoadSession(t *testing.T) {
 			},
 			assert: func(t *testing.T, s *agent.Session) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
-				require.NotNil(t, s)
-				assert.Equal(t, "s-load-no-msg-repo", s.Session().ID)
-				assert.Len(t, s.Messages(), 0)
+				require.NotNil(s)
+				assert.Equal("s-load-no-msg-repo", s.Session().ID)
+				assert.Len(s.Messages(), 0)
 			},
 		},
 
 		"Loading with paginated message repository should include all pages.": {
 			prepare: func(t *testing.T) agent.LoadSessionConfig {
 				t.Helper()
+				require := require.New(t)
 
 				repo := memory.NewRepository()
-				require.NoError(t, repo.CreateSession(context.Background(), model.Session{ID: "s-load-paginated", CreatedAt: time.Now().UTC()}))
+				require.NoError(repo.CreateSession(context.Background(), model.Session{ID: "s-load-paginated", CreatedAt: time.Now().UTC()}))
 
 				many := make([]model.Message, 0, 125)
 				for i := 0; i < 125; i++ {
 					many = append(many, model.Message{ID: fmt.Sprintf("m-%03d", i), Kind: model.MessageKindUser})
 				}
-				require.NoError(t, repo.StoreMessages(context.Background(), "s-load-paginated", many))
+				require.NoError(repo.StoreMessages(context.Background(), "s-load-paginated", many))
 
 				return agent.LoadSessionConfig{
 					SessionID:         "s-load-paginated",
@@ -158,10 +168,12 @@ func TestLoadSession(t *testing.T) {
 			},
 			assert: func(t *testing.T, s *agent.Session) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 				msgs := s.Messages()
-				require.Len(t, msgs, 125)
-				assert.Equal(t, "m-000", msgs[0].ID)
-				assert.Equal(t, "m-124", msgs[124].ID)
+				require.Len(msgs, 125)
+				assert.Equal("m-000", msgs[0].ID)
+				assert.Equal("m-124", msgs[124].ID)
 			},
 		},
 
@@ -204,21 +216,24 @@ func TestLoadSession(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			cfg := test.prepare(t)
 
 			s, err := agent.LoadSession(context.Background(), cfg)
 
 			if test.expErr {
-				assert.Error(t, err)
+				assert.Error(err)
 				if test.expErrIs != nil {
-					assert.ErrorIs(t, err, test.expErrIs)
+					assert.ErrorIs(err, test.expErrIs)
 				}
-				assert.Nil(t, s)
+				assert.Nil(s)
 				return
 			}
 
-			require.NoError(t, err)
-			require.NotNil(t, s)
+			require.NoError(err)
+			require.NotNil(s)
 
 			if test.assert != nil {
 				test.assert(t, s)
@@ -256,23 +271,25 @@ func TestSessionPrompt(t *testing.T) {
 			},
 			expResp: func(t *testing.T, results []*agent.TurnResult, session *agent.Session) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
-				require.Len(t, results, 1)
-				assert.Equal(t, "hello back", results[0].Message.Content[0].Text)
+				require.Len(results, 1)
+				assert.Equal("hello back", results[0].Message.Content[0].Text)
 
 				// Session should have 2 messages: user + LLM.
 				msgs := session.Messages()
-				assert.Len(t, msgs, 2)
-				assert.Equal(t, model.MessageKindUser, msgs[0].Kind)
-				assert.Equal(t, "hello", msgs[0].Content[0].Text)
-				assert.NotEmpty(t, msgs[0].ID)
-				assert.False(t, msgs[0].CreatedAt.IsZero())
-				assert.Equal(t, model.MessageKindLLM, msgs[1].Kind)
+				assert.Len(msgs, 2)
+				assert.Equal(model.MessageKindUser, msgs[0].Kind)
+				assert.Equal("hello", msgs[0].Content[0].Text)
+				assert.NotEmpty(msgs[0].ID)
+				assert.False(msgs[0].CreatedAt.IsZero())
+				assert.Equal(model.MessageKindLLM, msgs[1].Kind)
 
 				// Usage should be tracked.
 				usage := session.Usage()
-				assert.Equal(t, 10, usage.InputTokens)
-				assert.Equal(t, 5, usage.OutputTokens)
+				assert.Equal(10, usage.InputTokens)
+				assert.Equal(5, usage.OutputTokens)
 			},
 		},
 
@@ -302,24 +319,26 @@ func TestSessionPrompt(t *testing.T) {
 			},
 			expResp: func(t *testing.T, results []*agent.TurnResult, session *agent.Session) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
-				require.Len(t, results, 3)
+				require.Len(results, 3)
 
 				// First turn: LLM sees 1 message (user).
-				assert.Equal(t, "response 1 (saw 1 msgs)", results[0].Message.Content[0].Text)
+				assert.Equal("response 1 (saw 1 msgs)", results[0].Message.Content[0].Text)
 				// Second turn: LLM sees 3 messages (user + LLM + user).
-				assert.Equal(t, "response 2 (saw 3 msgs)", results[1].Message.Content[0].Text)
+				assert.Equal("response 2 (saw 3 msgs)", results[1].Message.Content[0].Text)
 				// Third turn: LLM sees 5 messages.
-				assert.Equal(t, "response 3 (saw 5 msgs)", results[2].Message.Content[0].Text)
+				assert.Equal("response 3 (saw 5 msgs)", results[2].Message.Content[0].Text)
 
 				// Session should have 6 messages: 3 user + 3 LLM.
 				msgs := session.Messages()
-				assert.Len(t, msgs, 6)
+				assert.Len(msgs, 6)
 
 				// Usage should be aggregated: 10+20+30 = 60, 5+10+15 = 30.
 				usage := session.Usage()
-				assert.Equal(t, 60, usage.InputTokens)
-				assert.Equal(t, 30, usage.OutputTokens)
+				assert.Equal(60, usage.InputTokens)
+				assert.Equal(30, usage.OutputTokens)
 			},
 		},
 
@@ -364,17 +383,19 @@ func TestSessionPrompt(t *testing.T) {
 			},
 			expResp: func(t *testing.T, results []*agent.TurnResult, session *agent.Session) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
-				require.Len(t, results, 1)
-				assert.Equal(t, "done", results[0].Message.Content[0].Text)
+				require.Len(results, 1)
+				assert.Equal("done", results[0].Message.Content[0].Text)
 
 				// Session: user + LLM(tool use) + tool result + LLM(complete) = 4.
 				msgs := session.Messages()
-				assert.Len(t, msgs, 4)
-				assert.Equal(t, model.MessageKindUser, msgs[0].Kind)
-				assert.Equal(t, model.MessageKindLLM, msgs[1].Kind)
-				assert.Equal(t, model.MessageKindToolResult, msgs[2].Kind)
-				assert.Equal(t, model.MessageKindLLM, msgs[3].Kind)
+				assert.Len(msgs, 4)
+				assert.Equal(model.MessageKindUser, msgs[0].Kind)
+				assert.Equal(model.MessageKindLLM, msgs[1].Kind)
+				assert.Equal(model.MessageKindToolResult, msgs[2].Kind)
+				assert.Equal(model.MessageKindLLM, msgs[3].Kind)
 			},
 		},
 
@@ -403,11 +424,12 @@ func TestSessionPrompt(t *testing.T) {
 			expErr: true,
 			expResp: func(t *testing.T, _ []*agent.TurnResult, session *agent.Session) {
 				t.Helper()
+				assert := assert.New(t)
 
 				// The user message was appended before the error, so it's in the history.
 				msgs := session.Messages()
-				assert.Len(t, msgs, 1)
-				assert.Equal(t, model.MessageKindUser, msgs[0].Kind)
+				assert.Len(msgs, 1)
+				assert.Equal(model.MessageKindUser, msgs[0].Kind)
 			},
 		},
 
@@ -436,22 +458,27 @@ func TestSessionPrompt(t *testing.T) {
 			},
 			expResp: func(t *testing.T, results []*agent.TurnResult, _ *agent.Session) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
-				require.Len(t, results, 1)
-				assert.Equal(t, "got 2 parts", results[0].Message.Content[0].Text)
+				require.Len(results, 1)
+				assert.Equal("got 2 parts", results[0].Message.Content[0].Text)
 			},
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			mockTools := []*toolmock.MockTool{
 				toolmock.NewMockTool(t),
 			}
 
 			cfg := test.mock(mockTools)
 			session, err := agent.NewSession(context.Background(), cfg)
-			require.NoError(t, err)
+			require.NoError(err)
 
 			var results []*agent.TurnResult
 			var lastErr error
@@ -465,9 +492,9 @@ func TestSessionPrompt(t *testing.T) {
 			}
 
 			if test.expErr {
-				assert.Error(t, lastErr)
+				assert.Error(lastErr)
 			} else {
-				assert.NoError(t, lastErr)
+				assert.NoError(lastErr)
 			}
 
 			if test.expResp != nil {
@@ -486,9 +513,10 @@ func TestSessionContinue(t *testing.T) {
 		"Continue with no messages should return an error.": {
 			setup: func(t *testing.T) *agent.Session {
 				t.Helper()
+				require := require.New(t)
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider()})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				return s
 			},
@@ -498,6 +526,7 @@ func TestSessionContinue(t *testing.T) {
 		"Continue after AppendMessage should run a turn.": {
 			setup: func(t *testing.T) *agent.Session {
 				t.Helper()
+				require := require.New(t)
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
@@ -513,7 +542,7 @@ func TestSessionContinue(t *testing.T) {
 						}, nil
 					}),
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				s.AppendMessage(model.Message{
 					ID:      "manual-1",
@@ -525,30 +554,34 @@ func TestSessionContinue(t *testing.T) {
 			},
 			expResp: func(t *testing.T, result *agent.TurnResult, session *agent.Session) {
 				t.Helper()
+				assert := assert.New(t)
 
-				assert.Equal(t, "continued", result.Message.Content[0].Text)
+				assert.Equal("continued", result.Message.Content[0].Text)
 				// Messages: injected user + LLM response = 2.
 				msgs := session.Messages()
-				assert.Len(t, msgs, 2)
-				assert.Equal(t, "manual-1", msgs[0].ID)
-				assert.Equal(t, 5, session.Usage().InputTokens)
+				assert.Len(msgs, 2)
+				assert.Equal("manual-1", msgs[0].ID)
+				assert.Equal(5, session.Usage().InputTokens)
 			},
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
 			session := test.setup(t)
 
 			result, err := session.Continue(context.Background())
 
 			if test.expErr {
-				assert.Error(t, err)
+				assert.Error(err)
 				return
 			}
 
-			require.NoError(t, err)
-			require.NotNil(t, result)
+			require.NoError(err)
+			require.NotNil(result)
 
 			if test.expResp != nil {
 				test.expResp(t, result, session)
@@ -564,23 +597,27 @@ func TestSessionState(t *testing.T) {
 		"New session should report idle state.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider()})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				state := s.State()
-				assert.False(t, state.Running)
-				assert.Equal(t, agent.SessionOperationNone, state.Operation)
-				assert.Zero(t, state.Turn)
-				assert.Zero(t, state.MessageCount)
-				assert.Zero(t, state.Usage.InputTokens)
-				assert.Equal(t, s.Session().ID, state.Session.ID)
+				assert.False(state.Running)
+				assert.Equal(agent.SessionOperationNone, state.Operation)
+				assert.Zero(state.Turn)
+				assert.Zero(state.MessageCount)
+				assert.Zero(state.Usage.InputTokens)
+				assert.Equal(s.Session().ID, state.Session.ID)
 			},
 		},
 
 		"State should include turn count, message count and usage.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
@@ -596,27 +633,29 @@ func TestSessionState(t *testing.T) {
 						}, nil
 					}),
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "first"}})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "second"}})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				state := s.State()
-				assert.False(t, state.Running)
-				assert.Equal(t, agent.SessionOperationNone, state.Operation)
-				assert.Equal(t, 2, state.Turn)
-				assert.Equal(t, 4, state.MessageCount)
-				assert.Equal(t, 22, state.Usage.InputTokens)
-				assert.Equal(t, 14, state.Usage.OutputTokens)
+				assert.False(state.Running)
+				assert.Equal(agent.SessionOperationNone, state.Operation)
+				assert.Equal(2, state.Turn)
+				assert.Equal(4, state.MessageCount)
+				assert.Equal(22, state.Usage.InputTokens)
+				assert.Equal(14, state.Usage.OutputTokens)
 			},
 		},
 
 		"State should report prompt operation while running.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				started := make(chan struct{})
 				release := make(chan struct{})
@@ -627,7 +666,7 @@ func TestSessionState(t *testing.T) {
 						return &llm.Response{Message: model.Message{Kind: model.MessageKindLLM, Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete}}}, nil
 					}),
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				errCh := make(chan error, 1)
 				go func() {
@@ -637,23 +676,25 @@ func TestSessionState(t *testing.T) {
 
 				<-started
 				state := s.State()
-				assert.True(t, state.Running)
-				assert.Equal(t, agent.SessionOperationPrompt, state.Operation)
-				assert.Equal(t, 1, state.MessageCount)
-				assert.Equal(t, 1, state.Turn)
+				assert.True(state.Running)
+				assert.Equal(agent.SessionOperationPrompt, state.Operation)
+				assert.Equal(1, state.MessageCount)
+				assert.Equal(1, state.Turn)
 
 				close(release)
-				require.NoError(t, <-errCh)
+				require.NoError(<-errCh)
 
 				state = s.State()
-				assert.False(t, state.Running)
-				assert.Equal(t, agent.SessionOperationNone, state.Operation)
+				assert.False(state.Running)
+				assert.Equal(agent.SessionOperationNone, state.Operation)
 			},
 		},
 
 		"State should report compact operation while running.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				started := make(chan struct{})
 				release := make(chan struct{})
@@ -664,7 +705,7 @@ func TestSessionState(t *testing.T) {
 				}}
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider(), Compactor: compactor})
-				require.NoError(t, err)
+				require.NoError(err)
 				s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser})
 
 				errCh := make(chan error, 1)
@@ -675,37 +716,39 @@ func TestSessionState(t *testing.T) {
 
 				<-started
 				state := s.State()
-				assert.True(t, state.Running)
-				assert.Equal(t, agent.SessionOperationCompact, state.Operation)
-				assert.Equal(t, 1, state.MessageCount)
-				assert.Equal(t, 1, state.Turn)
+				assert.True(state.Running)
+				assert.Equal(agent.SessionOperationCompact, state.Operation)
+				assert.Equal(1, state.MessageCount)
+				assert.Equal(1, state.Turn)
 
 				close(release)
-				require.NoError(t, <-errCh)
+				require.NoError(<-errCh)
 
 				state = s.State()
-				assert.False(t, state.Running)
-				assert.Equal(t, agent.SessionOperationNone, state.Operation)
+				assert.False(state.Running)
+				assert.Equal(agent.SessionOperationNone, state.Operation)
 			},
 		},
 
 		"State should clear operation after failed run.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
 						return nil, fmt.Errorf("boom")
 					}),
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
-				require.Error(t, err)
+				require.Error(err)
 
 				state := s.State()
-				assert.False(t, state.Running)
-				assert.Equal(t, agent.SessionOperationNone, state.Operation)
+				assert.False(state.Running)
+				assert.Equal(agent.SessionOperationNone, state.Operation)
 			},
 		},
 	}
@@ -724,6 +767,7 @@ func TestSessionConcurrency(t *testing.T) {
 		"Concurrent Prompt should return ErrSessionBusy.": {
 			run: func(t *testing.T, session *agent.Session) {
 				t.Helper()
+				assert := assert.New(t)
 
 				// Start a slow prompt.
 				var wg sync.WaitGroup
@@ -738,7 +782,7 @@ func TestSessionConcurrency(t *testing.T) {
 
 				// Second prompt should get ErrSessionBusy.
 				_, err := session.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "fast"}})
-				assert.ErrorIs(t, err, pkgerrors.ErrSessionBusy)
+				assert.ErrorIs(err, pkgerrors.ErrSessionBusy)
 
 				wg.Wait()
 			},
@@ -747,6 +791,7 @@ func TestSessionConcurrency(t *testing.T) {
 		"Concurrent Continue should return ErrSessionBusy.": {
 			run: func(t *testing.T, session *agent.Session) {
 				t.Helper()
+				assert := assert.New(t)
 
 				// Inject a message so Continue has something to work with.
 				session.AppendMessage(model.Message{
@@ -767,7 +812,7 @@ func TestSessionConcurrency(t *testing.T) {
 
 				// Second call should get ErrSessionBusy.
 				_, err := session.Continue(context.Background())
-				assert.ErrorIs(t, err, pkgerrors.ErrSessionBusy)
+				assert.ErrorIs(err, pkgerrors.ErrSessionBusy)
 
 				wg.Wait()
 			},
@@ -776,6 +821,8 @@ func TestSessionConcurrency(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			require := require.New(t)
+
 			session, err := agent.NewSession(context.Background(), agent.SessionConfig{
 				Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
 					// Simulate a slow LLM call.
@@ -791,7 +838,7 @@ func TestSessionConcurrency(t *testing.T) {
 					}, nil
 				}),
 			})
-			require.NoError(t, err)
+			require.NoError(err)
 
 			test.run(t, session)
 		})
@@ -799,71 +846,87 @@ func TestSessionConcurrency(t *testing.T) {
 }
 
 func TestSessionSetProviderDuringRunReturnsBusyAndAppliesOnNextTurn(t *testing.T) {
-	ctx := context.Background()
+	tests := map[string]struct {
+		run func(t *testing.T)
+	}{
+		"SetProvider during active prompt should return busy, then apply on next turn.": {
+			run: func(t *testing.T) {
+				assert := assert.New(t)
+				require := require.New(t)
+				ctx := context.Background()
 
-	firstCallStarted := make(chan struct{})
-	releaseFirstCall := make(chan struct{})
-	var firstCallOnce sync.Once
+				firstCallStarted := make(chan struct{})
+				releaseFirstCall := make(chan struct{})
+				var firstCallOnce sync.Once
 
-	provider1 := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
-		firstCallOnce.Do(func() { close(firstCallStarted) })
-		<-releaseFirstCall
+				provider1 := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+					firstCallOnce.Do(func() { close(firstCallStarted) })
+					<-releaseFirstCall
 
-		return &llm.Response{
-			Message: model.Message{
-				Kind:     model.MessageKindLLM,
-				Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "provider-1"}},
-				Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
+					return &llm.Response{
+						Message: model.Message{
+							Kind:     model.MessageKindLLM,
+							Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "provider-1"}},
+							Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
+						},
+					}, nil
+				})
+
+				provider2 := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+					return &llm.Response{
+						Message: model.Message{
+							Kind:     model.MessageKindLLM,
+							Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "provider-2"}},
+							Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
+						},
+					}, nil
+				})
+
+				s, err := agent.NewSession(ctx, agent.SessionConfig{Provider: provider1})
+				require.NoError(err)
+
+				resultCh := make(chan *agent.TurnResult, 1)
+				errCh := make(chan error, 1)
+				go func() {
+					result, err := s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "first"}})
+					if err != nil {
+						errCh <- err
+						return
+					}
+
+					resultCh <- result
+				}()
+
+				<-firstCallStarted
+				err = s.SetProvider(provider2)
+				assert.ErrorIs(err, pkgerrors.ErrSessionBusy)
+
+				close(releaseFirstCall)
+
+				select {
+				case err := <-errCh:
+					require.NoError(err, "first prompt failed")
+				case result := <-resultCh:
+					require.NotNil(result)
+					assert.Equal("provider-1", result.Message.Content[0].Text)
+				case <-time.After(2 * time.Second):
+					require.FailNow("timed out waiting for first prompt")
+				}
+
+				require.NoError(s.SetProvider(provider2))
+
+				secondResult, err := s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "second"}})
+				require.NoError(err)
+				assert.Equal("provider-2", secondResult.Message.Content[0].Text)
 			},
-		}, nil
-	})
-
-	provider2 := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
-		return &llm.Response{
-			Message: model.Message{
-				Kind:     model.MessageKindLLM,
-				Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "provider-2"}},
-				Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
-			},
-		}, nil
-	})
-
-	s, err := agent.NewSession(ctx, agent.SessionConfig{Provider: provider1})
-	require.NoError(t, err)
-
-	resultCh := make(chan *agent.TurnResult, 1)
-	errCh := make(chan error, 1)
-	go func() {
-		result, err := s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "first"}})
-		if err != nil {
-			errCh <- err
-			return
-		}
-
-		resultCh <- result
-	}()
-
-	<-firstCallStarted
-	err = s.SetProvider(provider2)
-	assert.ErrorIs(t, err, pkgerrors.ErrSessionBusy)
-
-	close(releaseFirstCall)
-
-	select {
-	case err := <-errCh:
-		t.Fatalf("first prompt failed: %v", err)
-	case result := <-resultCh:
-		require.NotNil(t, result)
-		assert.Equal(t, "provider-1", result.Message.Content[0].Text)
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for first prompt")
+		},
 	}
 
-	require.NoError(t, s.SetProvider(provider2))
-
-	secondResult, err := s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "second"}})
-	require.NoError(t, err)
-	assert.Equal(t, "provider-2", secondResult.Message.Content[0].Text)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			test.run(t)
+		})
+	}
 }
 
 func TestSessionMutators(t *testing.T) {
@@ -873,9 +936,11 @@ func TestSessionMutators(t *testing.T) {
 		"Messages should return a copy that doesn't affect the session.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider()})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				s.AppendMessage(model.Message{ID: "1", Kind: model.MessageKindUser})
 
@@ -883,16 +948,18 @@ func TestSessionMutators(t *testing.T) {
 				msgs[0].ID = "mutated"
 
 				// Session's internal state should be unaffected.
-				assert.Equal(t, "1", s.Messages()[0].ID)
+				assert.Equal("1", s.Messages()[0].ID)
 			},
 		},
 
 		"ReplaceMessages should replace history and not retain a reference.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider()})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				s.AppendMessage(model.Message{ID: "old", Kind: model.MessageKindUser})
 
@@ -903,14 +970,16 @@ func TestSessionMutators(t *testing.T) {
 				replacement[0].ID = "mutated"
 
 				msgs := s.Messages()
-				require.Len(t, msgs, 1)
-				assert.Equal(t, "new", msgs[0].ID)
+				require.Len(msgs, 1)
+				assert.Equal("new", msgs[0].ID)
 			},
 		},
 
 		"Reset should clear messages and usage but preserve session identity.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
@@ -926,30 +995,32 @@ func TestSessionMutators(t *testing.T) {
 						}, nil
 					}),
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				sessionBefore := s.Session()
 
 				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}})
-				require.NoError(t, err)
-				assert.NotEmpty(t, s.Messages())
-				assert.NotZero(t, s.Usage().InputTokens)
+				require.NoError(err)
+				assert.NotEmpty(s.Messages())
+				assert.NotZero(s.Usage().InputTokens)
 
 				s.Reset()
 
-				assert.Empty(t, s.Messages())
-				assert.Zero(t, s.Usage().InputTokens)
+				assert.Empty(s.Messages())
+				assert.Zero(s.Usage().InputTokens)
 
 				// Session identity must survive reset.
 				sessionAfter := s.Session()
-				assert.Equal(t, sessionBefore.ID, sessionAfter.ID)
-				assert.Equal(t, sessionBefore.CreatedAt, sessionAfter.CreatedAt)
+				assert.Equal(sessionBefore.ID, sessionAfter.ID)
+				assert.Equal(sessionBefore.CreatedAt, sessionAfter.CreatedAt)
 			},
 		},
 
 		"SetProvider should change the provider for subsequent turns.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
@@ -962,14 +1033,14 @@ func TestSessionMutators(t *testing.T) {
 						}, nil
 					}),
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				r1, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
-				require.NoError(t, err)
-				assert.Equal(t, "provider-1", r1.Message.Content[0].Text)
+				require.NoError(err)
+				assert.Equal("provider-1", r1.Message.Content[0].Text)
 
 				// Switch provider.
-				require.NoError(t, s.SetProvider(fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+				require.NoError(s.SetProvider(fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
 					return &llm.Response{
 						Message: model.Message{
 							Kind:     model.MessageKindLLM,
@@ -980,14 +1051,16 @@ func TestSessionMutators(t *testing.T) {
 				})))
 
 				r2, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi again"}})
-				require.NoError(t, err)
-				assert.Equal(t, "provider-2", r2.Message.Content[0].Text)
+				require.NoError(err)
+				assert.Equal("provider-2", r2.Message.Content[0].Text)
 			},
 		},
 
 		"Session identity should be stable across multiple turns.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
@@ -1000,40 +1073,44 @@ func TestSessionMutators(t *testing.T) {
 						}, nil
 					}),
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				original := s.Session()
 
 				// Run several turns.
 				for range 3 {
 					_, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
-					require.NoError(t, err)
+					require.NoError(err)
 				}
 
 				// Identity must not change.
 				after := s.Session()
-				assert.Equal(t, original.ID, after.ID)
-				assert.Equal(t, original.CreatedAt, after.CreatedAt)
+				assert.Equal(original.ID, after.ID)
+				assert.Equal(original.CreatedAt, after.CreatedAt)
 			},
 		},
 
 		"Two sessions should have different IDs.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				s1, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider()})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				s2, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider()})
-				require.NoError(t, err)
+				require.NoError(err)
 
-				assert.NotEqual(t, s1.Session().ID, s2.Session().ID)
+				assert.NotEqual(s1.Session().ID, s2.Session().ID)
 			},
 		},
 
 		"SetSystemPrompt should change the prompt for subsequent turns.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, req llm.Request) (*llm.Response, error) {
@@ -1047,23 +1124,25 @@ func TestSessionMutators(t *testing.T) {
 					}),
 					SystemPrompt: "original",
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				r1, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
-				require.NoError(t, err)
-				assert.Equal(t, "original", r1.Message.Content[0].Text)
+				require.NoError(err)
+				assert.Equal("original", r1.Message.Content[0].Text)
 
-				require.NoError(t, s.SetSystemPrompt("updated"))
+				require.NoError(s.SetSystemPrompt("updated"))
 
 				r2, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
-				require.NoError(t, err)
-				assert.Equal(t, "updated", r2.Message.Content[0].Text)
+				require.NoError(err)
+				assert.Equal("updated", r2.Message.Content[0].Text)
 			},
 		},
 
 		"DisablePromptCache should be applied and updatable for subsequent turns.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				reqs := []llm.Request{}
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
@@ -1079,20 +1158,20 @@ func TestSessionMutators(t *testing.T) {
 					}),
 					DisablePromptCache: false,
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
-				require.NoError(t, err)
+				require.NoError(err)
 
-				require.NoError(t, s.SetDisablePromptCache(true))
+				require.NoError(s.SetDisablePromptCache(true))
 				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "again"}})
-				require.NoError(t, err)
+				require.NoError(err)
 
-				require.Len(t, reqs, 2)
-				assert.Equal(t, s.Session().ID, reqs[0].SessionID)
-				assert.Equal(t, s.Session().ID, reqs[1].SessionID)
-				assert.True(t, reqs[0].Config.EnablePromptCache)
-				assert.False(t, reqs[1].Config.EnablePromptCache)
+				require.Len(reqs, 2)
+				assert.Equal(s.Session().ID, reqs[0].SessionID)
+				assert.Equal(s.Session().ID, reqs[1].SessionID)
+				assert.True(reqs[0].Config.EnablePromptCache)
+				assert.False(reqs[1].Config.EnablePromptCache)
 			},
 		},
 	}
@@ -1111,6 +1190,8 @@ func TestSessionPersistence(t *testing.T) {
 		"NewSession with repos should persist the session.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				repo := memory.NewRepository()
 				ctx := context.Background()
@@ -1120,17 +1201,19 @@ func TestSessionPersistence(t *testing.T) {
 					SessionRepository: repo,
 					MessageRepository: repo,
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				got, err := repo.GetSession(ctx, s.Session().ID)
-				require.NoError(t, err)
-				assert.Equal(t, s.Session().ID, got.ID)
+				require.NoError(err)
+				assert.Equal(s.Session().ID, got.ID)
 			},
 		},
 
 		"Prompt should persist user message eagerly and LLM response via callback.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				repo := memory.NewRepository()
 				ctx := context.Background()
@@ -1158,31 +1241,33 @@ func TestSessionPersistence(t *testing.T) {
 					SessionRepository: repo,
 					MessageRepository: repo,
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				sessionID = s.Session().ID
 
 				_, err = s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				// User message was persisted before the LLM call.
-				require.Len(t, msgsAtLLMCall, 1)
-				assert.Equal(t, model.MessageKindUser, msgsAtLLMCall[0].Kind)
-				assert.Equal(t, "hello", msgsAtLLMCall[0].Content[0].Text)
+				require.Len(msgsAtLLMCall, 1)
+				assert.Equal(model.MessageKindUser, msgsAtLLMCall[0].Kind)
+				assert.Equal("hello", msgsAtLLMCall[0].Content[0].Text)
 
 				// After the turn, both messages are in the store.
 				result, err := repo.ListMessages(ctx, s.Session().ID, store.ListOpts{})
-				require.NoError(t, err)
-				require.Len(t, result.Items, 2)
-				assert.Equal(t, model.MessageKindUser, result.Items[0].Kind)
-				assert.Equal(t, model.MessageKindLLM, result.Items[1].Kind)
-				assert.Equal(t, "hi back", result.Items[1].Content[0].Text)
+				require.NoError(err)
+				require.Len(result.Items, 2)
+				assert.Equal(model.MessageKindUser, result.Items[0].Kind)
+				assert.Equal(model.MessageKindLLM, result.Items[1].Kind)
+				assert.Equal("hi back", result.Items[1].Content[0].Text)
 			},
 		},
 
 		"Continue should persist only turn messages (no extra user message).": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				repo := memory.NewRepository()
 				ctx := context.Background()
@@ -1200,7 +1285,7 @@ func TestSessionPersistence(t *testing.T) {
 					SessionRepository: repo,
 					MessageRepository: repo,
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				s.AppendMessage(model.Message{
 					ID:      "manual-1",
@@ -1209,19 +1294,21 @@ func TestSessionPersistence(t *testing.T) {
 				})
 
 				_, err = s.Continue(ctx)
-				require.NoError(t, err)
+				require.NoError(err)
 
 				// Continue should only persist the turn result (LLM message), not the manually appended one.
 				result, err := repo.ListMessages(ctx, s.Session().ID, store.ListOpts{})
-				require.NoError(t, err)
-				require.Len(t, result.Items, 1)
-				assert.Equal(t, model.MessageKindLLM, result.Items[0].Kind)
+				require.NoError(err)
+				require.Len(result.Items, 1)
+				assert.Equal(model.MessageKindLLM, result.Items[0].Kind)
 			},
 		},
 
 		"Multi-turn should accumulate persisted messages across turns.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				repo := memory.NewRepository()
 				ctx := context.Background()
@@ -1239,23 +1326,25 @@ func TestSessionPersistence(t *testing.T) {
 					SessionRepository: repo,
 					MessageRepository: repo,
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				for range 3 {
 					_, err := s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
-					require.NoError(t, err)
+					require.NoError(err)
 				}
 
 				// 3 turns × (user + LLM) = 6 messages.
 				result, err := repo.ListMessages(ctx, s.Session().ID, store.ListOpts{})
-				require.NoError(t, err)
-				assert.Len(t, result.Items, 6)
+				require.NoError(err)
+				assert.Len(result.Items, 6)
 			},
 		},
 
 		"Tool use turn should persist each message individually as produced.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				repo := memory.NewRepository()
 				ctx := context.Background()
@@ -1310,37 +1399,39 @@ func TestSessionPersistence(t *testing.T) {
 					SessionRepository: repo,
 					MessageRepository: repo,
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				sessionID = s.Session().ID
 
 				_, err = s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "calculate"}})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				// At first LLM call: only user message persisted.
-				require.Len(t, msgsAtFirstLLMCall, 1)
-				assert.Equal(t, model.MessageKindUser, msgsAtFirstLLMCall[0].Kind)
+				require.Len(msgsAtFirstLLMCall, 1)
+				assert.Equal(model.MessageKindUser, msgsAtFirstLLMCall[0].Kind)
 
 				// At second LLM call: user + LLM(tool use) + tool result = 3 persisted.
-				require.Len(t, msgsAtSecondLLMCall, 3)
-				assert.Equal(t, model.MessageKindUser, msgsAtSecondLLMCall[0].Kind)
-				assert.Equal(t, model.MessageKindLLM, msgsAtSecondLLMCall[1].Kind)
-				assert.Equal(t, model.MessageKindToolResult, msgsAtSecondLLMCall[2].Kind)
+				require.Len(msgsAtSecondLLMCall, 3)
+				assert.Equal(model.MessageKindUser, msgsAtSecondLLMCall[0].Kind)
+				assert.Equal(model.MessageKindLLM, msgsAtSecondLLMCall[1].Kind)
+				assert.Equal(model.MessageKindToolResult, msgsAtSecondLLMCall[2].Kind)
 
 				// After turn: all 4 messages persisted.
 				result, err := repo.ListMessages(ctx, s.Session().ID, store.ListOpts{})
-				require.NoError(t, err)
-				require.Len(t, result.Items, 4)
-				assert.Equal(t, model.MessageKindUser, result.Items[0].Kind)
-				assert.Equal(t, model.MessageKindLLM, result.Items[1].Kind)
-				assert.Equal(t, model.MessageKindToolResult, result.Items[2].Kind)
-				assert.Equal(t, model.MessageKindLLM, result.Items[3].Kind)
+				require.NoError(err)
+				require.Len(result.Items, 4)
+				assert.Equal(model.MessageKindUser, result.Items[0].Kind)
+				assert.Equal(model.MessageKindLLM, result.Items[1].Kind)
+				assert.Equal(model.MessageKindToolResult, result.Items[2].Kind)
+				assert.Equal(model.MessageKindLLM, result.Items[3].Kind)
 			},
 		},
 
 		"Without repos, session should work as before (no persistence).": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				ctx := context.Background()
 
@@ -1356,20 +1447,22 @@ func TestSessionPersistence(t *testing.T) {
 					}),
 					// No repos — purely in-memory.
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				_, err = s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				// Session should still work.
 				msgs := s.Messages()
-				assert.Len(t, msgs, 2)
+				assert.Len(msgs, 2)
 			},
 		},
 
 		"Session should be listed after creation.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				repo := memory.NewRepository()
 				ctx := context.Background()
@@ -1378,21 +1471,21 @@ func TestSessionPersistence(t *testing.T) {
 					Provider:          fake.NewEchoProvider(),
 					SessionRepository: repo,
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				s2, err := agent.NewSession(ctx, agent.SessionConfig{
 					Provider:          fake.NewEchoProvider(),
 					SessionRepository: repo,
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				result, err := repo.ListSessions(ctx, store.ListOpts{})
-				require.NoError(t, err)
-				require.Len(t, result.Items, 2)
+				require.NoError(err)
+				require.Len(result.Items, 2)
 
 				// Newest first.
-				assert.Equal(t, s2.Session().ID, result.Items[0].ID)
-				assert.Equal(t, s1.Session().ID, result.Items[1].ID)
+				assert.Equal(s2.Session().ID, result.Items[0].ID)
+				assert.Equal(s1.Session().ID, result.Items[1].ID)
 			},
 		},
 	}
@@ -1411,6 +1504,8 @@ func TestSessionCompact(t *testing.T) {
 		"Compact should call compactor with Force=true.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				var gotOpts agentcontext.CompactOptions
 				var gotMsgs []model.Message
@@ -1426,44 +1521,48 @@ func TestSessionCompact(t *testing.T) {
 					Provider:  fake.NewEchoProvider(),
 					Compactor: compactor,
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}})
 
 				result, err := s.Compact(context.Background())
-				require.NoError(t, err)
-				require.NotNil(t, result)
+				require.NoError(err)
+				require.NotNil(result)
 
-				assert.True(t, gotOpts.Force, "Force should be true")
-				assert.Len(t, gotMsgs, 1)
-				assert.Equal(t, "m1", gotMsgs[0].ID)
+				assert.True(gotOpts.Force, "Force should be true")
+				assert.Len(gotMsgs, 1)
+				assert.Equal("m1", gotMsgs[0].ID)
 			},
 		},
 
 		"Compact with no compactor (noop) should return nil message.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider: fake.NewEchoProvider(),
 					// No compactor — NoopCompactor used.
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser})
 
 				result, err := s.Compact(context.Background())
-				require.NoError(t, err)
-				require.NotNil(t, result)
+				require.NoError(err)
+				require.NotNil(result)
 
-				assert.Nil(t, result.Message, "NoopCompactor should not create a compaction message")
-				assert.Len(t, result.Messages, 1)
+				assert.Nil(result.Message, "NoopCompactor should not create a compaction message")
+				assert.Len(result.Messages, 1)
 			},
 		},
 
 		"Compact creating a message should append it to session history.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				compactionMsg := model.Message{
 					ID:         "compact-1",
@@ -1486,31 +1585,33 @@ func TestSessionCompact(t *testing.T) {
 					Provider:  fake.NewEchoProvider(),
 					Compactor: compactor,
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}})
 
 				result, err := s.Compact(context.Background())
-				require.NoError(t, err)
-				require.NotNil(t, result.Message)
+				require.NoError(err)
+				require.NotNil(result.Message)
 
 				// The compaction message should be appended to session history.
 				msgs := s.Messages()
-				require.Len(t, msgs, 2)
-				assert.Equal(t, "m1", msgs[0].ID)
-				assert.Equal(t, "compact-1", msgs[1].ID)
-				assert.Equal(t, model.MessageKindCompaction, msgs[1].Kind)
+				require.Len(msgs, 2)
+				assert.Equal("m1", msgs[0].ID)
+				assert.Equal("compact-1", msgs[1].ID)
+				assert.Equal(model.MessageKindCompaction, msgs[1].Kind)
 
 				// Usage should be aggregated.
 				usage := s.Usage()
-				assert.Equal(t, 100, usage.InputTokens)
-				assert.Equal(t, 50, usage.OutputTokens)
+				assert.Equal(100, usage.InputTokens)
+				assert.Equal(50, usage.OutputTokens)
 			},
 		},
 
 		"Compact should persist the compaction message when repo is set.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				repo := memory.NewRepository()
 				ctx := context.Background()
@@ -1537,25 +1638,27 @@ func TestSessionCompact(t *testing.T) {
 					SessionRepository: repo,
 					MessageRepository: repo,
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser})
 
 				_, err = s.Compact(ctx)
-				require.NoError(t, err)
+				require.NoError(err)
 
 				// The compaction message should be in the store.
 				result, err := repo.ListMessages(ctx, s.Session().ID, store.ListOpts{})
-				require.NoError(t, err)
-				require.Len(t, result.Items, 1)
-				assert.Equal(t, "compact-1", result.Items[0].ID)
-				assert.Equal(t, model.MessageKindCompaction, result.Items[0].Kind)
+				require.NoError(err)
+				require.Len(result.Items, 1)
+				assert.Equal("compact-1", result.Items[0].ID)
+				assert.Equal(model.MessageKindCompaction, result.Items[0].Kind)
 			},
 		},
 
 		"Compact during running turn should return ErrSessionBusy.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
@@ -1570,7 +1673,7 @@ func TestSessionCompact(t *testing.T) {
 						}, nil
 					}),
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				s.AppendMessage(model.Message{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}})
 
@@ -1587,7 +1690,7 @@ func TestSessionCompact(t *testing.T) {
 
 				// Compact should return ErrSessionBusy.
 				_, err = s.Compact(context.Background())
-				assert.ErrorIs(t, err, pkgerrors.ErrSessionBusy)
+				assert.ErrorIs(err, pkgerrors.ErrSessionBusy)
 
 				wg.Wait()
 			},
@@ -1596,6 +1699,8 @@ func TestSessionCompact(t *testing.T) {
 		"Compactor error should propagate.": {
 			run: func(t *testing.T) {
 				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
 				compactor := &testCompactor{
 					fn: func(_ context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
@@ -1607,18 +1712,18 @@ func TestSessionCompact(t *testing.T) {
 					Provider:  fake.NewEchoProvider(),
 					Compactor: compactor,
 				})
-				require.NoError(t, err)
+				require.NoError(err)
 
 				s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser})
 
 				_, err = s.Compact(context.Background())
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "compaction boom")
+				assert.Error(err)
+				assert.Contains(err.Error(), "compaction boom")
 
 				// Session state should be unmodified.
 				msgs := s.Messages()
-				assert.Len(t, msgs, 1)
-				assert.Equal(t, "m1", msgs[0].ID)
+				assert.Len(msgs, 1)
+				assert.Equal("m1", msgs[0].ID)
 			},
 		},
 	}
