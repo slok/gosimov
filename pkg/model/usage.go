@@ -1,6 +1,6 @@
 package model
 
-// Usage tracks token consumption and cost for an LLM call.
+// Usage tracks token consumption for an LLM call.
 type Usage struct {
 	InputTokens      int
 	OutputTokens     int
@@ -8,5 +8,4 @@ type Usage struct {
 	CacheWriteTokens int
 	TotalTokens      int
 	ReasoningTokens  int
-	CostUSD          float64
 }

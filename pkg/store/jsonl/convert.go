@@ -75,13 +75,12 @@ type metadataLine struct {
 
 // usageLine holds token usage data.
 type usageLine struct {
-	InputTokens      int     `json:"input_tokens,omitempty"`
-	OutputTokens     int     `json:"output_tokens,omitempty"`
-	CacheReadTokens  int     `json:"cache_read_tokens,omitempty"`
-	CacheWriteTokens int     `json:"cache_write_tokens,omitempty"`
-	TotalTokens      int     `json:"total_tokens,omitempty"`
-	ReasoningTokens  int     `json:"reasoning_tokens,omitempty"`
-	CostUSD          float64 `json:"cost_usd,omitempty"`
+	InputTokens      int `json:"input_tokens,omitempty"`
+	OutputTokens     int `json:"output_tokens,omitempty"`
+	CacheReadTokens  int `json:"cache_read_tokens,omitempty"`
+	CacheWriteTokens int `json:"cache_write_tokens,omitempty"`
+	TotalTokens      int `json:"total_tokens,omitempty"`
+	ReasoningTokens  int `json:"reasoning_tokens,omitempty"`
 }
 
 // compactionDataLine holds compaction checkpoint data.
@@ -260,7 +259,6 @@ func metadataToLine(md *model.MessageMetadata) *metadataLine {
 			CacheWriteTokens: u.CacheWriteTokens,
 			TotalTokens:      u.TotalTokens,
 			ReasoningTokens:  u.ReasoningTokens,
-			CostUSD:          u.CostUSD,
 		}
 	}
 
@@ -282,7 +280,6 @@ func lineToMetadata(ml *metadataLine) *model.MessageMetadata {
 			CacheWriteTokens: ml.Usage.CacheWriteTokens,
 			TotalTokens:      ml.Usage.TotalTokens,
 			ReasoningTokens:  ml.Usage.ReasoningTokens,
-			CostUSD:          ml.Usage.CostUSD,
 		})
 
 		md.Usage = &u

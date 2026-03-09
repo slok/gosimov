@@ -177,7 +177,6 @@ func run(ctx context.Context) error {
 	fmt.Printf("Total tokens:  %d\n", u.TotalTokens)
 	fmt.Printf("Input tokens:  %d\n", u.InputTokens)
 	fmt.Printf("Output tokens: %d\n", u.OutputTokens)
-	fmt.Printf("Cost USD:      %.6f\n", u.CostUSD)
 
 	return nil
 }

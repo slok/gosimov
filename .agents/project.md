@@ -114,7 +114,7 @@ The runtime `Session` in `pkg/agent/` holds a `model.Session` internally and pas
 
 ### Usage
 
-`Usage` tracks token consumption and cost for a single LLM call. Attached to LLM messages via `MessageMetadata`.
+`Usage` tracks token consumption for a single LLM call. Attached to LLM messages via `MessageMetadata`.
 
 ### StopReason
 
@@ -532,12 +532,12 @@ Line types are identified by the `"type"` field: `"session"` or `"message"`.
 | `imageDataLine` | `data`, `mime_type` | Image binary data (base64-encoded by `json.Marshal`) |
 | `toolCallLine` | `id`, `tool_id`, `arguments` | Tool call request |
 | `metadataLine` | `usage`, `stop_reason`, `model`, `provider` | LLM response metadata |
-| `usageLine` | `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `total_tokens`, `reasoning_tokens`, `cost_usd` | Token usage |
+| `usageLine` | `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `total_tokens`, `reasoning_tokens` | Token usage |
 | `compactionDataLine` | `first_kept_id`, `tokens_before` | Compaction checkpoint data |
 
 **Design decisions:**
 - **Images stored inline as base64** — same as Pi-mono. No external storage, no stripping. `json.Marshal` handles `[]byte` → base64 automatically.
-- **Per-message token usage stored** — for cost tracking, debugging, context window management, and analytics.
+- **Per-message token usage stored** — for debugging, context window management, and analytics.
 - **Corrupt lines are skipped** — `parseMessages` silently skips unparseable or wrong-type lines for resilience.
 - **Filename is always `<session_id>.jsonl`** — no customization. Users wanting something different implement their own repository.
 - **Cursor is index-based** — same as memory store (decimal string encoding of slice index).

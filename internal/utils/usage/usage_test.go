@@ -15,18 +15,18 @@ func TestNormalize(t *testing.T) {
 		exp                    model.Usage
 	}{
 		"Input including cache should be normalized to non-cached input.": {
-			raw:                    model.Usage{InputTokens: 100, OutputTokens: 40, CacheReadTokens: 25, CacheWriteTokens: 10, ReasoningTokens: 5, CostUSD: 0.01},
+			raw:                    model.Usage{InputTokens: 100, OutputTokens: 40, CacheReadTokens: 25, CacheWriteTokens: 10, ReasoningTokens: 5},
 			inputIncludesCacheRead: true,
-			exp:                    model.Usage{InputTokens: 75, OutputTokens: 40, CacheReadTokens: 25, CacheWriteTokens: 10, TotalTokens: 150, ReasoningTokens: 5, CostUSD: 0.01},
+			exp:                    model.Usage{InputTokens: 75, OutputTokens: 40, CacheReadTokens: 25, CacheWriteTokens: 10, TotalTokens: 150, ReasoningTokens: 5},
 		},
 
 		"Input already non-cached should stay unchanged.": {
-			raw: model.Usage{InputTokens: 100, OutputTokens: 40, CacheReadTokens: 25, CacheWriteTokens: 10, ReasoningTokens: 5, CostUSD: 0.01},
-			exp: model.Usage{InputTokens: 100, OutputTokens: 40, CacheReadTokens: 25, CacheWriteTokens: 10, TotalTokens: 175, ReasoningTokens: 5, CostUSD: 0.01},
+			raw: model.Usage{InputTokens: 100, OutputTokens: 40, CacheReadTokens: 25, CacheWriteTokens: 10, ReasoningTokens: 5},
+			exp: model.Usage{InputTokens: 100, OutputTokens: 40, CacheReadTokens: 25, CacheWriteTokens: 10, TotalTokens: 175, ReasoningTokens: 5},
 		},
 
 		"Negative values should be clamped to zero.": {
-			raw: model.Usage{InputTokens: -10, OutputTokens: -1, CacheReadTokens: -3, CacheWriteTokens: -2, ReasoningTokens: -4, CostUSD: -0.5},
+			raw: model.Usage{InputTokens: -10, OutputTokens: -1, CacheReadTokens: -3, CacheWriteTokens: -2, ReasoningTokens: -4},
 			exp: model.Usage{},
 		},
 
@@ -53,16 +53,16 @@ func TestAdd(t *testing.T) {
 		b   model.Usage
 		exp model.Usage
 	}{
-		"Usage should add all token fields and cost.": {
-			a:   model.Usage{InputTokens: 10, OutputTokens: 5, CacheReadTokens: 3, CacheWriteTokens: 1, ReasoningTokens: 2, CostUSD: 0.1},
-			b:   model.Usage{InputTokens: 20, OutputTokens: 7, CacheReadTokens: 4, CacheWriteTokens: 2, ReasoningTokens: 3, CostUSD: 0.2},
-			exp: model.Usage{InputTokens: 30, OutputTokens: 12, CacheReadTokens: 7, CacheWriteTokens: 3, TotalTokens: 52, ReasoningTokens: 5, CostUSD: 0.3},
+		"Usage should add all token fields.": {
+			a:   model.Usage{InputTokens: 10, OutputTokens: 5, CacheReadTokens: 3, CacheWriteTokens: 1, ReasoningTokens: 2},
+			b:   model.Usage{InputTokens: 20, OutputTokens: 7, CacheReadTokens: 4, CacheWriteTokens: 2, ReasoningTokens: 3},
+			exp: model.Usage{InputTokens: 30, OutputTokens: 12, CacheReadTokens: 7, CacheWriteTokens: 3, TotalTokens: 52, ReasoningTokens: 5},
 		},
 
 		"Negative values should be ignored when aggregating.": {
-			a:   model.Usage{InputTokens: 10, CostUSD: 0.1},
-			b:   model.Usage{InputTokens: -20, CostUSD: -1},
-			exp: model.Usage{InputTokens: 10, TotalTokens: 10, CostUSD: 0.1},
+			a:   model.Usage{InputTokens: 10},
+			b:   model.Usage{InputTokens: -20},
+			exp: model.Usage{InputTokens: 10, TotalTokens: 10},
 		},
 	}
 
@@ -71,8 +71,6 @@ func TestAdd(t *testing.T) {
 			assert := assert.New(t)
 
 			got := Add(test.a, test.b)
-			assert.InDelta(test.exp.CostUSD, got.CostUSD, 0.0000001)
-			got.CostUSD = test.exp.CostUSD
 			assert.Equal(test.exp, got)
 		})
 	}
