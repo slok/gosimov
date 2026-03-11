@@ -12,7 +12,7 @@ Build your own agentic developer/operator experience directly in your Go systems
 
 - Simple session API (`Prompt`, `Continue`, `Compact`) with minimal setup.
 - Built-in tool-calling loop with JSON schema contracts and structured tool results.
-- Multi-provider support (Zen, OpenAI, ChatGPT/Codex, Anthropic/Claude).
+- Multi-provider support (Zen, OpenCode Go, OpenAI, ChatGPT/Codex, Anthropic/Claude).
 - Optional persistence backends (`memory`, `jsonl`) plus live subscriptions via `subscriber`.
 - Context compaction support for long-running conversations.
 - Runtime state + usage tracking for observability and UI integration.
@@ -89,6 +89,9 @@ func main() {
 ```bash
 # Real provider + tools
 go run ./examples/zen --api-key "$ZEN_API_KEY"
+
+# OpenCode Go provider + tools
+go run ./examples/opencode-go --api-key "$OPENCODE_GO_API_KEY"
 
 # Fake provider scripted flow (offline)
 go run ./examples/simple

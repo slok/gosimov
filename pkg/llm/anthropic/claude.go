@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/slok/gosimov/pkg/llm"
+	"github.com/slok/gosimov/pkg/llm/internal/anthropicmsg"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
 	"github.com/slok/gosimov/pkg/tool"
@@ -59,22 +60,22 @@ func NewClaude(cfg ClaudeConfig) (llm.Provider, error) {
 		return nil, fmt.Errorf("invalid claude provider config: %w", err)
 	}
 
-	return newProvider(providerConfig{
+	return anthropicmsg.New(anthropicmsg.Config{
 		TokenSource: cfg.TokenSource,
 		BaseURL:     cfg.BaseURL,
 		Model:       cfg.Model,
 		ModelInfo:   info,
-		Tools:       convertTools(cfg.Tools, toClaudeCodeName),
+		Tools:       cfg.Tools,
 		Client:      cfg.Client,
-		Options: providerOptions{
-			providerID:         claudeProviderID,
-			authMode:           authModeOAuthBearer,
-			claudeCompat:       true,
-			normalizeToolName:  toClaudeCodeName,
-			restoreToolName:    fromClaudeCodeName(cfg.Tools),
-			defaultMaxTokens:   info.MaxOutputTokens,
-			claudeIdentityText: claudeIdentitySystemPrompt,
-			extraHeaders: map[string]string{
+		Options: anthropicmsg.Options{
+			ProviderID:         claudeProviderID,
+			AuthMode:           anthropicmsg.AuthModeOAuthBearer,
+			ClaudeCompat:       true,
+			NormalizeToolName:  toClaudeCodeName,
+			RestoreToolName:    fromClaudeCodeName(cfg.Tools),
+			DefaultMaxTokens:   info.MaxOutputTokens,
+			ClaudeIdentityText: claudeIdentitySystemPrompt,
+			ExtraHeaders: map[string]string{
 				"anthropic-beta": claudeCompatibilityBetaList,
 				"user-agent":     claudeCLIUserAgent,
 				"x-app":          "cli",

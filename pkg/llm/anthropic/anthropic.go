@@ -6,12 +6,16 @@ import (
 	"strings"
 
 	"github.com/slok/gosimov/pkg/llm"
+	"github.com/slok/gosimov/pkg/llm/internal/anthropicmsg"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
 	"github.com/slok/gosimov/pkg/tool"
 )
 
-const anthropicProviderID = "anthropic"
+const (
+	anthropicProviderID     = "anthropic"
+	defaultAnthropicBaseURL = "https://api.anthropic.com/v1"
+)
 
 // Config configures the Anthropic Messages API provider using API key authentication.
 type Config struct {
@@ -54,17 +58,17 @@ func NewAnthropic(cfg Config) (llm.Provider, error) {
 		return nil, fmt.Errorf("invalid anthropic provider config: %w", err)
 	}
 
-	return newProvider(providerConfig{
+	return anthropicmsg.New(anthropicmsg.Config{
 		TokenSource: cfg.TokenSource,
 		BaseURL:     cfg.BaseURL,
 		Model:       cfg.Model,
 		ModelInfo:   info,
-		Tools:       convertTools(cfg.Tools, nil),
+		Tools:       cfg.Tools,
 		Client:      cfg.Client,
-		Options: providerOptions{
-			providerID:       anthropicProviderID,
-			authMode:         authModeAPIKey,
-			defaultMaxTokens: info.MaxOutputTokens,
+		Options: anthropicmsg.Options{
+			ProviderID:       anthropicProviderID,
+			AuthMode:         anthropicmsg.AuthModeAPIKey,
+			DefaultMaxTokens: info.MaxOutputTokens,
 		},
 	})
 }
