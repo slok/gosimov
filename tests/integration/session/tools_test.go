@@ -60,7 +60,7 @@ func TestToolUsageWriteEditRead(t *testing.T) {
 		Provider:          provider,
 		SystemPrompt:      "You are a helpful assistant. Use the available tools to complete tasks. Be concise. Do not ask for confirmation, just do it.",
 		Tools:             tools,
-		MaxIterations:     15,
+		TurnMaxIterations: 15,
 		SessionRepository: repo,
 		MessageRepository: repo,
 	})
@@ -127,7 +127,7 @@ func TestToolUsageListDirectory(t *testing.T) {
 		Provider:          provider,
 		SystemPrompt:      "You are a helpful assistant. Use the available tools. Be concise.",
 		Tools:             tools,
-		MaxIterations:     10,
+		TurnMaxIterations: 10,
 		SessionRepository: repo,
 		MessageRepository: repo,
 	})

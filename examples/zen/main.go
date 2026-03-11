@@ -130,7 +130,7 @@ func run(ctx context.Context) error {
 		Tools:             tools,
 		SessionRepository: repo,
 		MessageRepository: repo,
-		MaxIterations:     cfg.maxIterations,
+		TurnMaxIterations: cfg.maxIterations,
 	})
 	if err != nil {
 		return fmt.Errorf("creating session: %w", err)
@@ -139,7 +139,7 @@ func run(ctx context.Context) error {
 	fmt.Printf("Session:   %s\n\n", session.Session().ID)
 	fmt.Printf("User: %s\n\n", cfg.prompt)
 
-	result, err := session.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: cfg.prompt}})
+	result, err := session.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: cfg.prompt}}, agent.PromptOptions{})
 	if err != nil {
 		return fmt.Errorf("prompt failed: %w", err)
 	}
