@@ -781,10 +781,49 @@ Current implementation note: `context/simple` supports both automatic threshold-
 - Run lint: `make check` (requires golangci-lint, runs in CI container)
 - Run all: `make ci`
 
+### Integration Tests
+
+Integration tests live in `tests/integration/session/` and test full sessions against the OpenCode Go provider. They are gated by environment variables and skipped when not configured.
+
+**Environment variables:**
+
+| Var | Required | Default | Description |
+|-----|----------|---------|-------------|
+| `GOSIMOV_INTEGRATION` | Yes | — | Must be `"true"` to run integration tests |
+| `INTEGRATION_OPENCODE_GO_API_KEY` | Yes | — | OpenCode Go API key |
+| `INTEGRATION_OPENCODE_GO_MODEL` | No | `minimax-m2.5` | Model for conversation |
+| `OPENCODEGO_INTEGRATION_SUMMARY_MODEL` | No | same as model | Model for compaction summarization |
+| `OPENCODEGO_INTEGRATION_TIMEOUT` | No | `3m` | Per-prompt timeout (Go duration) |
+
+**Run integration tests:**
+
+```sh
+GOSIMOV_INTEGRATION=true INTEGRATION_OPENCODE_GO_API_KEY=<key> go test -v -count=1 ./tests/integration/session/
+```
+
+**Test coverage:**
+
+- `TestSimpleResponse` — basic LLM response, metadata, token usage
+- `TestToolUsageWriteEditRead` — multi-step tool orchestration (write, edit, read)
+- `TestToolUsageListDirectory` — ls tool with pre-existing files
+- `TestCompaction` / `TestCompactionResultFields` / `TestCompactionNoopWhenNotForced` — compaction flow, fields, forced vs noop
+- `TestSessionJSONLExport` — JSONL file structure verification
+- `TestSessionLoadFromJSONL` — session load from persisted JSONL
+- `TestTokenUsageAccumulation` — multi-turn token tracking
+
+**Design decisions:**
+
+- No shell tool — only file tools (ls, read, write, edit) to avoid arbitrary code execution risk in CI
+- No build tags — env var gating is simpler (`t.Skipf` when `GOSIMOV_INTEGRATION != "true"`)
+- No `t.Parallel()` — free tier rate limits cause flakes with concurrent requests
+- Assertions are structural (message kinds, metadata presence, token counts > 0), not on exact LLM text
+- Config follows the `NewConfig(t)` helper pattern (see `tests/integration/session/helpers_test.go`)
+
 ## CI
 
 - **Check job:** golangci-lint in `golangci/golangci-lint:v2.10.1-alpine` container
 - **Unit test job:** `actions/setup-go` with Go >= 1.25, runs `make test`
+- **Integration test job:** `actions/setup-go` with Go >= 1.25, runs `go test -v -count=1 ./tests/integration/session/` when `OPENCODE_GO_API_KEY` secret is configured (uses `INTEGRATION_OPENCODE_GO_API_KEY` env var)
 - Triggered on push and pull request
 
 ## Code Generation
