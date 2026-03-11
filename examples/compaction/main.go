@@ -90,7 +90,7 @@ func run(ctx context.Context) error {
 		SystemPrompt:      "You are a pragmatic software engineer. Be concise. Never request tool calls.",
 		SessionRepository: repo,
 		MessageRepository: repo,
-		MaxIterations:     8,
+		TurnMaxIterations: 8,
 	})
 	if err != nil {
 		return fmt.Errorf("creating session: %w", err)
@@ -108,7 +108,7 @@ func run(ctx context.Context) error {
 	fmt.Println("Calling turn 1...")
 	turn1Start := time.Now()
 	turn1Ctx, cancelTurn1 := context.WithTimeout(ctx, timeout)
-	turn1, err := session.Prompt(turn1Ctx, textParts(turn1Prompt))
+	turn1, err := session.Prompt(turn1Ctx, textParts(turn1Prompt), agent.PromptOptions{})
 	cancelTurn1()
 	if err != nil {
 		return fmt.Errorf("turn 1: %w", err)
@@ -120,7 +120,7 @@ func run(ctx context.Context) error {
 	fmt.Println("Calling turn 2...")
 	turn2Start := time.Now()
 	turn2Ctx, cancelTurn2 := context.WithTimeout(ctx, timeout)
-	turn2, err := session.Prompt(turn2Ctx, textParts(turn2Prompt))
+	turn2, err := session.Prompt(turn2Ctx, textParts(turn2Prompt), agent.PromptOptions{})
 	cancelTurn2()
 	if err != nil {
 		return fmt.Errorf("turn 2: %w", err)
@@ -152,7 +152,7 @@ func run(ctx context.Context) error {
 	fmt.Println("Calling turn 3...")
 	turn3Start := time.Now()
 	turn3Ctx, cancelTurn3 := context.WithTimeout(ctx, timeout)
-	turn3, err := session.Prompt(turn3Ctx, textParts(turn3Prompt))
+	turn3, err := session.Prompt(turn3Ctx, textParts(turn3Prompt), agent.PromptOptions{})
 	cancelTurn3()
 	if err != nil {
 		return fmt.Errorf("turn 3: %w", err)

@@ -613,7 +613,7 @@ This keeps compaction logic in one place (the turn runner layer) instead of dupl
    - `Error` → return error.
    - `Aborted` → return error.
    - `ToolUse` → execute tool calls, append results, loop back to step 1.
-4. If MaxIterations > 0 and exceeded → return error.
+4. If TurnMaxIterations > 0 and exceeded → return error.
 
 ### Tool Execution
 
@@ -647,7 +647,7 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 | `Provider` | Yes | — | LLM provider to call |
 | `SystemPrompt` | No | `""` | System instruction for the LLM |
 | `Tools` | No | `nil` | Available tools for the LLM to call |
-| `MaxIterations` | No | `0` (no limit) | Per-turn LLM call limit. 0 means unlimited. |
+| `TurnMaxIterations` | No | `0` (no limit) | Per-turn LLM call limit. 0 means unlimited. |
 | `SessionRepository` | No | `nil` | If set, session is persisted on creation. |
 | `MessageRepository` | No | `nil` | If set, messages are persisted after each turn. |
 | `Compactor` | No | `NoopCompactor` | Manages compaction inside the turn loop and via `Session.Compact()`. |
@@ -661,7 +661,7 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 | `Provider` | Yes | — | LLM provider to call |
 | `SystemPrompt` | No | `""` | System instruction for the LLM |
 | `Tools` | No | `nil` | Available tools for the LLM to call |
-| `MaxIterations` | No | `0` (no limit) | Per-turn LLM call limit. 0 means unlimited. |
+| `TurnMaxIterations` | No | `0` (no limit) | Per-turn LLM call limit. 0 means unlimited. |
 | `SessionRepository` | Yes | — | Repository used to load session identity by ID. |
 | `MessageRepository` | No | `nil` | If set, existing messages are preloaded into session state. |
 | `Compactor` | No | `NoopCompactor` | Manages compaction inside the turn loop and via `Session.Compact()`. |
@@ -673,19 +673,21 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 |--------|-------------|
 | `NewSession(ctx, cfg) (*Session, error)` | Creates a new session with ULID and timestamp. Persists when repo is set. |
 | `LoadSession(ctx, cfg) (*Session, error)` | Loads an existing persisted session identity and (optionally) preloads messages. |
-| `Prompt(ctx, []ContentPart) (*TurnResult, error)` | Builds a user message, appends it, runs a turn. |
-| `Continue(ctx) (*TurnResult, error)` | Runs a turn from current messages (retries, manual injection). |
+| `Prompt(ctx, []ContentPart, opts PromptOptions) (*TurnResult, error)` | Builds a user message, appends it, runs a turn. `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. |
+| `Continue(ctx, opts PromptOptions) (*TurnResult, error)` | Runs a turn from current messages (retries, manual injection). `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. |
 | `Compact(ctx) (*CompactResult, error)` | Delegates to `runCompaction` with `Force: true`. Appends the compaction message + aggregates usage if created. Returns `ErrSessionBusy` if a turn is running. |
 | `Session() model.Session` | Returns the session identity (ID and creation time). |
 | `State() SessionState` | Returns a thread-safe runtime snapshot (`running`, `operation`, `turn`, `message_count`, identity, usage). |
 | `Messages() []Message` | Returns a copy of the conversation history. |
 | `Usage() Usage` | Returns aggregated usage across all turns. |
-| `SetSystemPrompt(v)` | Changes system prompt for subsequent turns. |
-| `SetProvider(p)` | Changes LLM provider for subsequent turns. |
-| `SetTools(ts)` | Changes available tools for subsequent turns. |
 | `AppendMessage(m)` | Adds a message to history (for manual injection before Continue). |
 | `ReplaceMessages(ms)` | Replaces entire conversation history (copies the slice). |
 | `Reset()` | Clears messages and usage. Preserves configuration and session identity. |
+
+`PromptOptions` fields:
+
+- `SystemPrompt` — optional per-call system prompt override. Empty means use the session's `SystemPrompt`.
+- `TurnMaxIterations` — optional per-call max-iterations override. `0` means use the session's `TurnMaxIterations`.
 
 ### Concurrency
 

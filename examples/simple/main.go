@@ -142,7 +142,7 @@ func run(ctx context.Context) error {
 
 	result, err := session.Prompt(ctx, []model.ContentPart{
 		{Type: model.ContentPartTypeText, Text: "Create a Go hello world program, run it, then change the greeting to say 'Hello, Gosimov!' and run it again."},
-	})
+	}, agent.PromptOptions{})
 	if err != nil {
 		return fmt.Errorf("prompt: %w", err)
 	}

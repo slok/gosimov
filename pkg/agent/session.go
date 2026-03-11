@@ -23,9 +23,9 @@ type SessionConfig struct {
 	SystemPrompt string
 	// Tools available for the LLM to call (optional).
 	Tools []tool.Tool
-	// MaxIterations limits how many LLM calls each turn can make.
+	// TurnMaxIterations limits how many LLM calls each turn can make.
 	// 0 means no limit.
-	MaxIterations int
+	TurnMaxIterations int
 	// DisablePromptCache disables provider-side prompt caching.
 	// By default prompt caching is enabled.
 	DisablePromptCache bool
@@ -69,9 +69,9 @@ type LoadSessionConfig struct {
 	SystemPrompt string
 	// Tools available for the LLM to call (optional).
 	Tools []tool.Tool
-	// MaxIterations limits how many LLM calls each turn can make.
+	// TurnMaxIterations limits how many LLM calls each turn can make.
 	// 0 means no limit.
-	MaxIterations int
+	TurnMaxIterations int
 	// DisablePromptCache disables provider-side prompt caching.
 	// By default prompt caching is enabled.
 	DisablePromptCache bool
@@ -83,6 +83,20 @@ type LoadSessionConfig struct {
 	Compactor agentcontext.Compactor
 	// ContextProcessor transforms messages before each LLM call (optional).
 	ContextProcessor agentcontext.Processor
+}
+
+// PromptOptions configures per-call overrides for [Session.Prompt] and [Session.Continue].
+//
+// Zero values use the session defaults:
+//   - empty SystemPrompt uses [SessionConfig.SystemPrompt].
+//   - TurnMaxIterations == 0 uses [SessionConfig.TurnMaxIterations].
+type PromptOptions struct {
+	// SystemPrompt overrides the session SystemPrompt for this call only.
+	// Empty string uses [SessionConfig.SystemPrompt].
+	SystemPrompt string
+	// TurnMaxIterations overrides the session TurnMaxIterations for this call only.
+	// 0 uses [SessionConfig.TurnMaxIterations].
+	TurnMaxIterations int
 }
 
 // SessionOperation identifies which session operation is currently running.
@@ -176,7 +190,7 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		systemPrompt:       cfg.SystemPrompt,
 		disablePromptCache: cfg.DisablePromptCache,
 		tools:              cfg.Tools,
-		maxIterations:      cfg.MaxIterations,
+		maxIterations:      cfg.TurnMaxIterations,
 		sessionRepo:        cfg.SessionRepository,
 		messageRepo:        cfg.MessageRepository,
 		compactor:          cfg.Compactor,
@@ -207,7 +221,7 @@ func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 		systemPrompt:       cfg.SystemPrompt,
 		disablePromptCache: cfg.DisablePromptCache,
 		tools:              cfg.Tools,
-		maxIterations:      cfg.MaxIterations,
+		maxIterations:      cfg.TurnMaxIterations,
 		sessionRepo:        cfg.SessionRepository,
 		messageRepo:        cfg.MessageRepository,
 		compactor:          cfg.Compactor,
@@ -250,7 +264,7 @@ func listAllMessages(ctx context.Context, repo store.MessageRepository, sessionI
 // It builds a [model.MessageKindUser] message from the given content,
 // appends it to the conversation, runs a turn via [runTurn], and
 // appends all generated messages to the session history.
-func (s *Session) Prompt(ctx context.Context, content []model.ContentPart) (*TurnResult, error) {
+func (s *Session) Prompt(ctx context.Context, content []model.ContentPart, opts PromptOptions) (*TurnResult, error) {
 	if err := s.beginRun(SessionOperationPrompt); err != nil {
 		return nil, err
 	}
@@ -277,7 +291,7 @@ func (s *Session) Prompt(ctx context.Context, content []model.ContentPart) (*Tur
 	copy(messages, s.messages)
 	s.mu.Unlock()
 
-	return s.runTurn(ctx, messages)
+	return s.runTurn(ctx, messages, opts)
 }
 
 // Continue resumes the conversation from the current message history.
@@ -285,7 +299,7 @@ func (s *Session) Prompt(ctx context.Context, content []model.ContentPart) (*Tur
 // Use this for retries after errors, or after manually appending messages
 // via [AppendMessage]. It calls [runTurn] with the current messages
 // without adding a new user message.
-func (s *Session) Continue(ctx context.Context) (*TurnResult, error) {
+func (s *Session) Continue(ctx context.Context, opts PromptOptions) (*TurnResult, error) {
 	if err := s.beginRun(SessionOperationContinue); err != nil {
 		return nil, err
 	}
@@ -301,22 +315,33 @@ func (s *Session) Continue(ctx context.Context) (*TurnResult, error) {
 	copy(messages, s.messages)
 	s.mu.Unlock()
 
-	return s.runTurn(ctx, messages)
+	return s.runTurn(ctx, messages, opts)
 }
 
 // runTurn executes a turn and updates session state with the results.
 //
 // Each message produced during the turn (LLM responses and tool results) is
 // persisted individually via the onMessages callback as it is created.
-func (s *Session) runTurn(ctx context.Context, messages []model.Message) (*TurnResult, error) {
+
+func (s *Session) runTurn(ctx context.Context, messages []model.Message, opts PromptOptions) (*TurnResult, error) {
+	systemPrompt := s.systemPrompt
+	if opts.SystemPrompt != "" {
+		systemPrompt = opts.SystemPrompt
+	}
+
+	maxIterations := s.maxIterations
+	if opts.TurnMaxIterations > 0 {
+		maxIterations = opts.TurnMaxIterations
+	}
+
 	result, err := runTurn(ctx, turnConfig{
 		session:            s.session,
 		provider:           s.provider,
-		systemPrompt:       s.systemPrompt,
+		systemPrompt:       systemPrompt,
 		disablePromptCache: s.disablePromptCache,
 		messages:           messages,
 		tools:              s.tools,
-		maxIterations:      s.maxIterations,
+		maxIterations:      maxIterations,
 		onMessages:         s.persistMessages,
 		compactor:          s.compactor,
 		contextProcessor:   s.contextProcessor,
@@ -389,62 +414,6 @@ func (s *Session) State() SessionState {
 		MessageCount: len(messages),
 		Usage:        usage,
 	}
-}
-
-// SetSystemPrompt changes the system prompt for subsequent turns.
-// Returns [ErrSessionBusy] if a turn or compaction is running.
-func (s *Session) SetSystemPrompt(v string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.running {
-		return pkgerrors.ErrSessionBusy
-	}
-
-	s.systemPrompt = v
-
-	return nil
-}
-
-// SetProvider changes the LLM provider for subsequent turns.
-// Returns [ErrSessionBusy] if a turn or compaction is running.
-func (s *Session) SetProvider(p llm.Provider) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.running {
-		return pkgerrors.ErrSessionBusy
-	}
-
-	s.provider = p
-
-	return nil
-}
-
-// SetDisablePromptCache changes prompt-cache behavior for subsequent turns.
-// Returns [ErrSessionBusy] if a turn or compaction is running.
-func (s *Session) SetDisablePromptCache(disable bool) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.running {
-		return pkgerrors.ErrSessionBusy
-	}
-
-	s.disablePromptCache = disable
-
-	return nil
-}
-
-// SetTools changes the available tools for subsequent turns.
-// Returns [ErrSessionBusy] if a turn or compaction is running.
-func (s *Session) SetTools(tools []tool.Tool) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.running {
-		return pkgerrors.ErrSessionBusy
-	}
-
-	s.tools = tools
-
-	return nil
 }
 
 // AppendMessage adds a message to the conversation history.

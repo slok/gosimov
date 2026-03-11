@@ -135,7 +135,7 @@ func promptWithRetry(t *testing.T, ctx context.Context, session *agent.Session, 
 
 	var err error
 	for i := 0; i < maxAttempts; i++ {
-		res, promptErr := session.Prompt(ctx, content)
+		res, promptErr := session.Prompt(ctx, content, agent.PromptOptions{})
 		if promptErr == nil {
 			return res, nil
 		}

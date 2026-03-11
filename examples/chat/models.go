@@ -29,9 +29,8 @@ type app struct {
 }
 
 type chatSession struct {
-	session   *agent.Session
-	workDir   string
-	toolsInit bool
+	session *agent.Session
+	workDir string
 
 	opMu     sync.Mutex
 	opCancel context.CancelFunc

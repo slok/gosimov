@@ -192,33 +192,6 @@ func (a *app) getSession(id string) *chatSession {
 	return a.sessions[id]
 }
 
-func (a *app) ensureSessionTools(cSession *chatSession) error {
-	a.mu.RLock()
-	alreadyInit := cSession.toolsInit
-	a.mu.RUnlock()
-	if alreadyInit {
-		return nil
-	}
-
-	a.mu.Lock()
-	defer a.mu.Unlock()
-	if cSession.toolsInit {
-		return nil
-	}
-
-	tools, err := createToolsForDir(cSession.workDir)
-	if err != nil {
-		return err
-	}
-
-	if err := cSession.session.SetTools(tools); err != nil {
-		return fmt.Errorf("setting session tools: %w", err)
-	}
-	cSession.toolsInit = true
-
-	return nil
-}
-
 func createToolsForDir(workDir string) ([]tool.Tool, error) {
 	lsTool, err := ls.New(ls.Config{CWD: workDir})
 	if err != nil {

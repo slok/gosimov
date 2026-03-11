@@ -483,7 +483,7 @@ func TestSessionPrompt(t *testing.T) {
 			var results []*agent.TurnResult
 			var lastErr error
 			for _, content := range test.prompts {
-				result, promptErr := session.Prompt(context.Background(), content)
+				result, promptErr := session.Prompt(context.Background(), content, agent.PromptOptions{})
 				if promptErr != nil {
 					lastErr = promptErr
 					break
@@ -573,7 +573,7 @@ func TestSessionContinue(t *testing.T) {
 
 			session := test.setup(t)
 
-			result, err := session.Continue(context.Background())
+			result, err := session.Continue(context.Background(), agent.PromptOptions{})
 
 			if test.expErr {
 				assert.Error(err)
@@ -635,10 +635,10 @@ func TestSessionState(t *testing.T) {
 				})
 				require.NoError(err)
 
-				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "first"}})
+				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "first"}}, agent.PromptOptions{})
 				require.NoError(err)
 
-				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "second"}})
+				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "second"}}, agent.PromptOptions{})
 				require.NoError(err)
 
 				state := s.State()
@@ -670,7 +670,7 @@ func TestSessionState(t *testing.T) {
 
 				errCh := make(chan error, 1)
 				go func() {
-					_, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "slow"}})
+					_, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "slow"}}, agent.PromptOptions{})
 					errCh <- err
 				}()
 
@@ -743,7 +743,7 @@ func TestSessionState(t *testing.T) {
 				})
 				require.NoError(err)
 
-				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
+				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}, agent.PromptOptions{})
 				require.Error(err)
 
 				state := s.State()
@@ -774,14 +774,14 @@ func TestSessionConcurrency(t *testing.T) {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					_, _ = session.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "slow"}})
+					_, _ = session.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "slow"}}, agent.PromptOptions{})
 				}()
 
 				// Give the first prompt time to start.
 				time.Sleep(50 * time.Millisecond)
 
 				// Second prompt should get ErrSessionBusy.
-				_, err := session.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "fast"}})
+				_, err := session.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "fast"}}, agent.PromptOptions{})
 				assert.ErrorIs(err, pkgerrors.ErrSessionBusy)
 
 				wg.Wait()
@@ -804,14 +804,14 @@ func TestSessionConcurrency(t *testing.T) {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					_, _ = session.Continue(context.Background())
+					_, _ = session.Continue(context.Background(), agent.PromptOptions{})
 				}()
 
 				// Give the first call time to start.
 				time.Sleep(50 * time.Millisecond)
 
 				// Second call should get ErrSessionBusy.
-				_, err := session.Continue(context.Background())
+				_, err := session.Continue(context.Background(), agent.PromptOptions{})
 				assert.ErrorIs(err, pkgerrors.ErrSessionBusy)
 
 				wg.Wait()
@@ -841,90 +841,6 @@ func TestSessionConcurrency(t *testing.T) {
 			require.NoError(err)
 
 			test.run(t, session)
-		})
-	}
-}
-
-func TestSessionSetProviderDuringRunReturnsBusyAndAppliesOnNextTurn(t *testing.T) {
-	tests := map[string]struct {
-		run func(t *testing.T)
-	}{
-		"SetProvider during active prompt should return busy, then apply on next turn.": {
-			run: func(t *testing.T) {
-				assert := assert.New(t)
-				require := require.New(t)
-				ctx := context.Background()
-
-				firstCallStarted := make(chan struct{})
-				releaseFirstCall := make(chan struct{})
-				var firstCallOnce sync.Once
-
-				provider1 := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
-					firstCallOnce.Do(func() { close(firstCallStarted) })
-					<-releaseFirstCall
-
-					return &llm.Response{
-						Message: model.Message{
-							Kind:     model.MessageKindLLM,
-							Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "provider-1"}},
-							Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
-						},
-					}, nil
-				})
-
-				provider2 := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
-					return &llm.Response{
-						Message: model.Message{
-							Kind:     model.MessageKindLLM,
-							Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "provider-2"}},
-							Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
-						},
-					}, nil
-				})
-
-				s, err := agent.NewSession(ctx, agent.SessionConfig{Provider: provider1})
-				require.NoError(err)
-
-				resultCh := make(chan *agent.TurnResult, 1)
-				errCh := make(chan error, 1)
-				go func() {
-					result, err := s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "first"}})
-					if err != nil {
-						errCh <- err
-						return
-					}
-
-					resultCh <- result
-				}()
-
-				<-firstCallStarted
-				err = s.SetProvider(provider2)
-				assert.ErrorIs(err, pkgerrors.ErrSessionBusy)
-
-				close(releaseFirstCall)
-
-				select {
-				case err := <-errCh:
-					require.NoError(err, "first prompt failed")
-				case result := <-resultCh:
-					require.NotNil(result)
-					assert.Equal("provider-1", result.Message.Content[0].Text)
-				case <-time.After(2 * time.Second):
-					require.FailNow("timed out waiting for first prompt")
-				}
-
-				require.NoError(s.SetProvider(provider2))
-
-				secondResult, err := s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "second"}})
-				require.NoError(err)
-				assert.Equal("provider-2", secondResult.Message.Content[0].Text)
-			},
-		},
-	}
-
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			test.run(t)
 		})
 	}
 }
@@ -999,7 +915,7 @@ func TestSessionMutators(t *testing.T) {
 
 				sessionBefore := s.Session()
 
-				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}})
+				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}, agent.PromptOptions{})
 				require.NoError(err)
 				assert.NotEmpty(s.Messages())
 				assert.NotZero(s.Usage().InputTokens)
@@ -1016,7 +932,37 @@ func TestSessionMutators(t *testing.T) {
 			},
 		},
 
-		"SetProvider should change the provider for subsequent turns.": {
+		"PromptOptions SystemPrompt should override session SystemPrompt for one call.": {
+			run: func(t *testing.T) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+					Provider: fake.NewProvider(func(_ context.Context, req llm.Request) (*llm.Response, error) {
+						return &llm.Response{
+							Message: model.Message{
+								Kind:     model.MessageKindLLM,
+								Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: req.SystemPrompt}},
+								Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
+							},
+						}, nil
+					}),
+					SystemPrompt: "default",
+				})
+				require.NoError(err)
+
+				r1, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}, agent.PromptOptions{})
+				require.NoError(err)
+				assert.Equal("default", r1.Message.Content[0].Text)
+
+				r2, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}, agent.PromptOptions{SystemPrompt: "override"})
+				require.NoError(err)
+				assert.Equal("override", r2.Message.Content[0].Text)
+			},
+		},
+
+		"PromptOptions TurnMaxIterations should override session TurnMaxIterations for one call.": {
 			run: func(t *testing.T) {
 				t.Helper()
 				assert := assert.New(t)
@@ -1024,35 +970,23 @@ func TestSessionMutators(t *testing.T) {
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
-						return &llm.Response{
-							Message: model.Message{
-								Kind:     model.MessageKindLLM,
-								Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "provider-1"}},
-								Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
-							},
-						}, nil
+						return &llm.Response{Message: model.Message{
+							Kind: model.MessageKindLLM,
+							ToolCallRequests: []model.ToolCallRequest{{
+								ID:        "tool-call-id",
+								ToolID:    "missing",
+								Arguments: []byte(`{}`),
+							}},
+							Metadata: &model.MessageMetadata{StopReason: model.StopReasonToolUse},
+						}}, nil
 					}),
+					TurnMaxIterations: 2,
 				})
 				require.NoError(err)
 
-				r1, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
-				require.NoError(err)
-				assert.Equal("provider-1", r1.Message.Content[0].Text)
-
-				// Switch provider.
-				require.NoError(s.SetProvider(fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
-					return &llm.Response{
-						Message: model.Message{
-							Kind:     model.MessageKindLLM,
-							Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "provider-2"}},
-							Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
-						},
-					}, nil
-				})))
-
-				r2, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi again"}})
-				require.NoError(err)
-				assert.Equal("provider-2", r2.Message.Content[0].Text)
+				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}, agent.PromptOptions{TurnMaxIterations: 1})
+				require.Error(err)
+				assert.ErrorIs(err, pkgerrors.ErrMaxIterations)
 			},
 		},
 
@@ -1079,7 +1013,7 @@ func TestSessionMutators(t *testing.T) {
 
 				// Run several turns.
 				for range 3 {
-					_, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
+					_, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}, agent.PromptOptions{})
 					require.NoError(err)
 				}
 
@@ -1103,75 +1037,6 @@ func TestSessionMutators(t *testing.T) {
 				require.NoError(err)
 
 				assert.NotEqual(s1.Session().ID, s2.Session().ID)
-			},
-		},
-
-		"SetSystemPrompt should change the prompt for subsequent turns.": {
-			run: func(t *testing.T) {
-				t.Helper()
-				assert := assert.New(t)
-				require := require.New(t)
-
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
-					Provider: fake.NewProvider(func(_ context.Context, req llm.Request) (*llm.Response, error) {
-						return &llm.Response{
-							Message: model.Message{
-								Kind:     model.MessageKindLLM,
-								Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: req.SystemPrompt}},
-								Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
-							},
-						}, nil
-					}),
-					SystemPrompt: "original",
-				})
-				require.NoError(err)
-
-				r1, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
-				require.NoError(err)
-				assert.Equal("original", r1.Message.Content[0].Text)
-
-				require.NoError(s.SetSystemPrompt("updated"))
-
-				r2, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
-				require.NoError(err)
-				assert.Equal("updated", r2.Message.Content[0].Text)
-			},
-		},
-
-		"DisablePromptCache should be applied and updatable for subsequent turns.": {
-			run: func(t *testing.T) {
-				t.Helper()
-				assert := assert.New(t)
-				require := require.New(t)
-
-				reqs := []llm.Request{}
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
-					Provider: fake.NewProvider(func(_ context.Context, req llm.Request) (*llm.Response, error) {
-						reqs = append(reqs, req)
-						return &llm.Response{
-							Message: model.Message{
-								Kind:     model.MessageKindLLM,
-								Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ok"}},
-								Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
-							},
-						}, nil
-					}),
-					DisablePromptCache: false,
-				})
-				require.NoError(err)
-
-				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
-				require.NoError(err)
-
-				require.NoError(s.SetDisablePromptCache(true))
-				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "again"}})
-				require.NoError(err)
-
-				require.Len(reqs, 2)
-				assert.Equal(s.Session().ID, reqs[0].SessionID)
-				assert.Equal(s.Session().ID, reqs[1].SessionID)
-				assert.True(reqs[0].Config.EnablePromptCache)
-				assert.False(reqs[1].Config.EnablePromptCache)
 			},
 		},
 	}
@@ -1245,7 +1110,7 @@ func TestSessionPersistence(t *testing.T) {
 
 				sessionID = s.Session().ID
 
-				_, err = s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}})
+				_, err = s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}, agent.PromptOptions{})
 				require.NoError(err)
 
 				// User message was persisted before the LLM call.
@@ -1293,7 +1158,7 @@ func TestSessionPersistence(t *testing.T) {
 					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "injected"}},
 				})
 
-				_, err = s.Continue(ctx)
+				_, err = s.Continue(ctx, agent.PromptOptions{})
 				require.NoError(err)
 
 				// Continue should only persist the turn result (LLM message), not the manually appended one.
@@ -1329,7 +1194,7 @@ func TestSessionPersistence(t *testing.T) {
 				require.NoError(err)
 
 				for range 3 {
-					_, err := s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
+					_, err := s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}, agent.PromptOptions{})
 					require.NoError(err)
 				}
 
@@ -1403,7 +1268,7 @@ func TestSessionPersistence(t *testing.T) {
 
 				sessionID = s.Session().ID
 
-				_, err = s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "calculate"}})
+				_, err = s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "calculate"}}, agent.PromptOptions{})
 				require.NoError(err)
 
 				// At first LLM call: only user message persisted.
@@ -1449,7 +1314,7 @@ func TestSessionPersistence(t *testing.T) {
 				})
 				require.NoError(err)
 
-				_, err = s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}})
+				_, err = s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}, agent.PromptOptions{})
 				require.NoError(err)
 
 				// Session should still work.
@@ -1682,7 +1547,7 @@ func TestSessionCompact(t *testing.T) {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					_, _ = s.Continue(context.Background())
+					_, _ = s.Continue(context.Background(), agent.PromptOptions{})
 				}()
 
 				// Give the turn time to start.

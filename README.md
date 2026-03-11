@@ -63,7 +63,7 @@ func main() {
     session, err := agent.NewSession(ctx, agent.SessionConfig{
         Provider:     provider,
         SystemPrompt: "You are a concise software assistant.",
-        MaxIterations: 8,
+        TurnMaxIterations: 8,
     })
     if err != nil {
         panic(err)
@@ -72,7 +72,7 @@ func main() {
     result, err := session.Prompt(ctx, []model.ContentPart{{
         Type: model.ContentPartTypeText,
         Text: "Give me 3 practical tips to debug flaky Go tests.",
-    }})
+    }}, agent.PromptOptions{})
     if err != nil {
         panic(err)
     }
@@ -123,7 +123,7 @@ session, _ := agent.NewSession(ctx, agent.SessionConfig{
 _, _ = session.Prompt(ctx, []model.ContentPart{{
     Type: model.ContentPartTypeText,
     Text: "Create hello.py with a hello world and run it with python3.",
-}})
+}}, agent.PromptOptions{})
 ```
 
 See a complete runnable flow in `examples/simple/main.go` and `examples/zen/main.go`.
@@ -219,7 +219,7 @@ loaded, _ := agent.LoadSession(ctx, agent.LoadSessionConfig{
     MessageRepository: repo,
 })
 
-_, _ = loaded.Continue(ctx)
+_, _ = loaded.Continue(ctx, agent.PromptOptions{})
 ```
 
 ### 3) Enable context compaction
@@ -258,8 +258,9 @@ Useful for context-window math and UX telemetry.
 
 ## Notes
 
-- `MaxIterations` protects from infinite tool-call loops.
-- `Continue()` requires existing messages in session history.
+- `TurnMaxIterations` protects from infinite tool-call loops.
+- Session configuration is immutable after creation; use `PromptOptions` for per-call overrides.
+- `Continue(ctx, opts)` requires existing messages in session history.
 - Provider constructors validate model IDs and auth config up front.
 
 ## What You Can Build

@@ -57,13 +57,21 @@ func (a *app) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tools, err := createToolsForDir(workDir)
+	if err != nil {
+		log.Printf("create-session tools error work_dir=%s err=%v", workDir, err)
+		http.Error(w, fmt.Sprintf("creating session tools: %s", err), http.StatusInternalServerError)
+		return
+	}
+
 	session, err := agent.NewSession(ctx, agent.SessionConfig{
 		Provider:          a.provider,
 		Compactor:         a.compactor,
 		SystemPrompt:      defaultSystemPrompt(a.cfg.systemPrompt),
+		Tools:             tools,
 		SessionRepository: a.sessRepo,
 		MessageRepository: a.msgRepo,
-		MaxIterations:     a.cfg.maxIterations,
+		TurnMaxIterations: a.cfg.maxIterations,
 	})
 	if err != nil {
 		log.Printf("create-session new-session error: %v", err)
@@ -134,14 +142,22 @@ func (a *app) handleLoadSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	tools, err := createToolsForDir(workDir)
+	if err != nil {
+		log.Printf("load-session tools error session_id=%s work_dir=%s err=%v", sessionID, workDir, err)
+		http.Error(w, fmt.Sprintf("creating session tools: %s", err), http.StatusInternalServerError)
+		return
+	}
+
 	session, err := agent.LoadSession(r.Context(), agent.LoadSessionConfig{
 		SessionID:         sessionID,
 		Provider:          a.provider,
 		Compactor:         a.compactor,
 		SystemPrompt:      defaultSystemPrompt(a.cfg.systemPrompt),
+		Tools:             tools,
 		SessionRepository: a.sessRepo,
 		MessageRepository: a.msgRepo,
-		MaxIterations:     a.cfg.maxIterations,
+		TurnMaxIterations: a.cfg.maxIterations,
 	})
 	if err != nil {
 		log.Printf("load-session load error session_id=%s err=%v", sessionID, err)
@@ -191,12 +207,6 @@ func (a *app) handlePrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.ensureSessionTools(cSession); err != nil {
-		log.Printf("prompt tools init error session_id=%s err=%v", id, err)
-		http.Error(w, fmt.Sprintf("initializing session tools: %s", err), http.StatusInternalServerError)
-		return
-	}
-
 	log.Printf("prompt context session_id=%s messages=%d", id, len(cSession.session.Messages()))
 
 	reqText = strings.TrimSpace(reqText)
@@ -208,7 +218,7 @@ func (a *app) handlePrompt(w http.ResponseWriter, r *http.Request) {
 	promptCtx := context.WithValue(r.Context(), contextKeySessionID{}, id)
 	promptCtx, finishOp := cSession.startOperation(promptCtx)
 	defer finishOp()
-	result, err := cSession.session.Prompt(promptCtx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: reqText}})
+	result, err := cSession.session.Prompt(promptCtx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: reqText}}, agent.PromptOptions{})
 	if err != nil {
 		log.Printf("prompt execution error session_id=%s err=%v", id, err)
 		http.Error(w, fmt.Sprintf("prompt failed: %s", err), http.StatusInternalServerError)
@@ -218,7 +228,7 @@ func (a *app) handlePrompt(w http.ResponseWriter, r *http.Request) {
 	if shouldRetryForExecutionEvidence(result) {
 		log.Printf("prompt unverified-claim retry session_id=%s", id)
 		retryText := "Execution policy reminder: you claimed changes were made, but no tool output was produced in the previous step. Now execute the required tools and provide evidence from tool results. Do not claim changes without tool evidence."
-		if _, retryErr := cSession.session.Prompt(promptCtx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: retryText}}); retryErr != nil {
+		if _, retryErr := cSession.session.Prompt(promptCtx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: retryText}}, agent.PromptOptions{}); retryErr != nil {
 			log.Printf("prompt retry error session_id=%s err=%v", id, retryErr)
 		}
 	}
@@ -261,12 +271,6 @@ func (a *app) handlePromptAny(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := a.ensureSessionTools(cSession); err != nil {
-		log.Printf("prompt tools init error session_id=%s err=%v", id, err)
-		http.Error(w, fmt.Sprintf("initializing session tools: %s", err), http.StatusInternalServerError)
-		return
-	}
-
 	log.Printf("prompt context session_id=%s messages=%d", id, len(cSession.session.Messages()))
 
 	req.Text = strings.TrimSpace(req.Text)
@@ -278,7 +282,7 @@ func (a *app) handlePromptAny(w http.ResponseWriter, r *http.Request) {
 	promptCtx := context.WithValue(r.Context(), contextKeySessionID{}, id)
 	promptCtx, finishOp := cSession.startOperation(promptCtx)
 	defer finishOp()
-	result, err := cSession.session.Prompt(promptCtx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: req.Text}})
+	result, err := cSession.session.Prompt(promptCtx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: req.Text}}, agent.PromptOptions{})
 	if err != nil {
 		log.Printf("prompt execution error session_id=%s err=%v", id, err)
 		http.Error(w, fmt.Sprintf("prompt failed: %s", err), http.StatusInternalServerError)
@@ -288,7 +292,7 @@ func (a *app) handlePromptAny(w http.ResponseWriter, r *http.Request) {
 	if shouldRetryForExecutionEvidence(result) {
 		log.Printf("prompt unverified-claim retry session_id=%s", id)
 		retryText := "Execution policy reminder: you claimed changes were made, but no tool output was produced in the previous step. Now execute the required tools and provide evidence from tool results. Do not claim changes without tool evidence."
-		if _, retryErr := cSession.session.Prompt(promptCtx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: retryText}}); retryErr != nil {
+		if _, retryErr := cSession.session.Prompt(promptCtx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: retryText}}, agent.PromptOptions{}); retryErr != nil {
 			log.Printf("prompt retry error session_id=%s err=%v", id, retryErr)
 		}
 	}
