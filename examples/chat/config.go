@@ -18,11 +18,12 @@ import (
 type providerKind string
 
 const (
-	providerZen       providerKind = "zen"
-	providerOpenAI    providerKind = "openai"
-	providerCodex     providerKind = "codex"
-	providerAnthropic providerKind = "anthropic"
-	providerClaude    providerKind = "claude"
+	providerZen        providerKind = "zen"
+	providerOpenCodeGo providerKind = "opencode-go"
+	providerOpenAI     providerKind = "openai"
+	providerCodex      providerKind = "codex"
+	providerAnthropic  providerKind = "anthropic"
+	providerClaude     providerKind = "claude"
 )
 
 const (
@@ -44,11 +45,12 @@ const (
 )
 
 var defaultModelByProvider = map[providerKind]string{
-	providerZen:       "glm-5-free",
-	providerOpenAI:    "gpt-5",
-	providerCodex:     "gpt-5.3-codex",
-	providerAnthropic: "claude-sonnet-4-6",
-	providerClaude:    "claude-sonnet-4-6",
+	providerZen:        "glm-5-free",
+	providerOpenCodeGo: "kimi-k2.5",
+	providerOpenAI:     "gpt-5",
+	providerCodex:      "gpt-5.3-codex",
+	providerAnthropic:  "claude-sonnet-4-6",
+	providerClaude:     "claude-sonnet-4-6",
 }
 
 type config struct {
@@ -70,7 +72,7 @@ func loadConfig() (config, error) {
 	var provider string
 	var cfg config
 	flag.StringVar(&cfg.addr, "addr", ":8080", "HTTP listen address")
-	flag.StringVar(&provider, "provider", string(providerZen), "LLM provider: zen|openai|codex|anthropic|claude")
+	flag.StringVar(&provider, "provider", string(providerZen), "LLM provider: zen|opencode-go|openai|codex|anthropic|claude")
 	flag.StringVar(&cfg.apiKey, "api-key", "", "Provider API key/token (required unless --auth-file is set)")
 	flag.StringVar(&cfg.authFile, "auth-file", "", "OAuth credentials file path (only for codex/claude providers)")
 	flag.StringVar(&cfg.modelID, "model", "", "LLM model ID (defaults depend on --provider)")
@@ -89,7 +91,7 @@ func loadConfig() (config, error) {
 	cfg.modelID = strings.TrimSpace(cfg.modelID)
 
 	if !isSupportedProvider(cfg.provider) {
-		return config{}, fmt.Errorf("unsupported --provider %q (allowed: zen, openai, codex, anthropic, claude)", provider)
+		return config{}, fmt.Errorf("unsupported --provider %q (allowed: zen, opencode-go, openai, codex, anthropic, claude)", provider)
 	}
 
 	if cfg.modelID == "" {

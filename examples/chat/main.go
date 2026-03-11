@@ -8,6 +8,7 @@
 // Usage:
 //
 //	go run ./examples/chat --provider zen --api-key <key>
+//	go run ./examples/chat --provider opencode-go --api-key <key>
 //	go run ./examples/chat --provider openai --api-key <key>
 //	go run ./examples/chat --provider codex --auth-file /tmp/gosimov-chat-auth.json
 //	go run ./examples/chat --provider anthropic --api-key <key>
@@ -38,6 +39,7 @@ import (
 	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/llm/anthropic"
 	"github.com/slok/gosimov/pkg/llm/openai"
+	"github.com/slok/gosimov/pkg/llm/opencodego"
 	"github.com/slok/gosimov/pkg/llm/zen"
 	"github.com/slok/gosimov/pkg/store/jsonl"
 	"github.com/slok/gosimov/pkg/store/subscriber"
@@ -147,6 +149,13 @@ func buildProvider(cfg config, apiKey string, tokenSrc openai.TokenSource, model
 			return nil, err
 		}
 		return zen.New(zen.Config{TokenSource: ts, Model: modelID, Tools: tools})
+
+	case providerOpenCodeGo:
+		ts, err := resolveTokenSource(opencodego.NewAPIKeyTokenSource)
+		if err != nil {
+			return nil, err
+		}
+		return opencodego.New(opencodego.Config{TokenSource: ts, Model: modelID, Tools: tools})
 
 	case providerOpenAI:
 		ts, err := resolveTokenSource(openai.NewAPIKeyTokenSource)

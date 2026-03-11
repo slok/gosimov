@@ -22,6 +22,8 @@ This example starts an HTTP server with a browser chat UI that uses gosimov sess
 ```bash
 go run ./examples/chat --provider zen --api-key <key>
 
+go run ./examples/chat --provider opencode-go --api-key <key>
+
 go run ./examples/chat --provider openai --api-key <key>
 
 go run ./examples/chat --provider anthropic --api-key <key>
@@ -38,7 +40,7 @@ Then open `http://localhost:8080`.
 Optional flags:
 
 - `--addr` (default `:8080`)
-- `--provider` (default `zen`; one of `zen`, `openai`, `codex`, `anthropic`, `claude`)
+- `--provider` (default `zen`; one of `zen`, `opencode-go`, `openai`, `codex`, `anthropic`, `claude`)
 - `--api-key` (required unless `--auth-file` is set)
 - `--auth-file` (OAuth credentials file path; only for `codex`/`claude` providers)
 - `--model` (default depends on `--provider`)

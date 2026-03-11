@@ -1,4 +1,4 @@
-package anthropic
+package anthropicmsg
 
 import (
 	"bytes"
@@ -10,101 +10,107 @@ import (
 	"strings"
 
 	"github.com/slok/gosimov/pkg/llm"
+	llmauth "github.com/slok/gosimov/pkg/llm/internal/auth"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
+	"github.com/slok/gosimov/pkg/tool"
 )
+
+const defaultVersionHeader = "2023-06-01"
+
+type AuthMode int
 
 const (
-	defaultAnthropicBaseURL = "https://api.anthropic.com/v1"
-	defaultVersionHeader    = "2023-06-01"
+	AuthModeAPIKey AuthMode = iota
+	AuthModeOAuthBearer
 )
 
-type authMode int
-
-const (
-	authModeAPIKey authMode = iota
-	authModeOAuthBearer
-)
-
-type providerOptions struct {
-	providerID         string
-	authMode           authMode
-	claudeCompat       bool
-	normalizeToolName  func(string) string
-	restoreToolName    func(string) string
-	extraHeaders       map[string]string
-	defaultMaxTokens   int
-	claudeIdentityText string
+type Options struct {
+	ProviderID         string
+	AuthMode           AuthMode
+	ClaudeCompat       bool
+	NormalizeToolName  func(string) string
+	RestoreToolName    func(string) string
+	ExtraHeaders       map[string]string
+	DefaultMaxTokens   int
+	ClaudeIdentityText string
 }
 
-type provider struct {
-	tokenSrc  TokenSource
+type Config struct {
+	TokenSource llmauth.TokenSource
+	BaseURL     string
+	Model       string
+	ModelInfo   model.LLMModelInfo
+	Tools       []tool.Tool
+	Client      *http.Client
+	Options     Options
+}
+
+func (c *Config) defaults() error {
+	if c.TokenSource == nil {
+		return fmt.Errorf("token source is required: %w", pkgerrors.ErrNotValid)
+	}
+
+	if strings.TrimSpace(c.BaseURL) == "" {
+		return fmt.Errorf("base url is required: %w", pkgerrors.ErrNotValid)
+	}
+
+	if strings.TrimSpace(c.Model) == "" {
+		return fmt.Errorf("model is required: %w", pkgerrors.ErrNotValid)
+	}
+
+	if strings.TrimSpace(c.Options.ProviderID) == "" {
+		return fmt.Errorf("provider id is required: %w", pkgerrors.ErrNotValid)
+	}
+
+	if c.Client == nil {
+		c.Client = http.DefaultClient
+	}
+
+	if c.Options.DefaultMaxTokens <= 0 {
+		c.Options.DefaultMaxTokens = 4096
+	}
+
+	return nil
+}
+
+type Provider struct {
+	tokenSrc  llmauth.TokenSource
 	baseURL   string
 	model     string
 	modelInfo model.LLMModelInfo
 	tools     []anthropicTool
 	client    *http.Client
 
-	opts providerOptions
+	opts Options
 }
 
-type providerConfig struct {
-	TokenSource TokenSource
-	BaseURL     string
-	Model       string
-	ModelInfo   model.LLMModelInfo
-	Tools       []anthropicTool
-	Client      *http.Client
-
-	Options providerOptions
-}
-
-func newProvider(cfg providerConfig) (llm.Provider, error) {
-	if cfg.TokenSource == nil {
-		return nil, fmt.Errorf("token source is required: %w", pkgerrors.ErrNotValid)
+func New(cfg Config) (llm.Provider, error) {
+	if err := cfg.defaults(); err != nil {
+		return nil, fmt.Errorf("invalid anthropic messages provider config: %w", err)
 	}
 
-	if strings.TrimSpace(cfg.BaseURL) == "" {
-		return nil, fmt.Errorf("base url is required: %w", pkgerrors.ErrNotValid)
-	}
-
-	if strings.TrimSpace(cfg.Model) == "" {
-		return nil, fmt.Errorf("model is required: %w", pkgerrors.ErrNotValid)
-	}
-
-	if strings.TrimSpace(cfg.Options.providerID) == "" {
-		return nil, fmt.Errorf("provider id is required: %w", pkgerrors.ErrNotValid)
-	}
-
-	if cfg.Client == nil {
-		cfg.Client = http.DefaultClient
-	}
-
-	if cfg.Options.defaultMaxTokens <= 0 {
-		cfg.Options.defaultMaxTokens = 4096
-	}
-
-	return &provider{
+	return &Provider{
 		tokenSrc:  cfg.TokenSource,
 		baseURL:   strings.TrimRight(cfg.BaseURL, "/"),
 		model:     cfg.Model,
 		modelInfo: cfg.ModelInfo,
-		tools:     cfg.Tools,
+		tools:     convertTools(cfg.Tools, cfg.Options.NormalizeToolName),
 		client:    cfg.Client,
 		opts:      cfg.Options,
 	}, nil
 }
 
-func (p *provider) ModelInfo() model.LLMModelInfo {
+func (p *Provider) ModelInfo() model.LLMModelInfo {
 	return p.modelInfo
 }
 
-func (p *provider) Call(ctx context.Context, req llm.Request) (*llm.Response, error) {
+func (p *Provider) Call(ctx context.Context, req llm.Request) (*llm.Response, error) {
 	body := anthropicRequest{
 		Model:     p.model,
-		Messages:  convertMessages(req.Messages, p.opts.normalizeToolName),
+		Messages:  convertMessages(req.Messages, p.opts.NormalizeToolName),
 		Tools:     p.tools,
-		MaxTokens: p.opts.defaultMaxTokens,
+		MaxTokens: p.opts.DefaultMaxTokens,
 	}
 
 	if req.Config.MaxTokens > 0 {
@@ -113,13 +119,13 @@ func (p *provider) Call(ctx context.Context, req llm.Request) (*llm.Response, er
 
 	systemPrompt := ""
 	if strings.TrimSpace(req.SystemPrompt) != "" {
-		if p.opts.claudeCompat && strings.TrimSpace(p.opts.claudeIdentityText) != "" {
-			systemPrompt = p.opts.claudeIdentityText + "\n\n" + req.SystemPrompt
+		if p.opts.ClaudeCompat && strings.TrimSpace(p.opts.ClaudeIdentityText) != "" {
+			systemPrompt = p.opts.ClaudeIdentityText + "\n\n" + req.SystemPrompt
 		} else {
 			systemPrompt = req.SystemPrompt
 		}
-	} else if p.opts.claudeCompat && strings.TrimSpace(p.opts.claudeIdentityText) != "" {
-		systemPrompt = p.opts.claudeIdentityText
+	} else if p.opts.ClaudeCompat && strings.TrimSpace(p.opts.ClaudeIdentityText) != "" {
+		systemPrompt = p.opts.ClaudeIdentityText
 	}
 
 	if strings.TrimSpace(systemPrompt) != "" {
@@ -143,7 +149,7 @@ func (p *provider) Call(ctx context.Context, req llm.Request) (*llm.Response, er
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("anthropic-version", defaultVersionHeader)
 
-	for k, v := range p.opts.extraHeaders {
+	for k, v := range p.opts.ExtraHeaders {
 		httpReq.Header.Set(k, v)
 	}
 
@@ -152,10 +158,10 @@ func (p *provider) Call(ctx context.Context, req llm.Request) (*llm.Response, er
 		return nil, fmt.Errorf("getting auth token: %w", err)
 	}
 
-	switch p.opts.authMode {
-	case authModeAPIKey:
+	switch p.opts.AuthMode {
+	case AuthModeAPIKey:
 		httpReq.Header.Set("x-api-key", token)
-	case authModeOAuthBearer:
+	case AuthModeOAuthBearer:
 		httpReq.Header.Set("Authorization", "Bearer "+token)
 	default:
 		return nil, fmt.Errorf("unsupported auth mode: %w", pkgerrors.ErrNotValid)
@@ -181,11 +187,11 @@ func (p *provider) Call(ctx context.Context, req llm.Request) (*llm.Response, er
 		return nil, fmt.Errorf("unmarshaling response: %w", err)
 	}
 
-	msg := convertResponse(apiResp, p.opts.restoreToolName)
+	msg := convertResponse(apiResp, p.opts.RestoreToolName)
 	if msg.Metadata == nil {
 		msg.Metadata = &model.MessageMetadata{}
 	}
-	msg.Metadata.Provider = p.opts.providerID
+	msg.Metadata.Provider = p.opts.ProviderID
 
 	return &llm.Response{Message: msg}, nil
 }
@@ -196,22 +202,16 @@ func applyPromptCacheControl(body *anthropicRequest, baseURL string) {
 	}
 
 	cc := &anthropicCacheControl{Type: "ephemeral"}
-	// Anthropic supports longer-lived cache retention through ttl on direct API calls.
-	// Other Anthropic-compatible gateways may reject ttl values, so keep ephemeral only there.
 	if strings.Contains(baseURL, "api.anthropic.com") {
 		cc.TTL = "1h"
 	}
 
 	switch system := body.System.(type) {
 	case string:
-		// System can be encoded as a plain string by default; convert it to
-		// a text block so Anthropic cache_control can be attached.
 		if strings.TrimSpace(system) != "" {
 			body.System = []anthropicTextBlock{{Type: "text", Text: system, CacheControl: cc}}
 		}
 	case []anthropicTextBlock:
-		// System can also be encoded as Anthropic text blocks; annotate the
-		// first block to keep payload changes minimal while enabling caching.
 		if len(system) > 0 {
 			system[0].CacheControl = cc
 			body.System = system
@@ -229,23 +229,17 @@ func applyPromptCacheControl(body *anthropicRequest, baseURL string) {
 
 	switch content := last.Content.(type) {
 	case string:
-		// Single-part user input is often encoded as a string; convert to a
-		// text block because cache_control is a block-level field.
 		if strings.TrimSpace(content) == "" {
 			return
 		}
 		last.Content = []anthropicTextBlock{{Type: "text", Text: content, CacheControl: cc}}
 	case []anthropicToolResultBlock:
-		// Consecutive tool results are encoded as tool_result blocks. Annotate
-		// the latest block to bias caching toward the newest stable boundary.
 		if len(content) == 0 {
 			return
 		}
 		content[len(content)-1].CacheControl = cc
 		last.Content = content
 	case []any:
-		// Mixed multipart content (text/tool results/images). Walk backward and
-		// annotate the last cacheable block to preserve prior structure/order.
 		for i := len(content) - 1; i >= 0; i-- {
 			switch b := content[i].(type) {
 			case anthropicTextBlock:
