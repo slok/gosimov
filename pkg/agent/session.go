@@ -8,6 +8,7 @@ import (
 
 	"github.com/slok/gosimov/internal/utils/id"
 	agentcontext "github.com/slok/gosimov/pkg/agent/context"
+	"github.com/slok/gosimov/pkg/conventions"
 	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
@@ -174,7 +175,7 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 	}
 
 	sess := model.Session{
-		ID:        id.NewULID(),
+		ID:        id.NewULID(conventions.IDPrefixSession),
 		CreatedAt: time.Now(),
 	}
 
@@ -272,7 +273,7 @@ func (s *Session) Prompt(ctx context.Context, content []model.ContentPart, opts 
 
 	// Build the user message.
 	userMsg := model.Message{
-		ID:        id.NewULID(),
+		ID:        id.NewULID(conventions.IDPrefixMessage),
 		Kind:      model.MessageKindUser,
 		Content:   content,
 		CreatedAt: time.Now(),

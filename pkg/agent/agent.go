@@ -8,6 +8,7 @@ import (
 	"github.com/slok/gosimov/internal/utils/id"
 	usageutil "github.com/slok/gosimov/internal/utils/usage"
 	agentcontext "github.com/slok/gosimov/pkg/agent/context"
+	"github.com/slok/gosimov/pkg/conventions"
 	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
@@ -150,7 +151,7 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 		}
 
 		// Stamp the response message with ID and timestamp.
-		resp.Message.ID = id.NewULID()
+		resp.Message.ID = id.NewULID(conventions.IDPrefixMessage)
 		resp.Message.CreatedAt = time.Now()
 
 		allMessages = append(allMessages, resp.Message)
@@ -234,7 +235,7 @@ func executeOneToolCall(ctx context.Context, req model.ToolCallRequest, tools ma
 // newToolResultMessage creates a tool result message.
 func newToolResultMessage(toolCallID string, content []model.ContentPart, isError bool) model.Message {
 	return model.Message{
-		ID:         id.NewULID(),
+		ID:         id.NewULID(conventions.IDPrefixToolResult),
 		Kind:       model.MessageKindToolResult,
 		Content:    content,
 		ToolCallID: toolCallID,
