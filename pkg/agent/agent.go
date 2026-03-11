@@ -151,7 +151,7 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 		}
 
 		// Stamp the response message with ID and timestamp.
-		resp.Message.ID = id.NewULID(conventions.IDPrefixMessage)
+		resp.Message.ID = id.NewULID(conventions.IDPrefixMessageLLM)
 		resp.Message.CreatedAt = time.Now()
 
 		allMessages = append(allMessages, resp.Message)

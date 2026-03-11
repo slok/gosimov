@@ -273,7 +273,7 @@ func (s *Session) Prompt(ctx context.Context, content []model.ContentPart, opts 
 
 	// Build the user message.
 	userMsg := model.Message{
-		ID:        id.NewULID(conventions.IDPrefixMessage),
+		ID:        id.NewULID(conventions.IDPrefixMessageUser),
 		Kind:      model.MessageKindUser,
 		Content:   content,
 		CreatedAt: time.Now(),
