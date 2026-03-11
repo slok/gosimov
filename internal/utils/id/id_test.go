@@ -1,6 +1,7 @@
 package id_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/oklog/ulid/v2"
@@ -18,7 +19,7 @@ func TestNewULID(t *testing.T) {
 			check: func(t *testing.T) {
 				assert := assert.New(t)
 
-				got := id.NewULID()
+				got := id.NewULID("")
 				assert.NotEmpty(got)
 			},
 		},
@@ -27,7 +28,7 @@ func TestNewULID(t *testing.T) {
 			check: func(t *testing.T) {
 				require := require.New(t)
 
-				got := id.NewULID()
+				got := id.NewULID("")
 				_, err := ulid.Parse(got)
 				require.NoError(err, "expected valid ULID format for %q", got)
 			},
@@ -37,9 +38,33 @@ func TestNewULID(t *testing.T) {
 			check: func(t *testing.T) {
 				assert := assert.New(t)
 
-				a := id.NewULID()
-				b := id.NewULID()
+				a := id.NewULID("")
+				b := id.NewULID("")
 				assert.NotEqual(a, b)
+			},
+		},
+
+		"Generated ULID with prefix should include prefix and valid ULID suffix.": {
+			check: func(t *testing.T) {
+				require := require.New(t)
+
+				got := id.NewULID("gse")
+				parts := strings.SplitN(got, "-", 2)
+				require.Len(parts, 2)
+				require.Equal("gse", parts[0])
+				_, err := ulid.Parse(parts[1])
+				require.NoError(err, "expected valid ULID suffix for %q", got)
+			},
+		},
+
+		"Generated ULID should remove trailing dash from prefix.": {
+			check: func(t *testing.T) {
+				require := require.New(t)
+
+				got := id.NewULID("gse-")
+				parts := strings.SplitN(got, "-", 2)
+				require.Len(parts, 2)
+				require.Equal("gse", parts[0])
 			},
 		},
 	}

@@ -9,6 +9,7 @@ import (
 
 	"github.com/slok/gosimov/internal/utils/id"
 	agentcontext "github.com/slok/gosimov/pkg/agent/context"
+	"github.com/slok/gosimov/pkg/conventions"
 	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
@@ -128,7 +129,7 @@ func (c *Compactor) Compact(ctx context.Context, messages []model.Message, opts 
 	}
 
 	checkpoint := model.Message{
-		ID:        id.NewULID(),
+		ID:        id.NewULID(conventions.IDPrefixCompaction),
 		Kind:      model.MessageKindCompaction,
 		CreatedAt: time.Now(),
 		Content: []model.ContentPart{{
