@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
@@ -316,6 +317,58 @@ func TestRunTurn(t *testing.T) {
 				// Usage should be aggregated.
 				assert.Equal(30, result.Usage.InputTokens)
 				assert.Equal(15, result.Usage.OutputTokens)
+			},
+		},
+
+		"Tool execution should use child context with timeout when configured.": {
+			mock: func(tools []*toolmock.MockTool) turnConfig {
+				callCount := 0
+				provider := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+					callCount++
+					if callCount == 1 {
+						return &llm.Response{
+							Message: model.Message{
+								Kind: model.MessageKindLLM,
+								ToolCallRequests: []model.ToolCallRequest{{
+									ID:        "tc1",
+									ToolID:    "slow-tool",
+									Arguments: json.RawMessage(`{}`),
+								}},
+								Metadata: &model.MessageMetadata{StopReason: model.StopReasonToolUse},
+							},
+						}, nil
+					}
+
+					return &llm.Response{
+						Message: model.Message{
+							Kind:    model.MessageKindLLM,
+							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "done"}},
+							Metadata: &model.MessageMetadata{
+								StopReason: model.StopReasonComplete,
+							},
+						},
+					}, nil
+				})
+
+				tools[0].On("ID").Return("slow-tool")
+				tools[0].On("Execute", mock.MatchedBy(func(ctx context.Context) bool {
+					_, ok := ctx.Deadline()
+					return ok
+				}), json.RawMessage(`{}`)).Return(&tool.Result{
+					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ok"}},
+				}, nil)
+
+				return turnConfig{
+					provider:    provider,
+					messages:    []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "run"}}}},
+					tools:       []tool.Tool{tools[0]},
+					toolTimeout: 2 * time.Second,
+				}
+			},
+			expResp: func(t *testing.T, result *TurnResult) {
+				t.Helper()
+				assert := assert.New(t)
+				assert.Equal("done", result.Message.Content[0].Text)
 			},
 		},
 
