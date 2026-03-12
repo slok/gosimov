@@ -136,22 +136,19 @@ Instead, create narrow tools with explicit allowlists and validation.
 ```go
 type kubectlGetPodsTool struct{}
 
-func (t kubectlGetPodsTool) ID() string          { return "k8s_get_pods" }
-func (t kubectlGetPodsTool) Description() string { return "List pods from an allowed namespace." }
-func (t kubectlGetPodsTool) Schema() json.RawMessage {
-    return json.RawMessage(`{
-      "type":"object",
-      "properties":{"namespace":{"type":"string"}},
-      "required":["namespace"],
-      "additionalProperties":false
-    }`)
+type kubectlGetPodsInput struct {
+    Namespace string `json:"namespace" jsonschema:"required,description=Kubernetes namespace to query"`
 }
 
+var kubectlGetPodsSchema = schema.MustFromType[kubectlGetPodsInput]()
+
+func (t kubectlGetPodsTool) ID() string          { return "k8s_get_pods" }
+func (t kubectlGetPodsTool) Description() string { return "List pods from an allowed namespace." }
+func (t kubectlGetPodsTool) Schema() json.RawMessage { return kubectlGetPodsSchema }
+
 func (t kubectlGetPodsTool) Execute(ctx context.Context, args json.RawMessage) (*tool.Result, error) {
-    var in struct {
-        Namespace string `json:"namespace"`
-    }
-    if err := json.Unmarshal(args, &in); err != nil {
+    var in kubectlGetPodsInput
+    if err := schema.DecodeStrict(args, &in); err != nil {
         return nil, err
     }
 

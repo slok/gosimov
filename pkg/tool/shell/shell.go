@@ -20,6 +20,7 @@ import (
 	"github.com/slok/gosimov/internal/utils/file"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/tool"
+	toolschema "github.com/slok/gosimov/pkg/tool/schema"
 )
 
 // Config configures the shell [Tool].
@@ -70,9 +71,11 @@ func (c *Config) defaults() error {
 
 // input is the JSON schema input for the shell tool.
 type input struct {
-	Command string `json:"command"`
-	Timeout int    `json:"timeout"`
+	Command string `json:"command" jsonschema:"required,description=The shell command to execute"`
+	Timeout int    `json:"timeout" jsonschema:"description=Timeout in seconds (optional, default 120)"`
 }
+
+var inputSchema = toolschema.MustFromType[input]()
 
 // Tool executes shell commands via an [Executor].
 type Tool struct {
@@ -107,28 +110,13 @@ func (t *Tool) Description() string {
 }
 
 func (t *Tool) Schema() json.RawMessage {
-	return json.RawMessage(`{
-  "type": "object",
-  "properties": {
-    "command": {
-      "type": "string",
-      "description": "The shell command to execute"
-    },
-    "timeout": {
-      "type": "integer",
-      "description": "Timeout in seconds (optional, default 120)"
-    }
-  },
-  "required": ["command"]
-}`)
+	return inputSchema
 }
 
 func (t *Tool) Execute(ctx context.Context, args json.RawMessage) (*tool.Result, error) {
 	var in input
-	if len(args) > 0 {
-		if err := json.Unmarshal(args, &in); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
+	if err := toolschema.DecodeStrict(args, &in); err != nil {
+		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
 	if in.Command == "" {

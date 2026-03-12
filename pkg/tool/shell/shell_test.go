@@ -190,6 +190,13 @@ func TestExecute(t *testing.T) {
 			expErr:    true,
 			expErrMsg: "command is required",
 		},
+
+		"Unknown argument should return an error.": {
+			args:      map[string]any{"command": "ls", "unknown": true},
+			mock:      func(m *shellmock.MockExecutor) {},
+			expErr:    true,
+			expErrMsg: "unknown field",
+		},
 	}
 
 	for name, test := range tests {

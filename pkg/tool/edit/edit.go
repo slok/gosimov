@@ -15,6 +15,7 @@ import (
 	"github.com/slok/gosimov/internal/utils/file"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/tool"
+	toolschema "github.com/slok/gosimov/pkg/tool/schema"
 )
 
 // Config configures the edit [Tool].
@@ -40,12 +41,14 @@ func (c *Config) defaults() error {
 
 // input is the JSON schema input for the edit tool.
 type input struct {
-	Path       string `json:"path"`
-	OldText    string `json:"old_text"`
-	NewText    string `json:"new_text"`
-	ReplaceAll bool   `json:"replace_all"`
-	Mtime      string `json:"mtime"`
+	Path       string `json:"path" jsonschema:"required,description=Path to the file to edit, relative to working directory"`
+	OldText    string `json:"old_text" jsonschema:"required,description=Exact text to find in the file"`
+	NewText    string `json:"new_text" jsonschema:"required,description=Text to replace old_text with"`
+	ReplaceAll bool   `json:"replace_all" jsonschema:"description=Replace all occurrences instead of requiring a unique match (default: false)"`
+	Mtime      string `json:"mtime" jsonschema:"description=Expected file modification time from a previous read (RFC3339). If the file was modified since, the edit is rejected."`
 }
+
+var inputSchema = toolschema.MustFromType[input]()
 
 // Tool performs search-and-replace edits on files.
 type Tool struct {
@@ -69,40 +72,13 @@ func (t *Tool) Description() string {
 }
 
 func (t *Tool) Schema() json.RawMessage {
-	return json.RawMessage(`{
-  "type": "object",
-  "properties": {
-    "path": {
-      "type": "string",
-      "description": "Path to the file to edit, relative to working directory"
-    },
-    "old_text": {
-      "type": "string",
-      "description": "Exact text to find in the file"
-    },
-    "new_text": {
-      "type": "string",
-      "description": "Text to replace old_text with"
-    },
-    "replace_all": {
-      "type": "boolean",
-      "description": "Replace all occurrences instead of requiring a unique match (default: false)"
-    },
-    "mtime": {
-      "type": "string",
-      "description": "Expected file modification time from a previous read (RFC3339). If the file was modified since, the edit is rejected."
-    }
-  },
-  "required": ["path", "old_text", "new_text"]
-}`)
+	return inputSchema
 }
 
 func (t *Tool) Execute(_ context.Context, args json.RawMessage) (*tool.Result, error) {
 	var in input
-	if len(args) > 0 {
-		if err := json.Unmarshal(args, &in); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
+	if err := toolschema.DecodeStrict(args, &in); err != nil {
+		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
 	if in.Path == "" {

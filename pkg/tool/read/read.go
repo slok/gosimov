@@ -24,6 +24,7 @@ import (
 	"github.com/slok/gosimov/internal/utils/file"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/tool"
+	toolschema "github.com/slok/gosimov/pkg/tool/schema"
 )
 
 const (
@@ -66,10 +67,12 @@ func (c *Config) defaults() error {
 
 // input is the JSON schema input for the read tool.
 type input struct {
-	Path   string `json:"path"`
-	Offset int    `json:"offset"`
-	Limit  int    `json:"limit"`
+	Path   string `json:"path" jsonschema:"required,description=Path to the file to read, relative to working directory"`
+	Offset int    `json:"offset" jsonschema:"description=Line number to start reading from (1-indexed, default: 1)"`
+	Limit  int    `json:"limit" jsonschema:"description=Maximum number of lines to read"`
 }
+
+var inputSchema = toolschema.MustFromType[input]()
 
 // Tool reads file contents.
 type Tool struct {
@@ -98,32 +101,13 @@ func (t *Tool) Description() string {
 }
 
 func (t *Tool) Schema() json.RawMessage {
-	return json.RawMessage(`{
-  "type": "object",
-  "properties": {
-    "path": {
-      "type": "string",
-      "description": "Path to the file to read, relative to working directory"
-    },
-    "offset": {
-      "type": "integer",
-      "description": "Line number to start reading from (1-indexed, default: 1)"
-    },
-    "limit": {
-      "type": "integer",
-      "description": "Maximum number of lines to read"
-    }
-  },
-  "required": ["path"]
-}`)
+	return inputSchema
 }
 
 func (t *Tool) Execute(_ context.Context, args json.RawMessage) (*tool.Result, error) {
 	var in input
-	if len(args) > 0 {
-		if err := json.Unmarshal(args, &in); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
+	if err := toolschema.DecodeStrict(args, &in); err != nil {
+		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
 	if in.Path == "" {

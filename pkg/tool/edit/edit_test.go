@@ -223,6 +223,12 @@ func TestToolExecute(t *testing.T) {
 			contains: []string{"invalid arguments"},
 		},
 
+		"Unknown argument should return error.": {
+			args:     json.RawMessage(`{"path":"file.txt","old_text":"a","new_text":"b","unknown":true}`),
+			expErr:   true,
+			contains: []string{"invalid arguments", "unknown field"},
+		},
+
 		"File in subdirectory should include diff with correct path.": {
 			setup: func(mfs *memFS) {
 				mfs.putFile("src/main.go", "package main", testMtime)
