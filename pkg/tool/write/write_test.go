@@ -159,6 +159,12 @@ func TestToolExecute(t *testing.T) {
 			contains: []string{"invalid arguments"},
 		},
 
+		"Unknown argument should return error.": {
+			args:     json.RawMessage(`{"path":"hello.txt","content":"hello","unknown":true}`),
+			expErr:   true,
+			contains: []string{"invalid arguments", "unknown field"},
+		},
+
 		"Write to root-level file should not call MkdirAll.": {
 			args:     json.RawMessage(`{"path": "root.txt", "content": "data"}`),
 			contains: []string{"Created", "root.txt"},

@@ -239,6 +239,16 @@ func TestToolExecute(t *testing.T) {
 			contains: []string{"invalid arguments"},
 		},
 
+		"Unknown argument should return error result.": {
+			fsys: fstest.MapFS{},
+			config: func(fsys fstest.MapFS) ls.Config {
+				return ls.Config{CWD: "/project", FS: fsys}
+			},
+			args:     json.RawMessage(`{"path":".","unknown":true}`),
+			expErr:   true,
+			contains: []string{"invalid arguments", "unknown field"},
+		},
+
 		"Entry limit should truncate and add notice.": {
 			fsys: func() fstest.MapFS {
 				m := fstest.MapFS{}

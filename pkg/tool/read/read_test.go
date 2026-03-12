@@ -228,6 +228,16 @@ func TestToolExecuteText(t *testing.T) {
 			contains: []string{"invalid arguments"},
 		},
 
+		"Unknown argument should return error.": {
+			fsys: fstest.MapFS{},
+			config: func(fsys fstest.MapFS) read.Config {
+				return read.Config{CWD: "/project", FS: fsys}
+			},
+			args:     json.RawMessage(`{"path":"hello.txt","unknown":1}`),
+			expErr:   true,
+			contains: []string{"invalid arguments", "unknown field"},
+		},
+
 		"Line limit truncation should add notice.": {
 			fsys: func() fstest.MapFS {
 				lines := make([]string, 100)

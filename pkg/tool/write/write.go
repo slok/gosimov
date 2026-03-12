@@ -13,6 +13,7 @@ import (
 	"github.com/slok/gosimov/internal/utils/file"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/tool"
+	toolschema "github.com/slok/gosimov/pkg/tool/schema"
 )
 
 // Config configures the write [Tool].
@@ -38,9 +39,11 @@ func (c *Config) defaults() error {
 
 // input is the JSON schema input for the write tool.
 type input struct {
-	Path    string `json:"path"`
-	Content string `json:"content"`
+	Path    string `json:"path" jsonschema:"required,description=Path to the file to write, relative to working directory"`
+	Content string `json:"content" jsonschema:"required,description=Content to write to the file"`
 }
+
+var inputSchema = toolschema.MustFromType[input]()
 
 // Tool writes file contents.
 type Tool struct {
@@ -63,28 +66,13 @@ func (t *Tool) Description() string {
 }
 
 func (t *Tool) Schema() json.RawMessage {
-	return json.RawMessage(`{
-  "type": "object",
-  "properties": {
-    "path": {
-      "type": "string",
-      "description": "Path to the file to write, relative to working directory"
-    },
-    "content": {
-      "type": "string",
-      "description": "Content to write to the file"
-    }
-  },
-  "required": ["path", "content"]
-}`)
+	return inputSchema
 }
 
 func (t *Tool) Execute(_ context.Context, args json.RawMessage) (*tool.Result, error) {
 	var in input
-	if len(args) > 0 {
-		if err := json.Unmarshal(args, &in); err != nil {
-			return nil, fmt.Errorf("invalid arguments: %w", err)
-		}
+	if err := toolschema.DecodeStrict(args, &in); err != nil {
+		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
 	if in.Path == "" {
