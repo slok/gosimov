@@ -15,6 +15,14 @@ import (
 	"github.com/slok/gosimov/pkg/tool"
 )
 
+func ensureTurnContextActive(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("turn context canceled (%v): %w", err, pkgerrors.ErrAborted)
+	}
+
+	return nil
+}
+
 // onMessagesFn is called each time new messages are produced during the turn.
 // This enables per-message persistence — the callback is invoked once per LLM
 // response and once per tool result, as they are created.
@@ -28,6 +36,7 @@ type turnConfig struct {
 	disablePromptCache bool
 	messages           []model.Message
 	tools              []tool.Tool
+	toolTimeout        time.Duration
 	maxIterations      int
 	onMessages         onMessagesFn
 	compactor          agentcontext.Compactor
@@ -103,6 +112,10 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 	)
 
 	for iteration := 0; ; iteration++ {
+		if err := ensureTurnContextActive(ctx); err != nil {
+			return nil, err
+		}
+
 		if config.maxIterations > 0 && iteration >= config.maxIterations {
 			return nil, fmt.Errorf("agent loop exceeded max iterations (%d): %w", config.maxIterations, pkgerrors.ErrMaxIterations)
 		}
@@ -117,6 +130,10 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 		})
 		if err != nil {
 			return nil, fmt.Errorf("running compaction: %w", err)
+		}
+
+		if err := ensureTurnContextActive(ctx); err != nil {
+			return nil, err
 		}
 
 		// If compaction created a checkpoint, append it to turn state.
@@ -136,6 +153,10 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 			}
 		}
 
+		if err := ensureTurnContextActive(ctx); err != nil {
+			return nil, err
+		}
+
 		// Build the LLM request.
 		req := llm.Request{
 			SystemPrompt: config.systemPrompt,
@@ -148,6 +169,10 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 		resp, err := config.provider.Call(ctx, req)
 		if err != nil {
 			return nil, fmt.Errorf("llm call failed: %w", err)
+		}
+
+		if err := ensureTurnContextActive(ctx); err != nil {
+			return nil, err
 		}
 
 		// Stamp the response message with ID and timestamp.
@@ -184,9 +209,9 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 			return nil, fmt.Errorf("llm request was aborted: %w", pkgerrors.ErrAborted)
 
 		case model.StopReasonToolUse:
-			toolResults, err := executeToolCalls(ctx, resp.Message.ToolCallRequests, toolIndex, config.onMessages)
+			toolResults, err := executeToolCalls(ctx, resp.Message.ToolCallRequests, toolIndex, config.toolTimeout, config.onMessages)
 			if err != nil {
-				return nil, fmt.Errorf("persisting tool result: %w", err)
+				return nil, fmt.Errorf("executing tool calls: %w", err)
 			}
 			allMessages = append(allMessages, toolResults...)
 			newMessages = append(newMessages, toolResults...)
@@ -199,11 +224,24 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 
 // executeToolCalls runs each tool call request and returns tool result messages.
 // Each tool result is persisted individually via onMessages as it is created.
-func executeToolCalls(ctx context.Context, requests []model.ToolCallRequest, tools map[string]tool.Tool, onMessages onMessagesFn) ([]model.Message, error) {
+func executeToolCalls(ctx context.Context, requests []model.ToolCallRequest, tools map[string]tool.Tool, toolTimeout time.Duration, onMessages onMessagesFn) ([]model.Message, error) {
+	if err := ensureTurnContextActive(ctx); err != nil {
+		return nil, err
+	}
+
 	results := make([]model.Message, 0, len(requests))
 
 	for _, req := range requests {
-		msg := executeOneToolCall(ctx, req, tools)
+		if err := ensureTurnContextActive(ctx); err != nil {
+			return nil, err
+		}
+
+		msg := executeOneToolCall(ctx, req, tools, toolTimeout)
+
+		if err := ensureTurnContextActive(ctx); err != nil {
+			return nil, err
+		}
+
 		results = append(results, msg)
 
 		if err := notifyMessages(ctx, onMessages, msg); err != nil {
@@ -218,13 +256,20 @@ func executeToolCalls(ctx context.Context, requests []model.ToolCallRequest, too
 //
 // If the tool returns an error, err.Error() is sent to the LLM as an error tool result.
 // The agent loop never aborts on tool errors — they are always fed back to the LLM.
-func executeOneToolCall(ctx context.Context, req model.ToolCallRequest, tools map[string]tool.Tool) model.Message {
+func executeOneToolCall(ctx context.Context, req model.ToolCallRequest, tools map[string]tool.Tool, toolTimeout time.Duration) model.Message {
 	t, ok := tools[req.ToolID]
 	if !ok {
 		return newToolResultMessage(req.ID, errorContent(fmt.Sprintf("tool %q not found", req.ToolID)), true)
 	}
 
-	result, err := t.Execute(ctx, req.Arguments)
+	toolCtx := ctx
+	cancel := func() {}
+	if toolTimeout > 0 {
+		toolCtx, cancel = context.WithTimeout(ctx, toolTimeout)
+	}
+	defer cancel()
+
+	result, err := t.Execute(toolCtx, req.Arguments)
 	if err != nil {
 		return newToolResultMessage(req.ID, errorContent(err.Error()), true)
 	}

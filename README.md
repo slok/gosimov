@@ -259,6 +259,7 @@ Useful for context-window math and UX telemetry.
 ## Notes
 
 - `TurnMaxIterations` protects from infinite tool-call loops.
+- `ToolTimeout` sets a per-tool execution timeout (`0` means no timeout).
 - Session configuration is immutable after creation; use `PromptOptions` for per-call overrides.
 - `Continue(ctx, opts)` requires existing messages in session history.
 - Provider constructors validate model IDs and auth config up front.

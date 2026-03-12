@@ -647,6 +647,7 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 | `Provider` | Yes | — | LLM provider to call |
 | `SystemPrompt` | No | `""` | System instruction for the LLM |
 | `Tools` | No | `nil` | Available tools for the LLM to call |
+| `ToolTimeout` | No | `0` | Per-tool execution timeout. `0` means no timeout. |
 | `TurnMaxIterations` | No | `0` (no limit) | Per-turn LLM call limit. 0 means unlimited. |
 | `SessionRepository` | No | `nil` | If set, session is persisted on creation. |
 | `MessageRepository` | No | `nil` | If set, messages are persisted after each turn. |
@@ -661,6 +662,7 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 | `Provider` | Yes | — | LLM provider to call |
 | `SystemPrompt` | No | `""` | System instruction for the LLM |
 | `Tools` | No | `nil` | Available tools for the LLM to call |
+| `ToolTimeout` | No | `0` | Per-tool execution timeout. `0` means no timeout. |
 | `TurnMaxIterations` | No | `0` (no limit) | Per-turn LLM call limit. 0 means unlimited. |
 | `SessionRepository` | Yes | — | Repository used to load session identity by ID. |
 | `MessageRepository` | No | `nil` | If set, existing messages are preloaded into session state. |

@@ -24,6 +24,9 @@ type SessionConfig struct {
 	SystemPrompt string
 	// Tools available for the LLM to call (optional).
 	Tools []tool.Tool
+	// ToolTimeout limits each individual tool execution.
+	// 0 means no timeout.
+	ToolTimeout time.Duration
 	// TurnMaxIterations limits how many LLM calls each turn can make.
 	// 0 means no limit.
 	TurnMaxIterations int
@@ -70,6 +73,9 @@ type LoadSessionConfig struct {
 	SystemPrompt string
 	// Tools available for the LLM to call (optional).
 	Tools []tool.Tool
+	// ToolTimeout limits each individual tool execution.
+	// 0 means no timeout.
+	ToolTimeout time.Duration
 	// TurnMaxIterations limits how many LLM calls each turn can make.
 	// 0 means no limit.
 	TurnMaxIterations int
@@ -155,6 +161,7 @@ type Session struct {
 	systemPrompt       string
 	disablePromptCache bool
 	tools              []tool.Tool
+	toolTimeout        time.Duration
 	maxIterations      int
 	messages           []model.Message
 	usage              model.Usage
@@ -191,6 +198,7 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		systemPrompt:       cfg.SystemPrompt,
 		disablePromptCache: cfg.DisablePromptCache,
 		tools:              cfg.Tools,
+		toolTimeout:        cfg.ToolTimeout,
 		maxIterations:      cfg.TurnMaxIterations,
 		sessionRepo:        cfg.SessionRepository,
 		messageRepo:        cfg.MessageRepository,
@@ -222,6 +230,7 @@ func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 		systemPrompt:       cfg.SystemPrompt,
 		disablePromptCache: cfg.DisablePromptCache,
 		tools:              cfg.Tools,
+		toolTimeout:        cfg.ToolTimeout,
 		maxIterations:      cfg.TurnMaxIterations,
 		sessionRepo:        cfg.SessionRepository,
 		messageRepo:        cfg.MessageRepository,
@@ -342,6 +351,7 @@ func (s *Session) runTurn(ctx context.Context, messages []model.Message, opts Pr
 		disablePromptCache: s.disablePromptCache,
 		messages:           messages,
 		tools:              s.tools,
+		toolTimeout:        s.toolTimeout,
 		maxIterations:      maxIterations,
 		onMessages:         s.persistMessages,
 		compactor:          s.compactor,
