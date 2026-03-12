@@ -1,10 +1,11 @@
 // Package simple provides a minimal LLM-backed context compactor.
 //
 // The compactor supports two modes:
-//  1. Non-forced: apply existing compaction checkpoints to filter context.
+//  1. Non-forced: apply existing compaction checkpoints and auto-compact
+//     when estimated tokens exceed the configured threshold.
 //  2. Forced: create a new checkpoint by summarizing older messages.
 //
-// Forced compaction uses a dedicated summarization provider and returns a
+// Checkpoint creation uses a dedicated summarization provider and returns a
 // MessageKindCompaction checkpoint plus the filtered message list.
 //
 // This implementation intentionally keeps the algorithm simple:
