@@ -13,7 +13,7 @@ const (
 	ctxKeyLLMModelInfo ctxKey = "agent-llm-model-info"
 )
 
-// CtxWithSessionID returns a copy of parent with the session ID set.
+// ctxWithSessionID returns a copy of parent with the session ID set.
 func ctxWithSessionID(parent context.Context, sessionID string) context.Context {
 	return context.WithValue(parent, ctxKeySessionID, sessionID)
 }
@@ -24,7 +24,7 @@ func SessionIDFromCtx(ctx context.Context) string {
 	return sessionID
 }
 
-// CtxWithLLMModelInfo returns a copy of parent with the model info set.
+// ctxWithLLMModelInfo returns a copy of parent with the model info set.
 // A nil model info is ignored and parent is returned as-is.
 func ctxWithLLMModelInfo(parent context.Context, info *model.LLMModelInfo) context.Context {
 	if info == nil {

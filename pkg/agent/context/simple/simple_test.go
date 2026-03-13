@@ -26,6 +26,15 @@ func TestNew(t *testing.T) {
 			cfg:    simple.Config{},
 			expErr: true,
 		},
+		"Provider context window lower than reserve should fail.": {
+			cfg: simple.Config{
+				Provider: fake.NewProviderWithModelInfo(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+					return nil, nil
+				}, model.LLMModelInfo{ContextWindow: 100}),
+				ReserveTokens: 200,
+			},
+			expErr: true,
+		},
 		"Valid config should create compactor.": {
 			cfg: simple.Config{Provider: fake.NewEchoProvider()},
 		},

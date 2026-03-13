@@ -48,11 +48,28 @@ func (c *Config) defaults() error {
 		c.ReserveTokens = defaultReserveTokens
 	}
 
+	if c.contextWindowTokens() <= c.ReserveTokens {
+		return fmt.Errorf("context window tokens must be greater than reserve tokens: %w", pkgerrors.ErrNotValid)
+	}
+
 	if c.MaxSummaryTokens <= 0 {
 		c.MaxSummaryTokens = defaultMaxSummaryTokens
 	}
 
 	return nil
+}
+
+func (c *Config) contextWindowTokens() int {
+	if c.Provider == nil {
+		return defaultContextWindowTokens
+	}
+
+	contextWindow := c.Provider.ModelInfo().ContextWindow
+	if contextWindow > 0 {
+		return contextWindow
+	}
+
+	return defaultContextWindowTokens
 }
 
 type Compactor struct {
