@@ -1599,3 +1599,65 @@ func TestSessionCompact(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionPromptSetsRuntimeContextValues(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	wantInfo := model.LLMModelInfo{ID: "ctx-model", ContextWindow: 1234, MaxOutputTokens: 256}
+
+	var gotSessionID string
+	var gotInfo *model.LLMModelInfo
+
+	s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+		Provider: fake.NewProviderWithModelInfo(func(ctx context.Context, _ llm.Request) (*llm.Response, error) {
+			gotSessionID = agent.SessionIDFromCtx(ctx)
+			gotInfo = agent.LLMModelInfoFromCtx(ctx)
+
+			return &llm.Response{Message: model.Message{Kind: model.MessageKindLLM, Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete}}}, nil
+		}, wantInfo),
+	})
+	require.NoError(err)
+
+	_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}, agent.PromptOptions{})
+	require.NoError(err)
+
+	assert.Equal(s.Session().ID, gotSessionID)
+	if assert.NotNil(gotInfo) {
+		assert.Equal(wantInfo, *gotInfo)
+	}
+}
+
+func TestSessionCompactSetsRuntimeContextValues(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	wantInfo := model.LLMModelInfo{ID: "ctx-model", ContextWindow: 4096, MaxOutputTokens: 512}
+
+	var gotSessionID string
+	var gotInfo *model.LLMModelInfo
+
+	compactor := &testCompactor{
+		fn: func(ctx context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+			gotSessionID = agent.SessionIDFromCtx(ctx)
+			gotInfo = agent.LLMModelInfoFromCtx(ctx)
+			return &agentcontext.CompactResult{Messages: msgs}, nil
+		},
+	}
+
+	s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+		Provider:  fake.NewProviderWithModelInfo(func(_ context.Context, _ llm.Request) (*llm.Response, error) { return nil, nil }, wantInfo),
+		Compactor: compactor,
+	})
+	require.NoError(err)
+
+	s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}})
+
+	_, err = s.Compact(context.Background())
+	require.NoError(err)
+
+	assert.Equal(s.Session().ID, gotSessionID)
+	if assert.NotNil(gotInfo) {
+		assert.Equal(wantInfo, *gotInfo)
+	}
+}

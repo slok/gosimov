@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/slok/gosimov/pkg/agent"
 	agentcontext "github.com/slok/gosimov/pkg/agent/context"
 	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/model"
@@ -28,11 +29,10 @@ const (
 // The compactor uses a dedicated provider for summarization calls so
 // callers can choose a different model than the main conversation model.
 type Config struct {
-	Provider            llm.Provider
-	ContextWindowTokens int
-	ReserveTokens       int
-	KeepRecentTokens    int
-	MaxSummaryTokens    int
+	Provider         llm.Provider
+	ReserveTokens    int
+	KeepRecentTokens int
+	MaxSummaryTokens int
 }
 
 func (c *Config) defaults() error {
@@ -44,16 +44,8 @@ func (c *Config) defaults() error {
 		c.KeepRecentTokens = defaultKeepRecentTokens
 	}
 
-	if c.ContextWindowTokens <= 0 {
-		c.ContextWindowTokens = defaultContextWindowTokens
-	}
-
 	if c.ReserveTokens <= 0 {
 		c.ReserveTokens = defaultReserveTokens
-	}
-
-	if c.ContextWindowTokens <= c.ReserveTokens {
-		return fmt.Errorf("context window tokens must be greater than reserve tokens: %w", pkgerrors.ErrNotValid)
 	}
 
 	if c.MaxSummaryTokens <= 0 {
@@ -64,11 +56,10 @@ func (c *Config) defaults() error {
 }
 
 type Compactor struct {
-	provider            llm.Provider
-	contextWindowTokens int
-	reserveTokens       int
-	keepRecentTokens    int
-	maxSummaryTokens    int
+	provider         llm.Provider
+	reserveTokens    int
+	keepRecentTokens int
+	maxSummaryTokens int
 }
 
 type compactionSplit struct {
@@ -83,11 +74,10 @@ func New(cfg Config) (*Compactor, error) {
 	}
 
 	return &Compactor{
-		provider:            cfg.Provider,
-		contextWindowTokens: cfg.ContextWindowTokens,
-		reserveTokens:       cfg.ReserveTokens,
-		keepRecentTokens:    cfg.KeepRecentTokens,
-		maxSummaryTokens:    cfg.MaxSummaryTokens,
+		provider:         cfg.Provider,
+		reserveTokens:    cfg.ReserveTokens,
+		keepRecentTokens: cfg.KeepRecentTokens,
+		maxSummaryTokens: cfg.MaxSummaryTokens,
 	}, nil
 }
 
@@ -102,7 +92,7 @@ var _ agentcontext.Compactor = (*Compactor)(nil)
 //     otherwise return filtered context only.
 func (c *Compactor) Compact(ctx context.Context, messages []model.Message, opts agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
 	effective := effectiveMessages(messages)
-	if !c.shouldCreateCheckpoint(opts.Force, effective) {
+	if !c.shouldCreateCheckpoint(ctx, opts.Force, effective) {
 		return &agentcontext.CompactResult{Messages: effective}, nil
 	}
 
@@ -138,12 +128,12 @@ func effectiveMessages(messages []model.Message) []model.Message {
 	return applyLatestCheckpoint(messages)
 }
 
-func (c *Compactor) shouldCreateCheckpoint(force bool, messages []model.Message) bool {
+func (c *Compactor) shouldCreateCheckpoint(ctx context.Context, force bool, messages []model.Message) bool {
 	if force {
 		return true
 	}
 
-	return c.shouldCompact(messages)
+	return c.shouldCompact(ctx, messages)
 }
 
 func (c *Compactor) splitForCompaction(messages []model.Message) (compactionSplit, bool) {
@@ -161,13 +151,22 @@ func (c *Compactor) splitForCompaction(messages []model.Message) (compactionSpli
 	}, true
 }
 
-func (c *Compactor) shouldCompact(messages []model.Message) bool {
+func (c *Compactor) shouldCompact(ctx context.Context, messages []model.Message) bool {
 	if len(messages) == 0 {
 		return false
 	}
 
-	maxInputTokens := c.contextWindowTokens - c.reserveTokens
+	maxInputTokens := c.contextWindowTokensFromCtx(ctx) - c.reserveTokens
 	return estimateMessagesTokens(messages) > maxInputTokens
+}
+
+func (c *Compactor) contextWindowTokensFromCtx(ctx context.Context) int {
+	info := agent.LLMModelInfoFromCtx(ctx)
+	if info != nil && info.ContextWindow > 0 {
+		return info.ContextWindow
+	}
+
+	return defaultContextWindowTokens
 }
 
 // summarize performs the dedicated summary LLM call and extracts text + usage.

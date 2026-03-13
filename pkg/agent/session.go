@@ -334,6 +334,8 @@ func (s *Session) Continue(ctx context.Context, opts PromptOptions) (*TurnResult
 // persisted individually via the onMessages callback as it is created.
 
 func (s *Session) runTurn(ctx context.Context, messages []model.Message, opts PromptOptions) (*TurnResult, error) {
+	ctx = s.ctxWithRuntimeInfo(ctx)
+
 	systemPrompt := s.systemPrompt
 	if opts.SystemPrompt != "" {
 		systemPrompt = opts.SystemPrompt
@@ -465,6 +467,8 @@ func (s *Session) Compact(ctx context.Context) (*agentcontext.CompactResult, err
 	}
 	defer s.endRun()
 
+	ctx = s.ctxWithRuntimeInfo(ctx)
+
 	s.mu.Lock()
 	messages := make([]model.Message, len(s.messages))
 	copy(messages, s.messages)
@@ -488,6 +492,12 @@ func (s *Session) Compact(ctx context.Context) (*agentcontext.CompactResult, err
 	}
 
 	return result, nil
+}
+
+func (s *Session) ctxWithRuntimeInfo(parent context.Context) context.Context {
+	ctx := CtxWithSessionID(parent, s.session.ID)
+	modelInfo := s.provider.ModelInfo()
+	return CtxWithLLMModelInfo(ctx, &modelInfo)
 }
 
 // Reset clears the conversation history and usage, returning the session

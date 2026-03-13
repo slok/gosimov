@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/slok/gosimov/pkg/agent"
 	agentcontext "github.com/slok/gosimov/pkg/agent/context"
 	"github.com/slok/gosimov/pkg/agent/context/simple"
 	"github.com/slok/gosimov/pkg/llm"
@@ -24,14 +25,6 @@ func TestNew(t *testing.T) {
 	}{
 		"Missing provider should fail.": {
 			cfg:    simple.Config{},
-			expErr: true,
-		},
-		"Context window lower than reserve should fail.": {
-			cfg: simple.Config{
-				Provider:            fake.NewEchoProvider(),
-				ContextWindowTokens: 100,
-				ReserveTokens:       200,
-			},
 			expErr: true,
 		},
 		"Valid config should create compactor.": {
@@ -58,6 +51,7 @@ func TestNew(t *testing.T) {
 func TestCompactorCompact(t *testing.T) {
 	tests := map[string]struct {
 		mock   func() agentcontext.Compactor
+		ctx    context.Context
 		msgs   []model.Message
 		opts   agentcontext.CompactOptions
 		expErr bool
@@ -92,13 +86,13 @@ func TestCompactorCompact(t *testing.T) {
 					}}, nil
 				})
 				c, _ := simple.New(simple.Config{
-					Provider:            provider,
-					ContextWindowTokens: 6,
-					ReserveTokens:       2,
-					KeepRecentTokens:    2,
+					Provider:         provider,
+					ReserveTokens:    2,
+					KeepRecentTokens: 2,
 				})
 				return c
 			},
+			ctx: agent.CtxWithLLMModelInfo(context.Background(), &model.LLMModelInfo{ContextWindow: 6}),
 			msgs: []model.Message{
 				{ID: "m1", Kind: model.MessageKindUser, Content: textContent("12345678")},
 				{ID: "m2", Kind: model.MessageKindLLM, Content: textContent("12345678")},
@@ -114,6 +108,29 @@ func TestCompactorCompact(t *testing.T) {
 				require.Len(got.Messages, 3)
 				assert.Equal(11, got.Usage.InputTokens)
 				assert.Equal(7, got.Usage.OutputTokens)
+			},
+		},
+		"Force false should use context model info as context window fallback.": {
+			mock: func() agentcontext.Compactor {
+				provider := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+					return &llm.Response{Message: model.Message{Kind: model.MessageKindLLM, Content: textContent("ctx summary")}}, nil
+				})
+				c, _ := simple.New(simple.Config{
+					Provider:         provider,
+					ReserveTokens:    2,
+					KeepRecentTokens: 2,
+				})
+				return c
+			},
+			ctx: agent.CtxWithLLMModelInfo(context.Background(), &model.LLMModelInfo{ContextWindow: 6}),
+			msgs: []model.Message{
+				{ID: "m1", Kind: model.MessageKindUser, Content: textContent("12345678")},
+				{ID: "m2", Kind: model.MessageKindLLM, Content: textContent("12345678")},
+				{ID: "m3", Kind: model.MessageKindUser, Content: textContent("1234")},
+			},
+			assert: func(t *testing.T, got *agentcontext.CompactResult) {
+				require := require.New(t)
+				require.NotNil(got.Message)
 			},
 		},
 		"Force false should filter by latest checkpoint.": {
@@ -407,7 +424,12 @@ func TestCompactorCompact(t *testing.T) {
 
 			c := test.mock()
 
-			got, err := c.Compact(context.Background(), test.msgs, test.opts)
+			ctx := test.ctx
+			if ctx == nil {
+				ctx = context.Background()
+			}
+
+			got, err := c.Compact(ctx, test.msgs, test.opts)
 			if test.expErr {
 				require.Error(err)
 				return
