@@ -495,9 +495,9 @@ func (s *Session) Compact(ctx context.Context) (*agentcontext.CompactResult, err
 }
 
 func (s *Session) ctxWithRuntimeInfo(parent context.Context) context.Context {
-	ctx := CtxWithSessionID(parent, s.session.ID)
+	ctx := ctxWithSessionID(parent, s.session.ID)
 	modelInfo := s.provider.ModelInfo()
-	return CtxWithLLMModelInfo(ctx, &modelInfo)
+	return ctxWithLLMModelInfo(ctx, &modelInfo)
 }
 
 // Reset clears the conversation history and usage, returning the session

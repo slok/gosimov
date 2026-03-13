@@ -31,7 +31,7 @@ func TestCtxWithSessionID(t *testing.T) {
 			},
 		},
 		"Later value should override previous value.": {
-			ctx:   CtxWithSessionID(context.Background(), "s-old"),
+			ctx:   ctxWithSessionID(context.Background(), "s-old"),
 			setID: "s-new",
 			assert: func(t *testing.T, ctx context.Context) {
 				t.Helper()
@@ -44,7 +44,7 @@ func TestCtxWithSessionID(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			ctx := test.ctx
 			if test.setID != "" {
-				ctx = CtxWithSessionID(ctx, test.setID)
+				ctx = ctxWithSessionID(ctx, test.setID)
 			}
 
 			test.assert(t, ctx)
@@ -87,7 +87,7 @@ func TestCtxWithLLMModelInfo(t *testing.T) {
 			},
 		},
 		"Nil model info should keep context unchanged.": {
-			ctx: CtxWithSessionID(context.Background(), "s-1"),
+			ctx: ctxWithSessionID(context.Background(), "s-1"),
 			assert: func(t *testing.T, ctx context.Context) {
 				t.Helper()
 				assert.Nil(t, LLMModelInfoFromCtx(ctx))
@@ -112,13 +112,13 @@ func TestCtxWithLLMModelInfo(t *testing.T) {
 			ctx := test.ctx
 
 			if name == "Stored model info should be copied on set." {
-				ctx = CtxWithLLMModelInfo(ctx, test.info)
+				ctx = ctxWithLLMModelInfo(ctx, test.info)
 				test.info.ID = "after"
 				test.assert(t, ctx)
 				return
 			}
 
-			ctx = CtxWithLLMModelInfo(ctx, test.info)
+			ctx = ctxWithLLMModelInfo(ctx, test.info)
 			test.assert(t, ctx)
 		})
 	}
