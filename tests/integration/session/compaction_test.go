@@ -200,11 +200,10 @@ func TestCompactionNoopWhenNotForced(t *testing.T) {
 	provider := cfg.NewProvider(t, nil)
 	summaryProvider := cfg.NewSummaryProvider(t)
 
-	// Large context window + large reserve = auto-compaction won't trigger.
+	// Large keep-recent window = auto-compaction won't trigger.
 	compactor, err := simple.New(simple.Config{
-		Provider:            summaryProvider,
-		ContextWindowTokens: 200000,
-		KeepRecentTokens:    50000,
+		Provider:         summaryProvider,
+		KeepRecentTokens: 50000,
 	})
 	require.NoError(t, err)
 

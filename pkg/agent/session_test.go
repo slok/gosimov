@@ -1599,3 +1599,77 @@ func TestSessionCompact(t *testing.T) {
 		})
 	}
 }
+
+func TestSessionRuntimeContextValues(t *testing.T) {
+	tests := map[string]struct {
+		modelInfo model.LLMModelInfo
+		run       func(t *testing.T, wantInfo model.LLMModelInfo) (string, string, *model.LLMModelInfo, error)
+	}{
+		"Prompt should set runtime context values for provider calls.": {
+			modelInfo: model.LLMModelInfo{ID: "ctx-model-prompt", ContextWindow: 1234, MaxOutputTokens: 256},
+			run: func(t *testing.T, wantInfo model.LLMModelInfo) (string, string, *model.LLMModelInfo, error) {
+				t.Helper()
+
+				var gotSessionID string
+				var gotInfo *model.LLMModelInfo
+
+				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+					Provider: fake.NewProviderWithModelInfo(func(ctx context.Context, _ llm.Request) (*llm.Response, error) {
+						gotSessionID = agent.SessionIDFromCtx(ctx)
+						gotInfo = agent.LLMModelInfoFromCtx(ctx)
+						return &llm.Response{Message: model.Message{Kind: model.MessageKindLLM, Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete}}}, nil
+					}, wantInfo),
+				})
+				if err != nil {
+					return "", "", nil, err
+				}
+
+				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}, agent.PromptOptions{})
+				return s.Session().ID, gotSessionID, gotInfo, err
+			},
+		},
+		"Compact should set runtime context values for compactor calls.": {
+			modelInfo: model.LLMModelInfo{ID: "ctx-model-compact", ContextWindow: 4096, MaxOutputTokens: 512},
+			run: func(t *testing.T, wantInfo model.LLMModelInfo) (string, string, *model.LLMModelInfo, error) {
+				t.Helper()
+
+				var gotSessionID string
+				var gotInfo *model.LLMModelInfo
+
+				compactor := &testCompactor{
+					fn: func(ctx context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+						gotSessionID = agent.SessionIDFromCtx(ctx)
+						gotInfo = agent.LLMModelInfoFromCtx(ctx)
+						return &agentcontext.CompactResult{Messages: msgs}, nil
+					},
+				}
+
+				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+					Provider:  fake.NewProviderWithModelInfo(func(_ context.Context, _ llm.Request) (*llm.Response, error) { return nil, nil }, wantInfo),
+					Compactor: compactor,
+				})
+				if err != nil {
+					return "", "", nil, err
+				}
+
+				s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}})
+				_, err = s.Compact(context.Background())
+				return s.Session().ID, gotSessionID, gotInfo, err
+			},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
+
+			expSessionID, gotSessionID, gotInfo, err := test.run(t, test.modelInfo)
+			require.NoError(err)
+			assert.Equal(expSessionID, gotSessionID)
+			if assert.NotNil(gotInfo) {
+				assert.Equal(test.modelInfo, *gotInfo)
+			}
+		})
+	}
+}

@@ -26,11 +26,12 @@ func TestNew(t *testing.T) {
 			cfg:    simple.Config{},
 			expErr: true,
 		},
-		"Context window lower than reserve should fail.": {
+		"Provider context window lower than reserve should fail.": {
 			cfg: simple.Config{
-				Provider:            fake.NewEchoProvider(),
-				ContextWindowTokens: 100,
-				ReserveTokens:       200,
+				Provider: fake.NewProviderWithModelInfo(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+					return nil, nil
+				}, model.LLMModelInfo{ContextWindow: 100}),
+				ReserveTokens: 200,
 			},
 			expErr: true,
 		},
@@ -92,10 +93,9 @@ func TestCompactorCompact(t *testing.T) {
 					}}, nil
 				})
 				c, _ := simple.New(simple.Config{
-					Provider:            provider,
-					ContextWindowTokens: 6,
-					ReserveTokens:       2,
-					KeepRecentTokens:    2,
+					Provider:         provider,
+					ReserveTokens:    199998,
+					KeepRecentTokens: 2,
 				})
 				return c
 			},
