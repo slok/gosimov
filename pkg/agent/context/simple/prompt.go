@@ -1,6 +1,9 @@
 package simple
 
-import "strings"
+import (
+	"strings"
+	"text/template"
+)
 
 const summarizationSystemPrompt = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI coding assistant, then produce a structured summary following the exact format specified.
 
@@ -78,27 +81,36 @@ Use this EXACT format:
 
 Keep each section concise. Preserve exact file paths, function names, and error messages.`
 
+var summarizationPromptTemplate = template.Must(template.New("summarization_prompt").Parse(`<conversation>
+{{.Conversation}}
+</conversation>{{if .PreviousSummary}}
+
+<previous-summary>
+{{.PreviousSummary}}
+</previous-summary>{{end}}{{if .CustomInstructions}}
+
+Custom instructions: {{.CustomInstructions}}{{end}}
+
+{{.BasePrompt}}`))
+
 func makeSummarizationPrompt(conversation, previousSummary, customInstructions string) string {
-	sections := []string{`<conversation>
-` + conversation + `
-</conversation>`}
-
-	if previousSummary != "" {
-		sections = append(sections, `<previous-summary>
-`+previousSummary+`
-</previous-summary>`)
-	}
-
-	if customInstructions != "" {
-		sections = append(sections, "Custom instructions: "+customInstructions)
-	}
-
 	basePrompt := initialSummarizationPrompt
 	if previousSummary != "" {
 		basePrompt = updateSummarizationPrompt
 	}
 
-	sections = append(sections, basePrompt)
+	var b strings.Builder
+	_ = summarizationPromptTemplate.Execute(&b, struct {
+		Conversation       string
+		PreviousSummary    string
+		CustomInstructions string
+		BasePrompt         string
+	}{
+		Conversation:       conversation,
+		PreviousSummary:    previousSummary,
+		CustomInstructions: customInstructions,
+		BasePrompt:         basePrompt,
+	})
 
-	return strings.Join(sections, "\n\n")
+	return b.String()
 }
