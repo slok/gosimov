@@ -16,6 +16,7 @@
 //
 // Optional flags:
 //   - --addr (default :8080)
+//   - --debug (default false)
 //   - --provider (default zen)
 //   - --api-key (required unless --auth-file is set)
 //   - --auth-file (only for codex/claude providers)
@@ -35,12 +36,15 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/rs/zerolog"
 	"github.com/slok/gosimov/pkg/agent/context/simple"
 	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/llm/anthropic"
 	"github.com/slok/gosimov/pkg/llm/openai"
 	"github.com/slok/gosimov/pkg/llm/opencodego"
 	"github.com/slok/gosimov/pkg/llm/zen"
+	gosimovlog "github.com/slok/gosimov/pkg/log"
+	"github.com/slok/gosimov/pkg/log/zero"
 	"github.com/slok/gosimov/pkg/store/jsonl"
 	"github.com/slok/gosimov/pkg/store/subscriber"
 	"github.com/slok/gosimov/pkg/tool"
@@ -63,6 +67,13 @@ func run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	logLevel := zerolog.InfoLevel
+	if cfg.debug {
+		logLevel = zerolog.DebugLevel
+	}
+	baseLogger := zerolog.New(os.Stdout).Level(logLevel).With().Timestamp().Str("example", "chat").Logger()
+	sdkLogger := zero.New(baseLogger).WithValues(gosimovlog.KV{"component": "gosimov"})
 
 	baseRepo, err := jsonl.New(jsonl.Config{Dir: cfg.storeDir})
 	if err != nil {
@@ -109,6 +120,7 @@ func run(ctx context.Context) error {
 		msgRepo:            msgRepo,
 		provider:           provider,
 		compactor:          compactor,
+		sdkLogger:          sdkLogger,
 		conversationLogger: conversationLogger,
 		summaryLogger:      summaryLogger,
 		sessions:           map[string]*chatSession{},
@@ -119,6 +131,7 @@ func run(ctx context.Context) error {
 	fmt.Printf("Chat UI:   http://localhost%s\n", cfg.addr)
 	fmt.Printf("Provider:  %s\n", cfg.provider)
 	fmt.Printf("Model:     %s\n", cfg.modelID)
+	fmt.Printf("Debug:     %t\n", cfg.debug)
 	fmt.Printf("Auth:      %s\n", authStatus)
 	if cfg.authFile != "" {
 		fmt.Printf("Auth file: %s\n", cfg.authFile)

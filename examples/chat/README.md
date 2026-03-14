@@ -40,6 +40,7 @@ Then open `http://localhost:8080`.
 Optional flags:
 
 - `--addr` (default `:8080`)
+- `--debug` (default `false`, enables SDK debug logs)
 - `--provider` (default `zen`; one of `zen`, `opencode-go`, `openai`, `codex`, `anthropic`, `claude`)
 - `--api-key` (required unless `--auth-file` is set)
 - `--auth-file` (OAuth credentials file path; only for `codex`/`claude` providers)
