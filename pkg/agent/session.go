@@ -10,6 +10,7 @@ import (
 	agentcontext "github.com/slok/gosimov/pkg/agent/context"
 	"github.com/slok/gosimov/pkg/conventions"
 	"github.com/slok/gosimov/pkg/llm"
+	gosimovlog "github.com/slok/gosimov/pkg/log"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
 	"github.com/slok/gosimov/pkg/store"
@@ -49,6 +50,9 @@ type SessionConfig struct {
 	// after tool results), after the compactor. The full conversation history is
 	// never mutated — only the messages sent to the LLM go through the processor.
 	ContextProcessor agentcontext.Processor
+	// Logger records session and turn lifecycle events (optional).
+	// If nil, [log.Noop] is used.
+	Logger gosimovlog.Logger
 }
 
 func (c *SessionConfig) defaults() error {
@@ -58,6 +62,10 @@ func (c *SessionConfig) defaults() error {
 
 	if c.Compactor == nil {
 		c.Compactor = agentcontext.NoopCompactor{}
+	}
+
+	if c.Logger == nil {
+		c.Logger = gosimovlog.Noop
 	}
 
 	return nil
@@ -90,6 +98,9 @@ type LoadSessionConfig struct {
 	Compactor agentcontext.Compactor
 	// ContextProcessor transforms messages before each LLM call (optional).
 	ContextProcessor agentcontext.Processor
+	// Logger records session and turn lifecycle events (optional).
+	// If nil, [log.Noop] is used.
+	Logger gosimovlog.Logger
 }
 
 // PromptOptions configures per-call overrides for [Session.Prompt] and [Session.Continue].
@@ -143,6 +154,10 @@ func (c *LoadSessionConfig) defaults() error {
 		c.Compactor = agentcontext.NoopCompactor{}
 	}
 
+	if c.Logger == nil {
+		c.Logger = gosimovlog.Noop
+	}
+
 	return nil
 }
 
@@ -171,6 +186,7 @@ type Session struct {
 	messageRepo        store.MessageRepository
 	compactor          agentcontext.Compactor
 	contextProcessor   agentcontext.Processor
+	logger             gosimovlog.Logger
 }
 
 // NewSession creates a new session.
@@ -204,6 +220,7 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		messageRepo:        cfg.MessageRepository,
 		compactor:          cfg.Compactor,
 		contextProcessor:   cfg.ContextProcessor,
+		logger:             cfg.Logger,
 	}
 
 	return s, nil
@@ -236,6 +253,7 @@ func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 		messageRepo:        cfg.MessageRepository,
 		compactor:          cfg.Compactor,
 		contextProcessor:   cfg.ContextProcessor,
+		logger:             cfg.Logger,
 	}
 
 	if cfg.MessageRepository != nil {
@@ -280,6 +298,9 @@ func (s *Session) Prompt(ctx context.Context, content []model.ContentPart, opts 
 	}
 	defer s.endRun()
 
+	logger := s.sessionLogger(SessionOperationPrompt)
+	logger.Debugf("Starting prompt turn")
+
 	// Build the user message.
 	userMsg := model.Message{
 		ID:        id.NewULID(conventions.IDPrefixMessageUser),
@@ -301,7 +322,14 @@ func (s *Session) Prompt(ctx context.Context, content []model.ContentPart, opts 
 	copy(messages, s.messages)
 	s.mu.Unlock()
 
-	return s.runTurn(ctx, messages, opts)
+	result, err := s.runTurn(ctx, messages, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.WithValues(gosimovlog.KV{"turn_messages": len(result.Messages)}).Debugf("Prompt turn ended")
+
+	return result, nil
 }
 
 // Continue resumes the conversation from the current message history.
@@ -315,6 +343,9 @@ func (s *Session) Continue(ctx context.Context, opts PromptOptions) (*TurnResult
 	}
 	defer s.endRun()
 
+	logger := s.sessionLogger(SessionOperationContinue)
+	logger.Debugf("Continuing session turn")
+
 	s.mu.Lock()
 	if len(s.messages) == 0 {
 		s.mu.Unlock()
@@ -325,7 +356,14 @@ func (s *Session) Continue(ctx context.Context, opts PromptOptions) (*TurnResult
 	copy(messages, s.messages)
 	s.mu.Unlock()
 
-	return s.runTurn(ctx, messages, opts)
+	result, err := s.runTurn(ctx, messages, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	logger.WithValues(gosimovlog.KV{"turn_messages": len(result.Messages)}).Debugf("Session continuation ended")
+
+	return result, nil
 }
 
 // runTurn executes a turn and updates session state with the results.
@@ -358,6 +396,7 @@ func (s *Session) runTurn(ctx context.Context, messages []model.Message, opts Pr
 		onMessages:         s.persistMessages,
 		compactor:          s.compactor,
 		contextProcessor:   s.contextProcessor,
+		logger:             s.sessionLogger(""),
 	})
 	if err != nil {
 		return nil, err
@@ -467,6 +506,9 @@ func (s *Session) Compact(ctx context.Context) (*agentcontext.CompactResult, err
 	}
 	defer s.endRun()
 
+	logger := s.sessionLogger(SessionOperationCompact)
+	logger.Debugf("Starting message compaction...")
+
 	ctx = s.ctxWithRuntimeInfo(ctx)
 
 	s.mu.Lock()
@@ -479,6 +521,7 @@ func (s *Session) Compact(ctx context.Context) (*agentcontext.CompactResult, err
 		messages:   messages,
 		onMessages: s.persistMessages,
 		opts:       agentcontext.CompactOptions{Force: true},
+		logger:     logger,
 	})
 	if err != nil {
 		return nil, err
@@ -489,9 +532,28 @@ func (s *Session) Compact(ctx context.Context) (*agentcontext.CompactResult, err
 		s.messages = append(s.messages, *result.Message)
 		s.usage = addUsage(s.usage, &model.MessageMetadata{Usage: &result.Usage})
 		s.mu.Unlock()
+
+		logger.Debugf("Compaction succeeded, checkpoint message appended to conversation history")
+	} else {
+		logger.Debugf("No compaction happened, conversation history left unchanged")
 	}
 
 	return result, nil
+}
+
+func (s *Session) sessionLogger(op SessionOperation) gosimovlog.Logger {
+	logger := s.logger
+
+	kv := gosimovlog.KV{
+		"component":  "agent.session",
+		"session_id": s.session.ID,
+	}
+
+	if op != SessionOperationNone {
+		kv["operation"] = string(op)
+	}
+
+	return logger.WithValues(kv)
 }
 
 func (s *Session) ctxWithRuntimeInfo(parent context.Context) context.Context {

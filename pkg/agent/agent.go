@@ -10,6 +10,7 @@ import (
 	agentcontext "github.com/slok/gosimov/pkg/agent/context"
 	"github.com/slok/gosimov/pkg/conventions"
 	"github.com/slok/gosimov/pkg/llm"
+	gosimovlog "github.com/slok/gosimov/pkg/log"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
 	"github.com/slok/gosimov/pkg/tool"
@@ -41,6 +42,7 @@ type turnConfig struct {
 	onMessages         onMessagesFn
 	compactor          agentcontext.Compactor
 	contextProcessor   agentcontext.Processor
+	logger             gosimovlog.Logger
 }
 
 func (c *turnConfig) defaults() error {
@@ -54,6 +56,10 @@ func (c *turnConfig) defaults() error {
 
 	if c.compactor == nil {
 		c.compactor = agentcontext.NoopCompactor{}
+	}
+
+	if c.logger == nil {
+		c.logger = gosimovlog.Noop
 	}
 
 	return nil
@@ -112,6 +118,13 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 	)
 
 	for iteration := 0; ; iteration++ {
+		config.logger.WithValues(gosimovlog.KV{
+			"component":      "agent.turn",
+			"iteration":      iteration,
+			"max_iterations": config.maxIterations,
+			"message_count":  len(allMessages),
+		}).Debugf("Turn iteration started")
+
 		if err := ensureTurnContextActive(ctx); err != nil {
 			return nil, err
 		}
@@ -127,6 +140,9 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 			messages:   allMessages,
 			onMessages: config.onMessages,
 			opts:       agentcontext.CompactOptions{},
+			logger: config.logger.WithValues(gosimovlog.KV{
+				"component": "agent.compaction",
+			}),
 		})
 		if err != nil {
 			return nil, fmt.Errorf("running compaction: %w", err)
@@ -166,6 +182,7 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 		}
 
 		// Call the LLM.
+		llmStart := time.Now()
 		resp, err := config.provider.Call(ctx, req)
 		if err != nil {
 			return nil, fmt.Errorf("llm call failed: %w", err)
@@ -194,6 +211,15 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 			stopReason = resp.Message.Metadata.StopReason
 		}
 
+		config.logger.WithValues(gosimovlog.KV{
+			"component":            "agent.turn",
+			"iteration":            iteration,
+			"llm_message_count":    len(llmMessages),
+			"duration":             time.Since(llmStart),
+			"stop_reason":          string(stopReason),
+			"prompt_cache_enabled": !config.disablePromptCache,
+		}).Debugf("LLM call completed")
+
 		switch stopReason {
 		case model.StopReasonComplete, model.StopReasonMaxTokens, model.StopReasonNone:
 			return &TurnResult{
@@ -209,7 +235,7 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 			return nil, fmt.Errorf("llm request was aborted: %w", pkgerrors.ErrAborted)
 
 		case model.StopReasonToolUse:
-			toolResults, err := executeToolCalls(ctx, resp.Message.ToolCallRequests, toolIndex, config.toolTimeout, config.onMessages)
+			toolResults, err := executeToolCalls(ctx, resp.Message.ToolCallRequests, toolIndex, config.toolTimeout, config.onMessages, config.logger)
 			if err != nil {
 				return nil, fmt.Errorf("executing tool calls: %w", err)
 			}
@@ -224,7 +250,7 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 
 // executeToolCalls runs each tool call request and returns tool result messages.
 // Each tool result is persisted individually via onMessages as it is created.
-func executeToolCalls(ctx context.Context, requests []model.ToolCallRequest, tools map[string]tool.Tool, toolTimeout time.Duration, onMessages onMessagesFn) ([]model.Message, error) {
+func executeToolCalls(ctx context.Context, requests []model.ToolCallRequest, tools map[string]tool.Tool, toolTimeout time.Duration, onMessages onMessagesFn, logger gosimovlog.Logger) ([]model.Message, error) {
 	if err := ensureTurnContextActive(ctx); err != nil {
 		return nil, err
 	}
@@ -236,13 +262,23 @@ func executeToolCalls(ctx context.Context, requests []model.ToolCallRequest, too
 			return nil, err
 		}
 
+		start := time.Now()
 		msg := executeOneToolCall(ctx, req, tools, toolTimeout)
+		durationMS := time.Since(start).Milliseconds()
 
 		if err := ensureTurnContextActive(ctx); err != nil {
 			return nil, err
 		}
 
 		results = append(results, msg)
+
+		logger.WithValues(gosimovlog.KV{
+			"component":    "agent.turn",
+			"tool_id":      req.ToolID,
+			"tool_call_id": req.ID,
+			"duration_ms":  durationMS,
+			"is_error":     msg.IsError,
+		}).Debugf("Tool call executed")
 
 		if err := notifyMessages(ctx, onMessages, msg); err != nil {
 			return nil, err
@@ -309,11 +345,16 @@ type compactionConfig struct {
 	messages   []model.Message
 	onMessages onMessagesFn
 	opts       agentcontext.CompactOptions
+	logger     gosimovlog.Logger
 }
 
 func (c *compactionConfig) defaults() error {
 	if c.compactor == nil {
 		c.compactor = agentcontext.NoopCompactor{}
+	}
+
+	if c.logger == nil {
+		c.logger = gosimovlog.Noop
 	}
 
 	return nil
@@ -331,12 +372,30 @@ func runCompaction(ctx context.Context, config compactionConfig) (*agentcontext.
 		return nil, fmt.Errorf("invalid compaction config: %w", err)
 	}
 
+	started := time.Now()
+
 	result, err := config.compactor.Compact(ctx, config.messages, config.opts)
 	if err != nil {
 		return nil, fmt.Errorf("compaction failed: %w", err)
 	}
 
+	createdCheckpoint := result.Message != nil
+	config.logger.WithValues(gosimovlog.KV{
+		"duration_ms":        time.Since(started).Milliseconds(),
+		"force":              config.opts.Force,
+		"input_messages":     len(config.messages),
+		"output_messages":    len(result.Messages),
+		"created_checkpoint": createdCheckpoint,
+	}).Debugf("Message compactor executed")
+
 	if result.Message != nil {
+		config.logger.WithValues(gosimovlog.KV{
+			"duration_ms":         time.Since(started).Milliseconds(),
+			"compacted_messages":  len(config.messages) - len(result.Messages),
+			"usage_input_tokens":  result.Usage.InputTokens,
+			"usage_output_tokens": result.Usage.OutputTokens,
+		}).Infof("Compaction checkpoint created")
+
 		if err := notifyMessages(ctx, config.onMessages, *result.Message); err != nil {
 			return nil, fmt.Errorf("persisting compaction message: %w", err)
 		}
