@@ -255,10 +255,6 @@ func executeToolCalls(ctx context.Context, requests []model.ToolCallRequest, too
 		return nil, err
 	}
 
-	if logger == nil {
-		logger = gosimovlog.Noop
-	}
-
 	results := make([]model.Message, 0, len(requests))
 
 	for _, req := range requests {
