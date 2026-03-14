@@ -9,6 +9,7 @@ import (
 	"github.com/slok/gosimov/pkg/agent"
 	agentcontext "github.com/slok/gosimov/pkg/agent/context"
 	"github.com/slok/gosimov/pkg/llm"
+	gosimovlog "github.com/slok/gosimov/pkg/log"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/store"
 	"github.com/slok/gosimov/pkg/store/subscriber"
@@ -20,6 +21,7 @@ type app struct {
 	msgRepo   *subscriber.Repository
 	provider  llm.Provider
 	compactor agentcontext.Compactor
+	sdkLogger gosimovlog.Logger
 
 	conversationLogger *loggingProvider
 	summaryLogger      *loggingProvider

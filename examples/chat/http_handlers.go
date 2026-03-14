@@ -72,6 +72,7 @@ func (a *app) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 		SessionRepository: a.sessRepo,
 		MessageRepository: a.msgRepo,
 		TurnMaxIterations: a.cfg.maxIterations,
+		Logger:            a.sdkLogger,
 	})
 	if err != nil {
 		log.Printf("create-session new-session error: %v", err)
@@ -158,6 +159,7 @@ func (a *app) handleLoadSession(w http.ResponseWriter, r *http.Request) {
 		SessionRepository: a.sessRepo,
 		MessageRepository: a.msgRepo,
 		TurnMaxIterations: a.cfg.maxIterations,
+		Logger:            a.sdkLogger,
 	})
 	if err != nil {
 		log.Printf("load-session load error session_id=%s err=%v", sessionID, err)

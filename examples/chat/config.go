@@ -55,6 +55,7 @@ var defaultModelByProvider = map[providerKind]string{
 
 type config struct {
 	addr          string
+	debug         bool
 	provider      providerKind
 	apiKey        string
 	authFile      string
@@ -72,6 +73,7 @@ func loadConfig() (config, error) {
 	var provider string
 	var cfg config
 	flag.StringVar(&cfg.addr, "addr", ":8080", "HTTP listen address")
+	flag.BoolVar(&cfg.debug, "debug", false, "Enable debug logs")
 	flag.StringVar(&provider, "provider", string(providerZen), "LLM provider: zen|opencode-go|openai|codex|anthropic|claude")
 	flag.StringVar(&cfg.apiKey, "api-key", "", "Provider API key/token (required unless --auth-file is set)")
 	flag.StringVar(&cfg.authFile, "auth-file", "", "OAuth credentials file path (only for codex/claude providers)")
