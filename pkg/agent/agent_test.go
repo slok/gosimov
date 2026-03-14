@@ -41,6 +41,15 @@ func (f compactorFunc) Compact(ctx context.Context, messages []model.Message, op
 // Compile-time check that compactorFunc implements agentcontext.Compactor.
 var _ agentcontext.Compactor = compactorFunc(nil)
 
+// testToolIndex builds a tool index from mock tools by calling ID() on each.
+func testToolIndex(tools ...tool.Tool) map[string]tool.Tool {
+	idx := make(map[string]tool.Tool, len(tools))
+	for _, t := range tools {
+		idx[t.ID()] = t
+	}
+	return idx
+}
+
 func TestRunTurn(t *testing.T) {
 	tests := map[string]struct {
 		mock     func(tools []*toolmock.MockTool) turnConfig
@@ -62,25 +71,6 @@ func TestRunTurn(t *testing.T) {
 			mock: func(_ []*toolmock.MockTool) turnConfig {
 				return turnConfig{
 					provider: fake.NewEchoProvider(),
-				}
-			},
-			expErr:   true,
-			expErrIs: pkgerrors.ErrNotValid,
-		},
-
-		"Duplicate tool IDs should return validation error before LLM call.": {
-			mock: func(tools []*toolmock.MockTool) turnConfig {
-				tools[0].On("ID").Return("dup-tool")
-				tools[1].On("ID").Return("dup-tool")
-
-				return turnConfig{
-					provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
-						return nil, fmt.Errorf("provider should not be called when tool IDs are invalid")
-					}),
-					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
-					},
-					tools: []tool.Tool{tools[0], tools[1]},
 				}
 			},
 			expErr:   true,
@@ -298,7 +288,7 @@ func TestRunTurn(t *testing.T) {
 					messages: []model.Message{
 						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "what is 2+2"}}},
 					},
-					tools: []tool.Tool{tools[0]},
+					toolIndex: testToolIndex(tools[0]),
 				}
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
@@ -361,7 +351,7 @@ func TestRunTurn(t *testing.T) {
 				return turnConfig{
 					provider:    provider,
 					messages:    []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "run"}}}},
-					tools:       []tool.Tool{tools[0]},
+					toolIndex:   testToolIndex(tools[0]),
 					toolTimeout: 2 * time.Second,
 				}
 			},
@@ -416,7 +406,7 @@ func TestRunTurn(t *testing.T) {
 					messages: []model.Message{
 						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "do both"}}},
 					},
-					tools: []tool.Tool{tools[0], tools[1]},
+					toolIndex: testToolIndex(tools[0], tools[1]),
 				}
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
@@ -485,7 +475,7 @@ func TestRunTurn(t *testing.T) {
 					messages: []model.Message{
 						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "do steps"}}},
 					},
-					tools: []tool.Tool{tools[0]},
+					toolIndex: testToolIndex(tools[0]),
 				}
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
@@ -534,7 +524,7 @@ func TestRunTurn(t *testing.T) {
 					messages: []model.Message{
 						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "use broken tool"}}},
 					},
-					tools: []tool.Tool{tools[0]},
+					toolIndex: testToolIndex(tools[0]),
 				}
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
@@ -620,7 +610,7 @@ func TestRunTurn(t *testing.T) {
 				return turnConfig{
 					provider:      provider,
 					messages:      []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "loop"}}}},
-					tools:         []tool.Tool{tools[0]},
+					toolIndex:     testToolIndex(tools[0]),
 					maxIterations: 3,
 				}
 			},
@@ -736,7 +726,7 @@ func TestRunTurn(t *testing.T) {
 					messages: []model.Message{
 						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
 					},
-					tools: []tool.Tool{tools[0]},
+					toolIndex: testToolIndex(tools[0]),
 				}
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
@@ -790,7 +780,7 @@ func TestRunTurn(t *testing.T) {
 					messages: []model.Message{
 						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
 					},
-					tools: []tool.Tool{tools[0]},
+					toolIndex: testToolIndex(tools[0]),
 				}
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
@@ -838,7 +828,7 @@ func TestRunTurn(t *testing.T) {
 					messages: []model.Message{
 						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "validate"}}},
 					},
-					tools: []tool.Tool{tools[0]},
+					toolIndex: testToolIndex(tools[0]),
 				}
 			},
 			expResp: func(t *testing.T, result *TurnResult) {
@@ -943,7 +933,7 @@ func TestRunTurn(t *testing.T) {
 					messages: []model.Message{
 						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
 					},
-					tools: []tool.Tool{tools[0]},
+					toolIndex: testToolIndex(tools[0]),
 					contextProcessor: processorFunc(func(_ context.Context, msgs []model.Message) ([]model.Message, error) {
 						processorCallCount++
 						return msgs, nil
@@ -1080,7 +1070,7 @@ func TestRunTurn(t *testing.T) {
 					messages: []model.Message{
 						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
 					},
-					tools: []tool.Tool{tools[0]},
+					toolIndex: testToolIndex(tools[0]),
 					compactor: compactorFunc(func(_ context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
 						compactorCallCount++
 						return &agentcontext.CompactResult{Messages: msgs}, nil
