@@ -176,6 +176,7 @@ type Session struct {
 	systemPrompt       string
 	disablePromptCache bool
 	tools              []tool.Tool
+	toolIndex          map[string]tool.Tool
 	toolTimeout        time.Duration
 	maxIterations      int
 	messages           []model.Message
@@ -197,6 +198,11 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		return nil, fmt.Errorf("invalid session config: %w", err)
 	}
 
+	toolIndex, err := buildToolIndex(cfg.Tools)
+	if err != nil {
+		return nil, fmt.Errorf("invalid session config: %w", err)
+	}
+
 	sess := model.Session{
 		ID:        id.NewULID(conventions.IDPrefixSession),
 		CreatedAt: time.Now(),
@@ -214,6 +220,7 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		systemPrompt:       cfg.SystemPrompt,
 		disablePromptCache: cfg.DisablePromptCache,
 		tools:              cfg.Tools,
+		toolIndex:          toolIndex,
 		toolTimeout:        cfg.ToolTimeout,
 		maxIterations:      cfg.TurnMaxIterations,
 		sessionRepo:        cfg.SessionRepository,
@@ -236,6 +243,11 @@ func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 		return nil, fmt.Errorf("invalid load session config: %w", err)
 	}
 
+	toolIndex, err := buildToolIndex(cfg.Tools)
+	if err != nil {
+		return nil, fmt.Errorf("invalid load session config: %w", err)
+	}
+
 	existing, err := cfg.SessionRepository.GetSession(ctx, cfg.SessionID)
 	if err != nil {
 		return nil, fmt.Errorf("loading existing session: %w", err)
@@ -247,6 +259,7 @@ func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 		systemPrompt:       cfg.SystemPrompt,
 		disablePromptCache: cfg.DisablePromptCache,
 		tools:              cfg.Tools,
+		toolIndex:          toolIndex,
 		toolTimeout:        cfg.ToolTimeout,
 		maxIterations:      cfg.TurnMaxIterations,
 		sessionRepo:        cfg.SessionRepository,
@@ -265,6 +278,20 @@ func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 	}
 
 	return s, nil
+}
+
+// buildToolIndex creates a map from tool ID to tool for O(1) lookup.
+// Returns an error if duplicate tool IDs are found.
+func buildToolIndex(tools []tool.Tool) (map[string]tool.Tool, error) {
+	index := make(map[string]tool.Tool, len(tools))
+	for _, t := range tools {
+		toolID := t.ID()
+		if _, ok := index[toolID]; ok {
+			return nil, fmt.Errorf("duplicate tool id %q: %w", toolID, pkgerrors.ErrNotValid)
+		}
+		index[toolID] = t
+	}
+	return index, nil
 }
 
 func listAllMessages(ctx context.Context, repo store.MessageRepository, sessionID string) ([]model.Message, error) {
@@ -390,7 +417,7 @@ func (s *Session) runTurn(ctx context.Context, messages []model.Message, opts Pr
 		systemPrompt:       systemPrompt,
 		disablePromptCache: s.disablePromptCache,
 		messages:           messages,
-		tools:              s.tools,
+		toolIndex:          s.toolIndex,
 		toolTimeout:        s.toolTimeout,
 		maxIterations:      maxIterations,
 		onMessages:         s.persistMessages,

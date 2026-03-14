@@ -617,7 +617,7 @@ This keeps compaction logic in one place (the turn runner layer) instead of dupl
 
 ### Tool Execution
 
-- Tools are indexed by ID for O(1) lookup.
+- Tools are indexed by ID for O(1) lookup at session creation time (`buildToolIndex`). Duplicate tool IDs are rejected at `NewSession`/`LoadSession`, not at turn time.
 - Tool not found → `MessageKindToolResult` with `IsError=true` and descriptive text.
 - `Execute()` returns error → `MessageKindToolResult` with `IsError=true` and `err.Error()` as message.
 - `Execute()` returns `(*Result, nil)` → success result with `IsError=false`.

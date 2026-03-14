@@ -35,8 +35,9 @@ func (c *testCompactor) Compact(ctx context.Context, messages []model.Message, o
 
 func TestNewSession(t *testing.T) {
 	tests := map[string]struct {
-		config agent.SessionConfig
-		expErr bool
+		config   agent.SessionConfig
+		expErr   bool
+		expErrIs error
 	}{
 		"Valid config should create a session with a valid identity.": {
 			config: agent.SessionConfig{
@@ -45,8 +46,24 @@ func TestNewSession(t *testing.T) {
 		},
 
 		"Missing provider should return an error.": {
-			config: agent.SessionConfig{},
-			expErr: true,
+			config:   agent.SessionConfig{},
+			expErr:   true,
+			expErrIs: pkgerrors.ErrNotValid,
+		},
+
+		"Duplicate tool IDs should return validation error.": {
+			config: func() agent.SessionConfig {
+				t1 := toolmock.NewMockTool(t)
+				t2 := toolmock.NewMockTool(t)
+				t1.On("ID").Return("dup-tool")
+				t2.On("ID").Return("dup-tool")
+				return agent.SessionConfig{
+					Provider: fake.NewEchoProvider(),
+					Tools:    []tool.Tool{t1, t2},
+				}
+			}(),
+			expErr:   true,
+			expErrIs: pkgerrors.ErrNotValid,
 		},
 	}
 
@@ -60,6 +77,9 @@ func TestNewSession(t *testing.T) {
 			if test.expErr {
 				assert.Error(err)
 				assert.Nil(s)
+				if test.expErrIs != nil {
+					assert.ErrorIs(err, test.expErrIs)
+				}
 			} else {
 				assert.NoError(err)
 				require.NotNil(s)

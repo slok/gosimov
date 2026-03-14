@@ -36,7 +36,7 @@ type turnConfig struct {
 	systemPrompt       string
 	disablePromptCache bool
 	messages           []model.Message
-	tools              []tool.Tool
+	toolIndex          map[string]tool.Tool
 	toolTimeout        time.Duration
 	maxIterations      int
 	onMessages         onMessagesFn
@@ -100,17 +100,6 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 	// Copy input messages so we never mutate the caller's slice.
 	allMessages := make([]model.Message, len(config.messages))
 	copy(allMessages, config.messages)
-
-	// Index tools by ID for fast lookup.
-	toolIndex := make(map[string]tool.Tool, len(config.tools))
-	for _, t := range config.tools {
-		toolID := t.ID()
-		if _, ok := toolIndex[toolID]; ok {
-			return nil, fmt.Errorf("duplicate tool id %q: %w", toolID, pkgerrors.ErrNotValid)
-		}
-
-		toolIndex[toolID] = t
-	}
 
 	var (
 		newMessages []model.Message
@@ -235,7 +224,7 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 			return nil, fmt.Errorf("llm request was aborted: %w", pkgerrors.ErrAborted)
 
 		case model.StopReasonToolUse:
-			toolResults, err := executeToolCalls(ctx, resp.Message.ToolCallRequests, toolIndex, config.toolTimeout, config.onMessages, config.logger)
+			toolResults, err := executeToolCalls(ctx, resp.Message.ToolCallRequests, config.toolIndex, config.toolTimeout, config.onMessages, config.logger)
 			if err != nil {
 				return nil, fmt.Errorf("executing tool calls: %w", err)
 			}
