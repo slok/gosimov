@@ -99,6 +99,12 @@ This keeps `ContentPart` simple and separates concerns:
 
 Storage deals only with individual messages. Turns are for the agent loop and UI.
 
+### ContextUsage
+
+`ContextUsage` is a **derived/computed type**, not stored. It represents context window utilization based on the most recent LLM call's reported token usage. Use `ContextUsageFromMessages()` to extract it from a flat message list.
+
+`TotalInputTokens` (`InputTokens + CacheReadTokens`) is the actual context size the provider processed. Compare it with `LLMModelInfo.ContextWindow` to compute utilization percentage. Returns zero if the last LLM message has no usage metadata — does not fall back to earlier messages.
+
 ### Session
 
 `Session` is a domain entity that identifies a multi-turn conversation. It is purely identity — messages, usage, and other state are associated to a session via its `ID` but are not stored inside this struct.
