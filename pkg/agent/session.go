@@ -275,6 +275,7 @@ func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 			return nil, fmt.Errorf("loading existing messages: %w", err)
 		}
 		s.messages = msgs
+		s.usage = usageFromMessages(msgs)
 	}
 
 	return s, nil
@@ -312,6 +313,16 @@ func listAllMessages(ctx context.Context, repo store.MessageRepository, sessionI
 
 		opts.Cursor = result.NextCursor
 	}
+}
+
+func usageFromMessages(messages []model.Message) model.Usage {
+	total := model.Usage{}
+
+	for _, msg := range messages {
+		total = addUsage(total, msg.Metadata)
+	}
+
+	return total
 }
 
 // Prompt sends a user message and runs a full turn.
