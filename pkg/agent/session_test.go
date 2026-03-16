@@ -111,7 +111,15 @@ func TestLoadSession(t *testing.T) {
 
 				msgs := []model.Message{
 					{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
-					{ID: "m2", Kind: model.MessageKindLLM, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+					{
+						ID:      "m2",
+						Kind:    model.MessageKindLLM,
+						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}},
+						Metadata: &model.MessageMetadata{Usage: &model.Usage{
+							InputTokens:  7,
+							OutputTokens: 3,
+						}},
+					},
 				}
 				require.NoError(repo.StoreMessages(context.Background(), sess.ID, msgs))
 
@@ -137,6 +145,11 @@ func TestLoadSession(t *testing.T) {
 				assert.Equal("hello", msgs[0].Content[0].Text)
 				assert.Equal("m2", msgs[1].ID)
 				assert.Equal("hi", msgs[1].Content[0].Text)
+
+				usage := s.Usage()
+				assert.Equal(7, usage.InputTokens)
+				assert.Equal(3, usage.OutputTokens)
+				assert.Equal(10, usage.TotalTokens)
 			},
 		},
 
@@ -175,7 +188,16 @@ func TestLoadSession(t *testing.T) {
 
 				many := make([]model.Message, 0, 125)
 				for i := 0; i < 125; i++ {
-					many = append(many, model.Message{ID: fmt.Sprintf("m-%03d", i), Kind: model.MessageKindUser})
+					msg := model.Message{ID: fmt.Sprintf("m-%03d", i), Kind: model.MessageKindUser}
+					if i == 1 || i == 77 {
+						msg.Kind = model.MessageKindLLM
+						msg.Metadata = &model.MessageMetadata{Usage: &model.Usage{
+							InputTokens:  i + 1,
+							OutputTokens: i + 2,
+						}}
+					}
+
+					many = append(many, msg)
 				}
 				require.NoError(repo.StoreMessages(context.Background(), "s-load-paginated", many))
 
@@ -194,6 +216,11 @@ func TestLoadSession(t *testing.T) {
 				require.Len(msgs, 125)
 				assert.Equal("m-000", msgs[0].ID)
 				assert.Equal("m-124", msgs[124].ID)
+
+				usage := s.Usage()
+				assert.Equal(80, usage.InputTokens)
+				assert.Equal(82, usage.OutputTokens)
+				assert.Equal(162, usage.TotalTokens)
 			},
 		},
 

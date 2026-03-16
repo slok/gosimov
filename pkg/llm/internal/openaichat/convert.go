@@ -232,6 +232,7 @@ func convertResponse(resp chatResponse) model.Message {
 		for i, tc := range choice.Message.ToolCalls {
 			msg.ToolCallRequests[i] = model.ToolCallRequest{ID: tc.ID, ToolID: tc.Function.Name, Arguments: json.RawMessage(tc.Function.Arguments)}
 		}
+		msg.Metadata.StopReason = model.StopReasonToolUse
 	}
 	return msg
 }

@@ -206,6 +206,43 @@ func TestProviderCall(t *testing.T) {
 			},
 		},
 
+		"Tool call response should force tool_use stop reason regardless of finish_reason.": {
+			serverHandler: jsonHandler(200, map[string]any{
+				"model": "gpt-4o",
+				"choices": []map[string]any{{
+					"message": map[string]any{
+						"role": "assistant",
+						"tool_calls": []map[string]any{{
+							"id":   "call_force_tool_use",
+							"type": "function",
+							"function": map[string]any{
+								"name":      "read",
+								"arguments": `{"path":"README.md"}`,
+							},
+						}},
+					},
+					"finish_reason": "stop",
+				}},
+			}),
+			req: func() gllm.Request {
+				return gllm.Request{
+					Messages: []model.Message{
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "read README.md"}}},
+					},
+				}
+			},
+			assertResp: func(t *testing.T, resp *gllm.Response) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.NotNil(resp.Message.Metadata)
+				assert.Equal(model.StopReasonToolUse, resp.Message.Metadata.StopReason)
+				require.Len(resp.Message.ToolCallRequests, 1)
+				assert.Equal("call_force_tool_use", resp.Message.ToolCallRequests[0].ID)
+			},
+		},
+
 		"Request should include authorization header and correct model.": {
 			serverHandler: jsonHandler(200, map[string]any{
 				"model":   "test",
