@@ -157,7 +157,6 @@ func (a *app) handleLoadSession(w http.ResponseWriter, r *http.Request) {
 		SystemPrompt:      defaultSystemPrompt(a.cfg.systemPrompt),
 		Tools:             tools,
 		SessionRepository: a.sessRepo,
-		MessageRepository: a.msgRepo,
 		TurnMaxIterations: a.cfg.maxIterations,
 		Logger:            a.sdkLogger,
 	})
@@ -167,15 +166,25 @@ func (a *app) handleLoadSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	loadedMsgs := len(session.Messages())
+	loaded, err := loadAllMessages(r.Context(), a.msgRepo, sessionID)
+	if err != nil {
+		log.Printf("load-session messages error session_id=%s err=%v", sessionID, err)
+		http.Error(w, fmt.Sprintf("loading session messages: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	loadedMsgs := len(loaded)
 	// Always run loaded history through trim/sanitize. Even when max-history does
 	// not cut anything, sanitization removes incomplete tool-use tails that would
 	// be rejected by strict providers on the next continue.
-	trimmed := trimLoadedMessages(session.Messages(), a.cfg.maxHistory)
+	trimmed := trimLoadedMessages(loaded, a.cfg.maxHistory)
 	if len(trimmed) != loadedMsgs {
-		session.ReplaceMessages(trimmed)
 		log.Printf("load-session trimmed history session_id=%s from=%d to=%d", sessionID, loadedMsgs, len(trimmed))
 		loadedMsgs = len(trimmed)
+	}
+
+	for _, msg := range trimmed {
+		session.AppendMessage(msg)
 	}
 
 	log.Printf("load-session ok session_id=%s loaded_messages=%d work_dir=%s", sessionID, loadedMsgs, workDir)

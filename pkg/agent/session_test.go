@@ -915,7 +915,7 @@ func TestSessionMutators(t *testing.T) {
 			},
 		},
 
-		"ReplaceMessages should replace history and not retain a reference.": {
+		"AppendMessage should add usage from message metadata.": {
 			run: func(t *testing.T) {
 				t.Helper()
 				assert := assert.New(t)
@@ -924,17 +924,25 @@ func TestSessionMutators(t *testing.T) {
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider()})
 				require.NoError(err)
 
-				s.AppendMessage(model.Message{ID: "old", Kind: model.MessageKindUser})
-
-				replacement := []model.Message{{ID: "new", Kind: model.MessageKindUser}}
-				s.ReplaceMessages(replacement)
-
-				// Mutating the input should not affect the session.
-				replacement[0].ID = "mutated"
+				s.AppendMessage(model.Message{
+					ID:   "new",
+					Kind: model.MessageKindLLM,
+					Metadata: &model.MessageMetadata{Usage: &model.Usage{
+						InputTokens:     3,
+						OutputTokens:    2,
+						CacheReadTokens: 4,
+					}},
+				})
 
 				msgs := s.Messages()
 				require.Len(msgs, 1)
 				assert.Equal("new", msgs[0].ID)
+
+				usage := s.Usage()
+				assert.Equal(3, usage.InputTokens)
+				assert.Equal(2, usage.OutputTokens)
+				assert.Equal(4, usage.CacheReadTokens)
+				assert.Equal(9, usage.TotalTokens)
 			},
 		},
 

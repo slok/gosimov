@@ -509,22 +509,13 @@ func (s *Session) State() SessionState {
 // AppendMessage adds a message to the conversation history.
 //
 // Use this to inject messages (e.g., a user follow-up) before calling [Continue].
+// If the message carries usage metadata, session usage is updated as well.
 func (s *Session) AppendMessage(m model.Message) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	s.messages = append(s.messages, m)
-}
-
-// ReplaceMessages replaces the entire conversation history.
-//
-// The provided slice is copied — the session does not retain a reference to it.
-func (s *Session) ReplaceMessages(msgs []model.Message) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.messages = make([]model.Message, len(msgs))
-	copy(s.messages, msgs)
+	s.usage = addUsage(s.usage, m.Metadata)
 }
 
 // Compact forces a context compaction between turns.

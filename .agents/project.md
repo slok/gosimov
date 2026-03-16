@@ -688,8 +688,7 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 | `State() SessionState` | Returns a thread-safe runtime snapshot (`running`, `operation`, `turn`, `message_count`, identity, usage). |
 | `Messages() []Message` | Returns a copy of the conversation history. |
 | `Usage() Usage` | Returns aggregated usage across all turns. |
-| `AppendMessage(m)` | Adds a message to history (for manual injection before Continue). |
-| `ReplaceMessages(ms)` | Replaces entire conversation history (copies the slice). |
+| `AppendMessage(m)` | Adds a message to history (for manual injection before Continue). Aggregates usage if metadata includes usage. |
 | `Reset()` | Clears messages and usage. Preserves configuration and session identity. |
 
 `PromptOptions` fields:
@@ -705,7 +704,7 @@ Only one `Prompt`, `Continue`, or `Compact` can be active at a time. Concurrent 
 
 ### Error Behavior
 
-If `runTurn` fails after `Prompt` builds and appends the user message, the user message remains in history (it was already appended). The caller can `Reset()`, `ReplaceMessages()`, or retry with `Continue()`.
+If `runTurn` fails after `Prompt` builds and appends the user message, the user message remains in history (it was already appended). The caller can `Reset()` or retry with `Continue()`.
 
 ## Context Management
 
