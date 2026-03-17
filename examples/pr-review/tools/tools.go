@@ -163,6 +163,14 @@ func (s *State) viewer(ctx context.Context) (string, error) {
 	}
 	s.mu.Unlock()
 
+	if strings.EqualFold(strings.TrimSpace(os.Getenv("GITHUB_ACTIONS")), "true") {
+		s.mu.Lock()
+		s.viewerLogin = "github-actions[bot]"
+		v := s.viewerLogin
+		s.mu.Unlock()
+		return v, nil
+	}
+
 	if actor := strings.TrimSpace(os.Getenv("GITHUB_ACTOR")); actor != "" {
 		s.mu.Lock()
 		s.viewerLogin = actor

@@ -51,11 +51,6 @@ func (t *prCommentUpsertTool) Execute(ctx context.Context, args json.RawMessage)
 		body += "\n\n" + t.state.reviewMarker
 	}
 
-	viewer, err := t.state.viewer(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	comments, err := listIssueComments(ctx, t.state.gh)
 	if err != nil {
 		return nil, err
@@ -63,7 +58,7 @@ func (t *prCommentUpsertTool) Execute(ctx context.Context, args json.RawMessage)
 
 	var existingID int
 	for _, c := range comments {
-		if strings.Contains(c.Body, t.state.reviewMarker) && strings.EqualFold(c.User.Login, viewer) {
+		if strings.Contains(c.Body, t.state.reviewMarker) {
 			existingID = c.ID
 		}
 	}
