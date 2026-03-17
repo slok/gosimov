@@ -1,0 +1,83 @@
+name: PR Review
+
+on:
+  workflow_dispatch:
+    inputs:
+      repo:
+        description: Repository owner/name (defaults to current repository)
+        required: false
+        type: string
+      pr_number:
+        description: Pull request number to review
+        required: true
+        type: number
+      dry_run:
+        description: Do not write comments/reviews
+        required: false
+        default: true
+        type: boolean
+  pull_request_target:
+    types: [opened, edited, synchronize, ready_for_review]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'pull_request_target' &&
+        (
+          contains(github.event.pull_request.title, '@gosimov-review') ||
+          contains(github.event.pull_request.body || '', '@gosimov-review')
+        ) &&
+        contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
+      ) ||
+      (
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request &&
+        contains(github.event.comment.body, '@gosimov-review') &&
+        contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)
+      )
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    concurrency:
+      group: pr-review-${{ github.repository }}-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: ">=1.25"
+
+      - name: Run PR review example
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPENCODE_GO_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
+          OPENCODE_GO_MODEL: minimax-m2.5
+          REVIEW_REPO: ${{ inputs.repo || github.repository }}
+          REVIEW_PR: ${{ inputs.pr_number }}
+          REVIEW_DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          args=(--work-dir "$GITHUB_WORKSPACE")
+          if [ -n "$REVIEW_REPO" ]; then
+            args+=(--repo "$REVIEW_REPO")
+          fi
+          if [ -n "$REVIEW_PR" ]; then
+            args+=(--pr "$REVIEW_PR")
+          fi
+          if [ "$REVIEW_DRY_RUN" = "true" ]; then
+            args+=(--dry-run)
+          fi
+          go run ./examples/pr-review "${args[@]}"
