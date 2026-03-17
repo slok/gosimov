@@ -18,6 +18,8 @@ on:
         type: boolean
   pull_request_target:
     types: [opened, edited, synchronize, ready_for_review]
+  pull_request:
+    types: [opened, edited, synchronize, ready_for_review]
   issue_comment:
     types: [created]
 
@@ -28,6 +30,14 @@ jobs:
   review:
     if: |
       github.event_name == 'workflow_dispatch' ||
+      (
+        github.event_name == 'pull_request' &&
+        (
+          contains(github.event.pull_request.title, '@gosimov-review') ||
+          contains(github.event.pull_request.body || '', '@gosimov-review')
+        ) &&
+        contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
+      ) ||
       (
         github.event_name == 'pull_request_target' &&
         (

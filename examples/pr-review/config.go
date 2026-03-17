@@ -135,13 +135,13 @@ func resolveReviewContext(cfg config) (reviewContext, error) {
 		rctx.TriggerSourceText = payload.Comment.Body
 		rctx.TriggeredBy = "issue_comment"
 
-	case "pull_request_target":
+	case "pull_request_target", "pull_request":
 		if payload.PullRequest.Number > 0 {
 			rctx.PRNumber = payload.PullRequest.Number
 		}
 		rctx.ActorAssociation = strings.ToUpper(strings.TrimSpace(payload.PullRequest.AuthorAssociation))
 		rctx.TriggerSourceText = payload.PullRequest.Title + "\n" + payload.PullRequest.Body
-		rctx.TriggeredBy = "pull_request_target"
+		rctx.TriggeredBy = cfg.eventName
 
 	default:
 		if rctx.PRNumber <= 0 {
