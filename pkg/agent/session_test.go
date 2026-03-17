@@ -946,47 +946,6 @@ func TestSessionMutators(t *testing.T) {
 			},
 		},
 
-		"Reset should clear messages and usage but preserve session identity.": {
-			run: func(t *testing.T) {
-				t.Helper()
-				assert := assert.New(t)
-				require := require.New(t)
-
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
-					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
-						return &llm.Response{
-							Message: model.Message{
-								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}},
-								Metadata: &model.MessageMetadata{
-									StopReason: model.StopReasonComplete,
-									Usage:      &model.Usage{InputTokens: 10},
-								},
-							},
-						}, nil
-					}),
-				})
-				require.NoError(err)
-
-				sessionBefore := s.Session()
-
-				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}, agent.PromptOptions{})
-				require.NoError(err)
-				assert.NotEmpty(s.Messages())
-				assert.NotZero(s.Usage().InputTokens)
-
-				s.Reset()
-
-				assert.Empty(s.Messages())
-				assert.Zero(s.Usage().InputTokens)
-
-				// Session identity must survive reset.
-				sessionAfter := s.Session()
-				assert.Equal(sessionBefore.ID, sessionAfter.ID)
-				assert.Equal(sessionBefore.CreatedAt, sessionAfter.CreatedAt)
-			},
-		},
-
 		"PromptOptions SystemPrompt should override session SystemPrompt for one call.": {
 			run: func(t *testing.T) {
 				t.Helper()

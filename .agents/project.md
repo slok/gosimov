@@ -116,8 +116,6 @@ Storage deals only with individual messages. Turns are for the agent loop and UI
 
 The runtime `Session` in `pkg/agent/` holds a `model.Session` internally and passes it through to `runTurn` via `turnConfig`. The store layer uses this identity to associate persisted data with sessions.
 
-`Reset()` preserves session identity — same session, cleared history.
-
 ### Usage
 
 `Usage` tracks token consumption for a single LLM call. Attached to LLM messages via `MessageMetadata`.
@@ -689,7 +687,6 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 | `Messages() []Message` | Returns a copy of the conversation history. |
 | `Usage() Usage` | Returns aggregated usage across all turns. |
 | `AppendMessage(m)` | Adds a message to history (for manual injection before Continue). Aggregates usage if metadata includes usage. |
-| `Reset()` | Clears messages and usage. Preserves configuration and session identity. |
 
 `PromptOptions` fields:
 
@@ -704,7 +701,7 @@ Only one `Prompt`, `Continue`, or `Compact` can be active at a time. Concurrent 
 
 ### Error Behavior
 
-If `runTurn` fails after `Prompt` builds and appends the user message, the user message remains in history (it was already appended). The caller can `Reset()` or retry with `Continue()`.
+If `runTurn` fails after `Prompt` builds and appends the user message, the user message remains in history (it was already appended). The caller can retry with `Continue()`.
 
 ## Context Management
 

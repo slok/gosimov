@@ -591,16 +591,6 @@ func (s *Session) ctxWithRuntimeInfo(parent context.Context) context.Context {
 	return ctxWithLLMModelInfo(ctx, &modelInfo)
 }
 
-// Reset clears the conversation history and usage, returning the session
-// to its initial state. Configuration (provider, system prompt, tools) is preserved.
-func (s *Session) Reset() {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.messages = nil
-	s.usage = model.Usage{}
-}
-
 func (s *Session) beginRun(op SessionOperation) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
