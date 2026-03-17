@@ -116,8 +116,6 @@ Storage deals only with individual messages. Turns are for the agent loop and UI
 
 The runtime `Session` in `pkg/agent/` holds a `model.Session` internally and passes it through to `runTurn` via `turnConfig`. The store layer uses this identity to associate persisted data with sessions.
 
-`Reset()` preserves session identity — same session, cleared history.
-
 ### Usage
 
 `Usage` tracks token consumption for a single LLM call. Attached to LLM messages via `MessageMetadata`.
@@ -572,7 +570,7 @@ Line types are identified by the `"type"` field: `"session"` or `"message"`.
 
 ### Session Integration
 
-`SessionConfig` accepts optional `SessionRepository` and `MessageRepository`. If set:
+`SessionConfig` requires both `SessionRepository` and `MessageRepository`:
 
 - `NewSession(ctx, cfg)` calls `CreateSession` to persist the session identity.
 - Messages are persisted **individually as they are produced** (per-message persistence, like Pi-mono):
@@ -580,9 +578,8 @@ Line types are identified by the `"type"` field: `"session"` or `"message"`.
   2. Each LLM response is persisted immediately after being stamped with ID/timestamp.
   3. Each tool result is persisted individually after execution.
   4. `Continue` persists only the turn's messages (no user message to persist).
-- The `onMessages` callback on `turnConfig` is the mechanism — `Session.persistMessages` is wired as the callback when a `MessageRepository` is configured.
+- The `onMessages` callback on `turnConfig` is the mechanism — `Session.persistMessages` is wired as the callback.
 - Repository errors are fatal — they propagate as errors from the caller.
-- Without repos, behavior is identical to before (purely in-memory).
 
 ## Agent Loop
 
@@ -655,8 +652,9 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 | `Tools` | No | `nil` | Available tools for the LLM to call |
 | `ToolTimeout` | No | `0` | Per-tool execution timeout. `0` means no timeout. |
 | `TurnMaxIterations` | No | `0` (no limit) | Per-turn LLM call limit. 0 means unlimited. |
-| `SessionRepository` | No | `nil` | If set, session is persisted on creation. |
-| `MessageRepository` | No | `nil` | If set, messages are persisted after each turn. |
+| `SessionRepository` | Yes | — | Session identity repository. New sessions are persisted on creation. |
+| `MessageRepository` | Yes | — | Message repository used for per-message persistence during turns. |
+| `Messages` | No | `nil` | Advanced: preload initial in-memory history (e.g., branching). Usage is reconstructed from these messages, and initial messages are persisted on creation. |
 | `Compactor` | No | `NoopCompactor` | Manages compaction inside the turn loop and via `Session.Compact()`. |
 | `ContextProcessor` | No | `nil` | If set, transforms messages before each LLM call (after compactor). |
 
@@ -671,7 +669,8 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 | `ToolTimeout` | No | `0` | Per-tool execution timeout. `0` means no timeout. |
 | `TurnMaxIterations` | No | `0` (no limit) | Per-turn LLM call limit. 0 means unlimited. |
 | `SessionRepository` | Yes | — | Repository used to load session identity by ID. |
-| `MessageRepository` | No | `nil` | If set, existing messages are preloaded into session state. |
+| `MessageRepository` | Yes | — | Repository used to preload persisted message history when `Messages` is empty. |
+| `Messages` | No | `nil` | Advanced: when non-empty, overrides repository preload and is used as in-memory history instead. Empty behaves like nil (load from repository). |
 | `Compactor` | No | `NoopCompactor` | Manages compaction inside the turn loop and via `Session.Compact()`. |
 | `ContextProcessor` | No | `nil` | If set, transforms messages before each LLM call (after compactor). |
 
@@ -679,18 +678,15 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 
 | Method | Description |
 |--------|-------------|
-| `NewSession(ctx, cfg) (*Session, error)` | Creates a new session with ULID and timestamp. Persists when repo is set. |
-| `LoadSession(ctx, cfg) (*Session, error)` | Loads an existing persisted session identity and (optionally) preloads messages. |
+| `NewSession(ctx, cfg) (*Session, error)` | Creates a new session with ULID and timestamp. Persists session identity and can preload/persist initial history via `SessionConfig.Messages`. |
+| `LoadSession(ctx, cfg) (*Session, error)` | Loads an existing persisted session identity. Uses `LoadSessionConfig.Messages` when non-empty; otherwise preloads from `MessageRepository`. |
 | `Prompt(ctx, []ContentPart, opts PromptOptions) (*TurnResult, error)` | Builds a user message, appends it, runs a turn. `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. |
-| `Continue(ctx, opts PromptOptions) (*TurnResult, error)` | Runs a turn from current messages (retries, manual injection). `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. |
+| `Continue(ctx, opts PromptOptions) (*TurnResult, error)` | Runs a turn from current messages (retries). `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. |
 | `Compact(ctx) (*CompactResult, error)` | Delegates to `runCompaction` with `Force: true`. Appends the compaction message + aggregates usage if created. Returns `ErrSessionBusy` if a turn is running. |
 | `Session() model.Session` | Returns the session identity (ID and creation time). |
 | `State() SessionState` | Returns a thread-safe runtime snapshot (`running`, `operation`, `turn`, `message_count`, identity, usage). |
 | `Messages() []Message` | Returns a copy of the conversation history. |
 | `Usage() Usage` | Returns aggregated usage across all turns. |
-| `AppendMessage(m)` | Adds a message to history (for manual injection before Continue). |
-| `ReplaceMessages(ms)` | Replaces entire conversation history (copies the slice). |
-| `Reset()` | Clears messages and usage. Preserves configuration and session identity. |
 
 `PromptOptions` fields:
 
@@ -705,7 +701,7 @@ Only one `Prompt`, `Continue`, or `Compact` can be active at a time. Concurrent 
 
 ### Error Behavior
 
-If `runTurn` fails after `Prompt` builds and appends the user message, the user message remains in history (it was already appended). The caller can `Reset()`, `ReplaceMessages()`, or retry with `Continue()`.
+If `runTurn` fails after `Prompt` builds and appends the user message, the user message remains in history (it was already appended). The caller can retry with `Continue()`.
 
 ## Context Management
 

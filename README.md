@@ -60,9 +60,13 @@ func main() {
         panic(err)
     }
 
+    repo := memory.NewRepository()
+
     session, err := agent.NewSession(ctx, agent.SessionConfig{
-        Provider:     provider,
-        SystemPrompt: "You are a concise software assistant.",
+        Provider:          provider,
+        SystemPrompt:      "You are a concise software assistant.",
+        SessionRepository: repo,
+        MessageRepository: repo,
         TurnMaxIterations: 8,
     })
     if err != nil {
@@ -115,9 +119,13 @@ readTool, _ := read.New(read.Config{CWD: workDir})
 writeTool, _ := write.New(write.Config{CWD: workDir})
 shellTool, _ := shell.New(shell.Config{CWD: workDir})
 
+repo := memory.NewRepository()
+
 session, _ := agent.NewSession(ctx, agent.SessionConfig{
-    Provider: provider,
-    Tools:    []tool.Tool{lsTool, readTool, writeTool, shellTool},
+    Provider:          provider,
+    Tools:             []tool.Tool{lsTool, readTool, writeTool, shellTool},
+    SessionRepository: repo,
+    MessageRepository: repo,
 })
 
 _, _ = session.Prompt(ctx, []model.ContentPart{{
@@ -190,9 +198,13 @@ Agent CLIs and MCP can be useful, but infrastructure workflows usually need tigh
 ### 1) Add tools to the agent
 
 ```go
+repo := memory.NewRepository()
+
 session, err := agent.NewSession(ctx, agent.SessionConfig{
-    Provider: provider,
-    Tools:    []tool.Tool{lsTool, readTool, writeTool, editTool, shellTool},
+    Provider:          provider,
+    Tools:             []tool.Tool{lsTool, readTool, writeTool, editTool, shellTool},
+    SessionRepository: repo,
+    MessageRepository: repo,
 })
 ```
 
@@ -219,6 +231,16 @@ loaded, _ := agent.LoadSession(ctx, agent.LoadSessionConfig{
 _, _ = loaded.Continue(ctx, agent.PromptOptions{})
 ```
 
+Advanced customization: `LoadSessionConfig.Messages` can override repository-preloaded
+history when non-empty (for example, pre-trimmed/pre-sanitized messages). Nil and
+empty behave the same and load from `MessageRepository`.
+
+`LoadSession` cannot be used to reset a session's history to empty; create a new
+session when you want a reset.
+
+Branching: `SessionConfig.Messages` can bootstrap a new session from prior messages.
+That initial branched history is persisted.
+
 ### 3) Enable context compaction
 
 ```go
@@ -229,9 +251,13 @@ compactor, _ := simple.New(simple.Config{
     KeepRecentTokens: 1200,
 })
 
+repo := memory.NewRepository()
+
 session, _ := agent.NewSession(ctx, agent.SessionConfig{
-    Provider:  provider,
-    Compactor: compactor,
+    Provider:          provider,
+    Compactor:         compactor,
+    SessionRepository: repo,
+    MessageRepository: repo,
 })
 
 _, _ = session.Compact(ctx) // manual compaction
@@ -257,6 +283,7 @@ Useful for context-window math and UX telemetry.
 
 - `TurnMaxIterations` protects from infinite tool-call loops.
 - `ToolTimeout` sets a per-tool execution timeout (`0` means no timeout).
+- `NewSession` and `LoadSession` require both `SessionRepository` and `MessageRepository`.
 - Session configuration is immutable after creation; use `PromptOptions` for per-call overrides.
 - `Continue(ctx, opts)` requires existing messages in session history.
 - Provider constructors validate model IDs and auth config up front.

@@ -150,6 +150,34 @@ func (a *app) handleLoadSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	loaded, err := loadAllMessages(r.Context(), a.msgRepo, sessionID)
+	if err != nil {
+		log.Printf("load-session messages error session_id=%s err=%v", sessionID, err)
+		http.Error(w, fmt.Sprintf("loading session messages: %s", err), http.StatusInternalServerError)
+		return
+	}
+
+	loadedMsgs := len(loaded)
+	// Always run loaded history through trim/sanitize. Even when max-history does
+	// not cut anything, sanitization removes incomplete tool-use tails that would
+	// be rejected by strict providers on the next continue.
+	trimmed := trimLoadedMessages(loaded, a.cfg.maxHistory)
+	if len(trimmed) != loadedMsgs {
+		log.Printf("load-session trimmed history session_id=%s from=%d to=%d", sessionID, loadedMsgs, len(trimmed))
+		loadedMsgs = len(trimmed)
+	}
+
+	if len(loaded) > 0 && len(trimmed) == 0 {
+		log.Printf("load-session rejected reset-like history session_id=%s original=%d", sessionID, len(loaded))
+		http.Error(w, "loaded history was sanitized to empty; create a new session to reset history", http.StatusBadRequest)
+		return
+	}
+
+	customMessages := trimmed
+	if len(customMessages) == 0 {
+		customMessages = nil
+	}
+
 	session, err := agent.LoadSession(r.Context(), agent.LoadSessionConfig{
 		SessionID:         sessionID,
 		Provider:          a.provider,
@@ -158,6 +186,7 @@ func (a *app) handleLoadSession(w http.ResponseWriter, r *http.Request) {
 		Tools:             tools,
 		SessionRepository: a.sessRepo,
 		MessageRepository: a.msgRepo,
+		Messages:          customMessages,
 		TurnMaxIterations: a.cfg.maxIterations,
 		Logger:            a.sdkLogger,
 	})
@@ -165,17 +194,6 @@ func (a *app) handleLoadSession(w http.ResponseWriter, r *http.Request) {
 		log.Printf("load-session load error session_id=%s err=%v", sessionID, err)
 		http.Error(w, fmt.Sprintf("loading session: %s", err), http.StatusInternalServerError)
 		return
-	}
-
-	loadedMsgs := len(session.Messages())
-	// Always run loaded history through trim/sanitize. Even when max-history does
-	// not cut anything, sanitization removes incomplete tool-use tails that would
-	// be rejected by strict providers on the next continue.
-	trimmed := trimLoadedMessages(session.Messages(), a.cfg.maxHistory)
-	if len(trimmed) != loadedMsgs {
-		session.ReplaceMessages(trimmed)
-		log.Printf("load-session trimmed history session_id=%s from=%d to=%d", sessionID, loadedMsgs, len(trimmed))
-		loadedMsgs = len(trimmed)
 	}
 
 	log.Printf("load-session ok session_id=%s loaded_messages=%d work_dir=%s", sessionID, loadedMsgs, workDir)

@@ -26,6 +26,7 @@ import (
 	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/llm/fake"
 	"github.com/slok/gosimov/pkg/model"
+	"github.com/slok/gosimov/pkg/store/memory"
 	"github.com/slok/gosimov/pkg/tool"
 	"github.com/slok/gosimov/pkg/tool/edit"
 	"github.com/slok/gosimov/pkg/tool/ls"
@@ -125,10 +126,14 @@ func run(ctx context.Context) error {
 	}
 
 	// Create the session.
+	repo := memory.NewRepository()
+
 	session, err := agent.NewSession(ctx, agent.SessionConfig{
-		Provider:     scriptedProvider(),
-		SystemPrompt: "You are a helpful coding assistant.",
-		Tools:        []tool.Tool{lsTool, readTool, writeTool, editTool, shellTool},
+		Provider:          scriptedProvider(),
+		SystemPrompt:      "You are a helpful coding assistant.",
+		Tools:             []tool.Tool{lsTool, readTool, writeTool, editTool, shellTool},
+		SessionRepository: repo,
+		MessageRepository: repo,
 	})
 	if err != nil {
 		return fmt.Errorf("creating session: %w", err)
