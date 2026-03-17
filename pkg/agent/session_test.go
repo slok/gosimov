@@ -744,7 +744,7 @@ func TestSessionContinue(t *testing.T) {
 			expErr: true,
 		},
 
-		"Continue after AppendMessage should run a turn.": {
+		"Continue with preloaded history should run a turn.": {
 			setup: func(t *testing.T) *agent.Session {
 				t.Helper()
 				require := require.New(t)
@@ -762,14 +762,13 @@ func TestSessionContinue(t *testing.T) {
 							},
 						}, nil
 					}),
+					Messages: []model.Message{{
+						ID:      "manual-1",
+						Kind:    model.MessageKindUser,
+						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "injected"}},
+					}},
 				})
 				require.NoError(err)
-
-				s.AppendMessage(model.Message{
-					ID:      "manual-1",
-					Kind:    model.MessageKindUser,
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "injected"}},
-				})
 
 				return s
 			},
@@ -925,9 +924,12 @@ func TestSessionState(t *testing.T) {
 					return &agentcontext.CompactResult{Messages: msgs}, nil
 				}}
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider(), Compactor: compactor})
+				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+					Provider:  fake.NewEchoProvider(),
+					Compactor: compactor,
+					Messages:  []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
+				})
 				require.NoError(err)
-				s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser})
 
 				errCh := make(chan error, 1)
 				go func() {
@@ -1014,12 +1016,6 @@ func TestSessionConcurrency(t *testing.T) {
 				t.Helper()
 				assert := assert.New(t)
 
-				// Inject a message so Continue has something to work with.
-				session.AppendMessage(model.Message{
-					Kind:    model.MessageKindUser,
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "msg"}},
-				})
-
 				// Start a slow continue.
 				var wg sync.WaitGroup
 				wg.Add(1)
@@ -1058,6 +1054,10 @@ func TestSessionConcurrency(t *testing.T) {
 						},
 					}, nil
 				}),
+				Messages: []model.Message{{
+					Kind:    model.MessageKindUser,
+					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "msg"}},
+				}},
 			})
 			require.NoError(err)
 
@@ -1076,47 +1076,17 @@ func TestSessionMutators(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider()})
+				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+					Provider: fake.NewEchoProvider(),
+					Messages: []model.Message{{ID: "1", Kind: model.MessageKindUser}},
+				})
 				require.NoError(err)
-
-				s.AppendMessage(model.Message{ID: "1", Kind: model.MessageKindUser})
 
 				msgs := s.Messages()
 				msgs[0].ID = "mutated"
 
 				// Session's internal state should be unaffected.
 				assert.Equal("1", s.Messages()[0].ID)
-			},
-		},
-
-		"AppendMessage should add usage from message metadata.": {
-			run: func(t *testing.T) {
-				t.Helper()
-				assert := assert.New(t)
-				require := require.New(t)
-
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider()})
-				require.NoError(err)
-
-				s.AppendMessage(model.Message{
-					ID:   "new",
-					Kind: model.MessageKindLLM,
-					Metadata: &model.MessageMetadata{Usage: &model.Usage{
-						InputTokens:     3,
-						OutputTokens:    2,
-						CacheReadTokens: 4,
-					}},
-				})
-
-				msgs := s.Messages()
-				require.Len(msgs, 1)
-				assert.Equal("new", msgs[0].ID)
-
-				usage := s.Usage()
-				assert.Equal(3, usage.InputTokens)
-				assert.Equal(2, usage.OutputTokens)
-				assert.Equal(4, usage.CacheReadTokens)
-				assert.Equal(9, usage.TotalTokens)
 			},
 		},
 
@@ -1337,23 +1307,23 @@ func TestSessionPersistence(t *testing.T) {
 					}),
 					SessionRepository: repo,
 					MessageRepository: repo,
+					Messages: []model.Message{{
+						ID:      "manual-1",
+						Kind:    model.MessageKindUser,
+						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "injected"}},
+					}},
 				})
 				require.NoError(err)
-
-				s.AppendMessage(model.Message{
-					ID:      "manual-1",
-					Kind:    model.MessageKindUser,
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "injected"}},
-				})
 
 				_, err = s.Continue(ctx, agent.PromptOptions{})
 				require.NoError(err)
 
-				// Continue should only persist the turn result (LLM message), not the manually appended one.
+				// Continue should persist only the turn result (LLM message).
 				result, err := repo.ListMessages(ctx, s.Session().ID, store.ListOpts{})
 				require.NoError(err)
-				require.Len(result.Items, 1)
-				assert.Equal(model.MessageKindLLM, result.Items[0].Kind)
+				require.Len(result.Items, 2)
+				assert.Equal(model.MessageKindUser, result.Items[0].Kind)
+				assert.Equal(model.MessageKindLLM, result.Items[1].Kind)
 			},
 		},
 
@@ -1573,10 +1543,13 @@ func TestSessionCompact(t *testing.T) {
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider:  fake.NewEchoProvider(),
 					Compactor: compactor,
+					Messages: []model.Message{{
+						ID:      "m1",
+						Kind:    model.MessageKindUser,
+						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}},
+					}},
 				})
 				require.NoError(err)
-
-				s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}})
 
 				result, err := s.Compact(context.Background())
 				require.NoError(err)
@@ -1596,11 +1569,10 @@ func TestSessionCompact(t *testing.T) {
 
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider: fake.NewEchoProvider(),
+					Messages: []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
 					// No compactor — NoopCompactor used.
 				})
 				require.NoError(err)
-
-				s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser})
 
 				result, err := s.Compact(context.Background())
 				require.NoError(err)
@@ -1637,10 +1609,13 @@ func TestSessionCompact(t *testing.T) {
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider:  fake.NewEchoProvider(),
 					Compactor: compactor,
+					Messages: []model.Message{{
+						ID:      "m1",
+						Kind:    model.MessageKindUser,
+						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}},
+					}},
 				})
 				require.NoError(err)
-
-				s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}})
 
 				result, err := s.Compact(context.Background())
 				require.NoError(err)
@@ -1690,10 +1665,9 @@ func TestSessionCompact(t *testing.T) {
 					Compactor:         compactor,
 					SessionRepository: repo,
 					MessageRepository: repo,
+					Messages:          []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
 				})
 				require.NoError(err)
-
-				s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser})
 
 				_, err = s.Compact(ctx)
 				require.NoError(err)
@@ -1701,9 +1675,11 @@ func TestSessionCompact(t *testing.T) {
 				// The compaction message should be in the store.
 				result, err := repo.ListMessages(ctx, s.Session().ID, store.ListOpts{})
 				require.NoError(err)
-				require.Len(result.Items, 1)
-				assert.Equal("compact-1", result.Items[0].ID)
-				assert.Equal(model.MessageKindCompaction, result.Items[0].Kind)
+				require.Len(result.Items, 2)
+				assert.Equal("m1", result.Items[0].ID)
+				assert.Equal(model.MessageKindUser, result.Items[0].Kind)
+				assert.Equal("compact-1", result.Items[1].ID)
+				assert.Equal(model.MessageKindCompaction, result.Items[1].Kind)
 			},
 		},
 
@@ -1725,10 +1701,9 @@ func TestSessionCompact(t *testing.T) {
 							},
 						}, nil
 					}),
+					Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}}},
 				})
 				require.NoError(err)
-
-				s.AppendMessage(model.Message{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}})
 
 				// Start a turn.
 				var wg sync.WaitGroup
@@ -1764,10 +1739,9 @@ func TestSessionCompact(t *testing.T) {
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider:  fake.NewEchoProvider(),
 					Compactor: compactor,
+					Messages:  []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
 				})
 				require.NoError(err)
-
-				s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser})
 
 				_, err = s.Compact(context.Background())
 				assert.Error(err)
@@ -1835,12 +1809,15 @@ func TestSessionRuntimeContextValues(t *testing.T) {
 				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
 					Provider:  fake.NewProviderWithModelInfo(func(_ context.Context, _ llm.Request) (*llm.Response, error) { return nil, nil }, wantInfo),
 					Compactor: compactor,
+					Messages: []model.Message{{
+						ID:      "m1",
+						Kind:    model.MessageKindUser,
+						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}},
+					}},
 				})
 				if err != nil {
 					return "", "", nil, err
 				}
-
-				s.AppendMessage(model.Message{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}})
 				_, err = s.Compact(context.Background())
 				return s.Session().ID, gotSessionID, gotInfo, err
 			},

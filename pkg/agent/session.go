@@ -418,9 +418,8 @@ func (s *Session) Prompt(ctx context.Context, content []model.ContentPart, opts 
 
 // Continue resumes the conversation from the current message history.
 //
-// Use this for retries after errors, or after manually appending messages
-// via [AppendMessage]. It calls [runTurn] with the current messages
-// without adding a new user message.
+// Use this for retries after errors. It calls [runTurn] with the current
+// messages without adding a new user message.
 func (s *Session) Continue(ctx context.Context, opts PromptOptions) (*TurnResult, error) {
 	if err := s.beginRun(SessionOperationContinue); err != nil {
 		return nil, err
@@ -550,18 +549,6 @@ func (s *Session) State() SessionState {
 		MessageCount: len(messages),
 		Usage:        usage,
 	}
-}
-
-// AppendMessage adds a message to the conversation history.
-//
-// Use this to inject messages (e.g., a user follow-up) before calling [Continue].
-// If the message carries usage metadata, session usage is updated as well.
-func (s *Session) AppendMessage(m model.Message) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	s.messages = append(s.messages, m)
-	s.usage = addUsage(s.usage, m.Metadata)
 }
 
 // Compact forces a context compaction between turns.

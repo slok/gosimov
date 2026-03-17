@@ -682,13 +682,12 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 | `NewSession(ctx, cfg) (*Session, error)` | Creates a new session with ULID and timestamp. Persists session identity when repo is set; can preload/persist initial history via `SessionConfig.Messages`. |
 | `LoadSession(ctx, cfg) (*Session, error)` | Loads an existing persisted session identity. Uses `LoadSessionConfig.Messages` when non-nil; otherwise preloads from `MessageRepository`. |
 | `Prompt(ctx, []ContentPart, opts PromptOptions) (*TurnResult, error)` | Builds a user message, appends it, runs a turn. `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. |
-| `Continue(ctx, opts PromptOptions) (*TurnResult, error)` | Runs a turn from current messages (retries, manual injection). `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. |
+| `Continue(ctx, opts PromptOptions) (*TurnResult, error)` | Runs a turn from current messages (retries). `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. |
 | `Compact(ctx) (*CompactResult, error)` | Delegates to `runCompaction` with `Force: true`. Appends the compaction message + aggregates usage if created. Returns `ErrSessionBusy` if a turn is running. |
 | `Session() model.Session` | Returns the session identity (ID and creation time). |
 | `State() SessionState` | Returns a thread-safe runtime snapshot (`running`, `operation`, `turn`, `message_count`, identity, usage). |
 | `Messages() []Message` | Returns a copy of the conversation history. |
 | `Usage() Usage` | Returns aggregated usage across all turns. |
-| `AppendMessage(m)` | Adds a message to history (for manual injection before Continue). Aggregates usage if metadata includes usage. |
 
 `PromptOptions` fields:
 
