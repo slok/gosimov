@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -161,6 +162,14 @@ func (s *State) viewer(ctx context.Context) (string, error) {
 		return v, nil
 	}
 	s.mu.Unlock()
+
+	if actor := strings.TrimSpace(os.Getenv("GITHUB_ACTOR")); actor != "" {
+		s.mu.Lock()
+		s.viewerLogin = actor
+		v := s.viewerLogin
+		s.mu.Unlock()
+		return v, nil
+	}
 
 	var data struct {
 		Login string `json:"login"`
