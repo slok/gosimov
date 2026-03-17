@@ -150,22 +150,6 @@ func (a *app) handleLoadSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := agent.LoadSession(r.Context(), agent.LoadSessionConfig{
-		SessionID:         sessionID,
-		Provider:          a.provider,
-		Compactor:         a.compactor,
-		SystemPrompt:      defaultSystemPrompt(a.cfg.systemPrompt),
-		Tools:             tools,
-		SessionRepository: a.sessRepo,
-		TurnMaxIterations: a.cfg.maxIterations,
-		Logger:            a.sdkLogger,
-	})
-	if err != nil {
-		log.Printf("load-session load error session_id=%s err=%v", sessionID, err)
-		http.Error(w, fmt.Sprintf("loading session: %s", err), http.StatusInternalServerError)
-		return
-	}
-
 	loaded, err := loadAllMessages(r.Context(), a.msgRepo, sessionID)
 	if err != nil {
 		log.Printf("load-session messages error session_id=%s err=%v", sessionID, err)
@@ -178,13 +162,31 @@ func (a *app) handleLoadSession(w http.ResponseWriter, r *http.Request) {
 	// not cut anything, sanitization removes incomplete tool-use tails that would
 	// be rejected by strict providers on the next continue.
 	trimmed := trimLoadedMessages(loaded, a.cfg.maxHistory)
+	if trimmed == nil {
+		trimmed = []model.Message{}
+	}
+
 	if len(trimmed) != loadedMsgs {
 		log.Printf("load-session trimmed history session_id=%s from=%d to=%d", sessionID, loadedMsgs, len(trimmed))
 		loadedMsgs = len(trimmed)
 	}
 
-	for _, msg := range trimmed {
-		session.AppendMessage(msg)
+	session, err := agent.LoadSession(r.Context(), agent.LoadSessionConfig{
+		SessionID:         sessionID,
+		Provider:          a.provider,
+		Compactor:         a.compactor,
+		SystemPrompt:      defaultSystemPrompt(a.cfg.systemPrompt),
+		Tools:             tools,
+		SessionRepository: a.sessRepo,
+		MessageRepository: a.msgRepo,
+		Messages:          trimmed,
+		TurnMaxIterations: a.cfg.maxIterations,
+		Logger:            a.sdkLogger,
+	})
+	if err != nil {
+		log.Printf("load-session load error session_id=%s err=%v", sessionID, err)
+		http.Error(w, fmt.Sprintf("loading session: %s", err), http.StatusInternalServerError)
+		return
 	}
 
 	log.Printf("load-session ok session_id=%s loaded_messages=%d work_dir=%s", sessionID, loadedMsgs, workDir)

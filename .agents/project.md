@@ -655,6 +655,7 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 | `TurnMaxIterations` | No | `0` (no limit) | Per-turn LLM call limit. 0 means unlimited. |
 | `SessionRepository` | No | `nil` | If set, session is persisted on creation. |
 | `MessageRepository` | No | `nil` | If set, messages are persisted after each turn. |
+| `Messages` | No | `nil` | Advanced: preload initial in-memory history (e.g., branching). Usage is reconstructed from these messages. If `MessageRepository` is set, these messages are persisted on creation. |
 | `Compactor` | No | `NoopCompactor` | Manages compaction inside the turn loop and via `Session.Compact()`. |
 | `ContextProcessor` | No | `nil` | If set, transforms messages before each LLM call (after compactor). |
 
@@ -669,7 +670,8 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 | `ToolTimeout` | No | `0` | Per-tool execution timeout. `0` means no timeout. |
 | `TurnMaxIterations` | No | `0` (no limit) | Per-turn LLM call limit. 0 means unlimited. |
 | `SessionRepository` | Yes | — | Repository used to load session identity by ID. |
-| `MessageRepository` | No | `nil` | If set, existing messages are preloaded into session state. |
+| `MessageRepository` | Yes | — | Repository used to preload persisted message history when `Messages` is nil. |
+| `Messages` | No | `nil` | Advanced: when non-nil, overrides repository preload and is used as in-memory history instead (explicit empty slice means empty history). |
 | `Compactor` | No | `NoopCompactor` | Manages compaction inside the turn loop and via `Session.Compact()`. |
 | `ContextProcessor` | No | `nil` | If set, transforms messages before each LLM call (after compactor). |
 
@@ -677,8 +679,8 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 
 | Method | Description |
 |--------|-------------|
-| `NewSession(ctx, cfg) (*Session, error)` | Creates a new session with ULID and timestamp. Persists when repo is set. |
-| `LoadSession(ctx, cfg) (*Session, error)` | Loads an existing persisted session identity and (optionally) preloads messages. |
+| `NewSession(ctx, cfg) (*Session, error)` | Creates a new session with ULID and timestamp. Persists session identity when repo is set; can preload/persist initial history via `SessionConfig.Messages`. |
+| `LoadSession(ctx, cfg) (*Session, error)` | Loads an existing persisted session identity. Uses `LoadSessionConfig.Messages` when non-nil; otherwise preloads from `MessageRepository`. |
 | `Prompt(ctx, []ContentPart, opts PromptOptions) (*TurnResult, error)` | Builds a user message, appends it, runs a turn. `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. |
 | `Continue(ctx, opts PromptOptions) (*TurnResult, error)` | Runs a turn from current messages (retries, manual injection). `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. |
 | `Compact(ctx) (*CompactResult, error)` | Delegates to `runCompaction` with `Force: true`. Appends the compaction message + aggregates usage if created. Returns `ErrSessionBusy` if a turn is running. |

@@ -41,6 +41,14 @@ type SessionConfig struct {
 	// If set, each message is persisted individually as it is produced:
 	// user messages before the turn, LLM responses and tool results during the turn.
 	MessageRepository store.MessageRepository
+	// Messages preloads initial history (advanced customization, optional).
+	//
+	// Most callers should leave this nil and start from an empty conversation.
+	// Set this when creating a branched session from existing history.
+	//
+	// When set, the session copies these messages, reconstructs usage from their
+	// metadata, and persists them on creation if MessageRepository is configured.
+	Messages []model.Message
 	// Compactor manages context compaction within the agent loop (optional).
 	// If set, it runs on every LLM call within a turn before the context processor.
 	// It may create compaction checkpoints and filters messages based on those checkpoints.
@@ -92,8 +100,16 @@ type LoadSessionConfig struct {
 	DisablePromptCache bool
 	// SessionRepository is used to load the existing session identity (required).
 	SessionRepository store.SessionRepository
-	// MessageRepository preloads message history if set (optional).
+	// MessageRepository is required and used to preload history when Messages is nil.
 	MessageRepository store.MessageRepository
+	// Messages overrides repository preloading when non-nil (advanced customization, optional).
+	//
+	// Most callers should leave this nil and let MessageRepository preload the
+	// persisted conversation.
+	//
+	// When set (including an explicit empty slice), these messages are copied and
+	// used as the in-memory history instead of loading from MessageRepository.
+	Messages []model.Message
 	// Compactor manages context compaction within the agent loop (optional).
 	Compactor agentcontext.Compactor
 	// ContextProcessor transforms messages before each LLM call (optional).
@@ -148,6 +164,10 @@ func (c *LoadSessionConfig) defaults() error {
 
 	if c.SessionRepository == nil {
 		return fmt.Errorf("session repository is required: %w", pkgerrors.ErrNotValid)
+	}
+
+	if c.MessageRepository == nil {
+		return fmt.Errorf("message repository is required: %w", pkgerrors.ErrNotValid)
 	}
 
 	if c.Compactor == nil {
@@ -214,6 +234,13 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		}
 	}
 
+	initialMessages := cloneMessages(cfg.Messages)
+	if cfg.MessageRepository != nil && len(initialMessages) > 0 {
+		if err := cfg.MessageRepository.StoreMessages(ctx, sess.ID, initialMessages); err != nil {
+			return nil, fmt.Errorf("persisting initial messages: %w", err)
+		}
+	}
+
 	s := &Session{
 		session:            sess,
 		provider:           cfg.Provider,
@@ -223,6 +250,8 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		toolIndex:          toolIndex,
 		toolTimeout:        cfg.ToolTimeout,
 		maxIterations:      cfg.TurnMaxIterations,
+		messages:           initialMessages,
+		usage:              usageFromMessages(initialMessages),
 		sessionRepo:        cfg.SessionRepository,
 		messageRepo:        cfg.MessageRepository,
 		compactor:          cfg.Compactor,
@@ -235,9 +264,10 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 
 // LoadSession loads an existing persisted session.
 //
-// The session identity is loaded from SessionRepository. If MessageRepository is
-// set, historical messages are preloaded into memory before the returned session
-// can continue prompting.
+// The session identity is loaded from SessionRepository.
+//
+// If [LoadSessionConfig.Messages] is non-nil, those messages are copied and used
+// as the in-memory history. Otherwise, history is loaded from MessageRepository.
 func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 	if err := cfg.defaults(); err != nil {
 		return nil, fmt.Errorf("invalid load session config: %w", err)
@@ -269,14 +299,19 @@ func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 		logger:             cfg.Logger,
 	}
 
-	if cfg.MessageRepository != nil {
-		msgs, err := listAllMessages(ctx, cfg.MessageRepository, existing.ID)
-		if err != nil {
-			return nil, fmt.Errorf("loading existing messages: %w", err)
-		}
-		s.messages = msgs
-		s.usage = usageFromMessages(msgs)
+	if cfg.Messages != nil {
+		s.messages = cloneMessages(cfg.Messages)
+		s.usage = usageFromMessages(s.messages)
+		return s, nil
 	}
+
+	msgs, err := listAllMessages(ctx, cfg.MessageRepository, existing.ID)
+	if err != nil {
+		return nil, fmt.Errorf("loading existing messages: %w", err)
+	}
+
+	s.messages = msgs
+	s.usage = usageFromMessages(msgs)
 
 	return s, nil
 }
@@ -323,6 +358,17 @@ func usageFromMessages(messages []model.Message) model.Usage {
 	}
 
 	return total
+}
+
+func cloneMessages(messages []model.Message) []model.Message {
+	if messages == nil {
+		return nil
+	}
+
+	cloned := make([]model.Message, len(messages))
+	copy(cloned, messages)
+
+	return cloned
 }
 
 // Prompt sends a user message and runs a full turn.

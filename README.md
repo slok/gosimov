@@ -219,6 +219,13 @@ loaded, _ := agent.LoadSession(ctx, agent.LoadSessionConfig{
 _, _ = loaded.Continue(ctx, agent.PromptOptions{})
 ```
 
+Advanced customization: `LoadSessionConfig.Messages` can override repository-preloaded
+history (for example, pre-trimmed/pre-sanitized messages). Most callers should leave
+`Messages` unset and load history from `MessageRepository`.
+
+Branching: `SessionConfig.Messages` can bootstrap a new session from prior messages.
+When `MessageRepository` is configured, that initial branched history is persisted.
+
 ### 3) Enable context compaction
 
 ```go

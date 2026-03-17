@@ -38,10 +38,43 @@ func TestNewSession(t *testing.T) {
 		config   agent.SessionConfig
 		expErr   bool
 		expErrIs error
+		assert   func(t *testing.T, s *agent.Session)
 	}{
 		"Valid config should create a session with a valid identity.": {
 			config: agent.SessionConfig{
 				Provider: fake.NewEchoProvider(),
+			},
+		},
+
+		"Initial messages should preload history and usage.": {
+			config: agent.SessionConfig{
+				Provider: fake.NewEchoProvider(),
+				Messages: []model.Message{
+					{ID: "u1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+					{
+						ID:   "a1",
+						Kind: model.MessageKindLLM,
+						Metadata: &model.MessageMetadata{Usage: &model.Usage{
+							InputTokens:  5,
+							OutputTokens: 2,
+						}},
+					},
+				},
+			},
+			assert: func(t *testing.T, s *agent.Session) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				msgs := s.Messages()
+				require.Len(msgs, 2)
+				assert.Equal("u1", msgs[0].ID)
+				assert.Equal("a1", msgs[1].ID)
+
+				u := s.Usage()
+				assert.Equal(5, u.InputTokens)
+				assert.Equal(2, u.OutputTokens)
+				assert.Equal(7, u.TotalTokens)
 			},
 		},
 
@@ -88,9 +121,63 @@ func TestNewSession(t *testing.T) {
 				sess := s.Session()
 				assert.NotEmpty(sess.ID)
 				assert.False(sess.CreatedAt.IsZero())
+
+				if test.assert != nil {
+					test.assert(t, s)
+				}
 			}
 		})
 	}
+}
+
+func TestNewSessionInitialMessagesPersistence(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	repo := memory.NewRepository()
+
+	messages := []model.Message{
+		{ID: "m1", Kind: model.MessageKindUser},
+		{ID: "m2", Kind: model.MessageKindLLM, Metadata: &model.MessageMetadata{Usage: &model.Usage{InputTokens: 1, OutputTokens: 1}}},
+	}
+
+	s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+		Provider:          fake.NewEchoProvider(),
+		SessionRepository: repo,
+		MessageRepository: repo,
+		Messages:          messages,
+	})
+	require.NoError(err)
+
+	stored, err := repo.ListMessages(context.Background(), s.Session().ID, store.ListOpts{})
+	require.NoError(err)
+	require.Len(stored.Items, 2)
+	assert.Equal("m1", stored.Items[0].ID)
+	assert.Equal("m2", stored.Items[1].ID)
+
+	usage := s.Usage()
+	assert.Equal(1, usage.InputTokens)
+	assert.Equal(1, usage.OutputTokens)
+	assert.Equal(2, usage.TotalTokens)
+}
+
+func TestNewSessionInitialMessagesAreCopied(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	messages := []model.Message{{ID: "m1", Kind: model.MessageKindUser}}
+
+	s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+		Provider: fake.NewEchoProvider(),
+		Messages: messages,
+	})
+	require.NoError(err)
+
+	messages[0].ID = "mutated"
+
+	got := s.Messages()
+	require.Len(got, 1)
+	assert.Equal("m1", got[0].ID)
 }
 
 func TestLoadSession(t *testing.T) {
@@ -153,7 +240,7 @@ func TestLoadSession(t *testing.T) {
 			},
 		},
 
-		"Message repository should be optional when loading existing session.": {
+		"Missing message repository should return validation error.": {
 			prepare: func(t *testing.T) agent.LoadSessionConfig {
 				t.Helper()
 				require := require.New(t)
@@ -167,14 +254,75 @@ func TestLoadSession(t *testing.T) {
 					SessionRepository: repo,
 				}
 			},
+			expErr:   true,
+			expErrIs: pkgerrors.ErrNotValid,
+		},
+
+		"Provided messages should override repository preload.": {
+			prepare: func(t *testing.T) agent.LoadSessionConfig {
+				t.Helper()
+				require := require.New(t)
+
+				repo := memory.NewRepository()
+				require.NoError(repo.CreateSession(context.Background(), model.Session{ID: "s-load-override", CreatedAt: time.Now().UTC()}))
+				require.NoError(repo.StoreMessages(context.Background(), "s-load-override", []model.Message{
+					{ID: "repo-m1", Kind: model.MessageKindUser},
+					{ID: "repo-m2", Kind: model.MessageKindLLM, Metadata: &model.MessageMetadata{Usage: &model.Usage{InputTokens: 20, OutputTokens: 10}}},
+				}))
+
+				return agent.LoadSessionConfig{
+					SessionID:         "s-load-override",
+					Provider:          fake.NewEchoProvider(),
+					SessionRepository: repo,
+					MessageRepository: repo,
+					Messages: []model.Message{
+						{ID: "custom-m1", Kind: model.MessageKindUser},
+						{ID: "custom-m2", Kind: model.MessageKindLLM, Metadata: &model.MessageMetadata{Usage: &model.Usage{InputTokens: 3, OutputTokens: 2}}},
+					},
+				}
+			},
 			assert: func(t *testing.T, s *agent.Session) {
 				t.Helper()
 				assert := assert.New(t)
 				require := require.New(t)
 
-				require.NotNil(s)
-				assert.Equal("s-load-no-msg-repo", s.Session().ID)
+				msgs := s.Messages()
+				require.Len(msgs, 2)
+				assert.Equal("custom-m1", msgs[0].ID)
+				assert.Equal("custom-m2", msgs[1].ID)
+
+				u := s.Usage()
+				assert.Equal(3, u.InputTokens)
+				assert.Equal(2, u.OutputTokens)
+				assert.Equal(5, u.TotalTokens)
+			},
+		},
+
+		"Provided empty messages should load an empty history.": {
+			prepare: func(t *testing.T) agent.LoadSessionConfig {
+				t.Helper()
+				require := require.New(t)
+
+				repo := memory.NewRepository()
+				require.NoError(repo.CreateSession(context.Background(), model.Session{ID: "s-load-empty-override", CreatedAt: time.Now().UTC()}))
+				require.NoError(repo.StoreMessages(context.Background(), "s-load-empty-override", []model.Message{
+					{ID: "repo-m1", Kind: model.MessageKindUser},
+				}))
+
+				return agent.LoadSessionConfig{
+					SessionID:         "s-load-empty-override",
+					Provider:          fake.NewEchoProvider(),
+					SessionRepository: repo,
+					MessageRepository: repo,
+					Messages:          []model.Message{},
+				}
+			},
+			assert: func(t *testing.T, s *agent.Session) {
+				t.Helper()
+				assert := assert.New(t)
+
 				assert.Len(s.Messages(), 0)
+				assert.Equal(model.Usage{}, s.Usage())
 			},
 		},
 
@@ -254,7 +402,8 @@ func TestLoadSession(t *testing.T) {
 		"Missing persisted session should return not found error.": {
 			prepare: func(t *testing.T) agent.LoadSessionConfig {
 				t.Helper()
-				return agent.LoadSessionConfig{SessionID: "does-not-exist", Provider: fake.NewEchoProvider(), SessionRepository: memory.NewRepository()}
+				repo := memory.NewRepository()
+				return agent.LoadSessionConfig{SessionID: "does-not-exist", Provider: fake.NewEchoProvider(), SessionRepository: repo, MessageRepository: repo}
 			},
 			expErr:   true,
 			expErrIs: pkgerrors.ErrNotFound,
@@ -287,6 +436,31 @@ func TestLoadSession(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestLoadSessionProvidedMessagesAreCopied(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	repo := memory.NewRepository()
+	require.NoError(repo.CreateSession(context.Background(), model.Session{ID: "s-load-copy", CreatedAt: time.Now().UTC()}))
+
+	messages := []model.Message{{ID: "m1", Kind: model.MessageKindUser}}
+
+	s, err := agent.LoadSession(context.Background(), agent.LoadSessionConfig{
+		SessionID:         "s-load-copy",
+		Provider:          fake.NewEchoProvider(),
+		SessionRepository: repo,
+		MessageRepository: repo,
+		Messages:          messages,
+	})
+	require.NoError(err)
+
+	messages[0].ID = "mutated"
+
+	got := s.Messages()
+	require.Len(got, 1)
+	assert.Equal("m1", got[0].ID)
 }
 
 func TestSessionPrompt(t *testing.T) {
