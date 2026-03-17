@@ -68,7 +68,7 @@ func (t *prFileReadTool) Execute(ctx context.Context, args json.RawMessage) (*to
 	}
 
 	ref := head
-	refLabel := "head"
+	var refLabel string
 	switch strings.ToLower(strings.TrimSpace(in.Ref)) {
 	case "", "head":
 		ref = head

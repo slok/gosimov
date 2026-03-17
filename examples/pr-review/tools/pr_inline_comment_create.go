@@ -73,7 +73,7 @@ func (t *prInlineCommentCreateTool) Execute(ctx context.Context, args json.RawMe
 		"-f", "body="+in.Body,
 		"-f", "commit_id="+head,
 		"-f", "path="+in.Path,
-		"-F", "line="+strconv.Itoa(in.Line),
+		"-f", "line="+strconv.Itoa(in.Line),
 		"-f", "side=RIGHT",
 	)
 	if err != nil {
