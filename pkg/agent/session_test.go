@@ -180,54 +180,71 @@ func TestNewSessionRequiresRepositories(t *testing.T) {
 	}
 }
 
-func TestNewSessionInitialMessagesPersistence(t *testing.T) {
-	assert := assert.New(t)
-	require := require.New(t)
+func TestNewSessionInitialMessages(t *testing.T) {
+	tests := map[string]struct {
+		run func(t *testing.T)
+	}{
+		"Initial messages should persist and usage should aggregate.": {
+			run: func(t *testing.T) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
-	repo := memory.NewRepository()
+				repo := memory.NewRepository()
+				messages := []model.Message{
+					{ID: "m1", Kind: model.MessageKindUser},
+					{ID: "m2", Kind: model.MessageKindLLM, Metadata: &model.MessageMetadata{Usage: &model.Usage{InputTokens: 1, OutputTokens: 1}}},
+				}
 
-	messages := []model.Message{
-		{ID: "m1", Kind: model.MessageKindUser},
-		{ID: "m2", Kind: model.MessageKindLLM, Metadata: &model.MessageMetadata{Usage: &model.Usage{InputTokens: 1, OutputTokens: 1}}},
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
+					Provider:          fake.NewEchoProvider(),
+					SessionRepository: repo,
+					MessageRepository: repo,
+					Messages:          messages,
+				}))
+				require.NoError(err)
+
+				stored, err := repo.ListMessages(context.Background(), s.Session().ID, store.ListOpts{})
+				require.NoError(err)
+				require.Len(stored.Items, 2)
+				assert.Equal("m1", stored.Items[0].ID)
+				assert.Equal("m2", stored.Items[1].ID)
+
+				usage := s.Usage()
+				assert.Equal(1, usage.InputTokens)
+				assert.Equal(1, usage.OutputTokens)
+				assert.Equal(2, usage.TotalTokens)
+			},
+		},
+
+		"Initial messages should be copied.": {
+			run: func(t *testing.T) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				messages := []model.Message{{ID: "m1", Kind: model.MessageKindUser}}
+
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
+					Provider: fake.NewEchoProvider(),
+					Messages: messages,
+				}))
+				require.NoError(err)
+
+				messages[0].ID = "mutated"
+
+				got := s.Messages()
+				require.Len(got, 1)
+				assert.Equal("m1", got[0].ID)
+			},
+		},
 	}
 
-	s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
-		Provider:          fake.NewEchoProvider(),
-		SessionRepository: repo,
-		MessageRepository: repo,
-		Messages:          messages,
-	}))
-	require.NoError(err)
-
-	stored, err := repo.ListMessages(context.Background(), s.Session().ID, store.ListOpts{})
-	require.NoError(err)
-	require.Len(stored.Items, 2)
-	assert.Equal("m1", stored.Items[0].ID)
-	assert.Equal("m2", stored.Items[1].ID)
-
-	usage := s.Usage()
-	assert.Equal(1, usage.InputTokens)
-	assert.Equal(1, usage.OutputTokens)
-	assert.Equal(2, usage.TotalTokens)
-}
-
-func TestNewSessionInitialMessagesAreCopied(t *testing.T) {
-	assert := assert.New(t)
-	require := require.New(t)
-
-	messages := []model.Message{{ID: "m1", Kind: model.MessageKindUser}}
-
-	s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
-		Provider: fake.NewEchoProvider(),
-		Messages: messages,
-	}))
-	require.NoError(err)
-
-	messages[0].ID = "mutated"
-
-	got := s.Messages()
-	require.Len(got, 1)
-	assert.Equal("m1", got[0].ID)
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			test.run(t)
+		})
+	}
 }
 
 func TestLoadSession(t *testing.T) {
@@ -491,28 +508,51 @@ func TestLoadSession(t *testing.T) {
 }
 
 func TestLoadSessionProvidedMessagesAreCopied(t *testing.T) {
-	assert := assert.New(t)
-	require := require.New(t)
+	tests := map[string]struct {
+		messages   []model.Message
+		mutate     func([]model.Message)
+		expFirstID string
+	}{
+		"Single message should be copied.": {
+			messages:   []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
+			mutate:     func(msgs []model.Message) { msgs[0].ID = "mutated" },
+			expFirstID: "m1",
+		},
+		"Multiple messages should be copied.": {
+			messages: []model.Message{
+				{ID: "m1", Kind: model.MessageKindUser},
+				{ID: "m2", Kind: model.MessageKindLLM},
+			},
+			mutate:     func(msgs []model.Message) { msgs[0].ID = "changed" },
+			expFirstID: "m1",
+		},
+	}
 
-	repo := memory.NewRepository()
-	require.NoError(repo.CreateSession(context.Background(), model.Session{ID: "s-load-copy", CreatedAt: time.Now().UTC()}))
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+			require := require.New(t)
 
-	messages := []model.Message{{ID: "m1", Kind: model.MessageKindUser}}
+			repo := memory.NewRepository()
+			sessionID := fmt.Sprintf("s-load-copy-%d", time.Now().UnixNano())
+			require.NoError(repo.CreateSession(context.Background(), model.Session{ID: sessionID, CreatedAt: time.Now().UTC()}))
 
-	s, err := agent.LoadSession(context.Background(), agent.LoadSessionConfig{
-		SessionID:         "s-load-copy",
-		Provider:          fake.NewEchoProvider(),
-		SessionRepository: repo,
-		MessageRepository: repo,
-		Messages:          messages,
-	})
-	require.NoError(err)
+			s, err := agent.LoadSession(context.Background(), agent.LoadSessionConfig{
+				SessionID:         sessionID,
+				Provider:          fake.NewEchoProvider(),
+				SessionRepository: repo,
+				MessageRepository: repo,
+				Messages:          test.messages,
+			})
+			require.NoError(err)
 
-	messages[0].ID = "mutated"
+			test.mutate(test.messages)
 
-	got := s.Messages()
-	require.Len(got, 1)
-	assert.Equal("m1", got[0].ID)
+			got := s.Messages()
+			require.Len(got, len(test.messages))
+			assert.Equal(test.expFirstID, got[0].ID)
+		})
+	}
 }
 
 func TestSessionPrompt(t *testing.T) {
