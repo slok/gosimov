@@ -33,6 +33,22 @@ func (c *testCompactor) Compact(ctx context.Context, messages []model.Message, o
 	return c.fn(ctx, messages, opts)
 }
 
+func withRequiredRepos(cfg agent.SessionConfig) agent.SessionConfig {
+	if cfg.SessionRepository != nil && cfg.MessageRepository != nil {
+		return cfg
+	}
+
+	repo := memory.NewRepository()
+	if cfg.SessionRepository == nil {
+		cfg.SessionRepository = repo
+	}
+	if cfg.MessageRepository == nil {
+		cfg.MessageRepository = repo
+	}
+
+	return cfg
+}
+
 func TestNewSession(t *testing.T) {
 	tests := map[string]struct {
 		config   agent.SessionConfig
@@ -105,7 +121,7 @@ func TestNewSession(t *testing.T) {
 			assert := assert.New(t)
 			require := require.New(t)
 
-			s, err := agent.NewSession(context.Background(), test.config)
+			s, err := agent.NewSession(context.Background(), withRequiredRepos(test.config))
 
 			if test.expErr {
 				assert.Error(err)
@@ -130,6 +146,40 @@ func TestNewSession(t *testing.T) {
 	}
 }
 
+func TestNewSessionRequiresRepositories(t *testing.T) {
+	tests := map[string]struct {
+		config agent.SessionConfig
+		err    string
+	}{
+		"Missing session repository should fail": {
+			config: agent.SessionConfig{
+				Provider:          fake.NewEchoProvider(),
+				MessageRepository: memory.NewRepository(),
+			},
+			err: "session repository is required",
+		},
+		"Missing message repository should fail": {
+			config: agent.SessionConfig{
+				Provider:          fake.NewEchoProvider(),
+				SessionRepository: memory.NewRepository(),
+			},
+			err: "message repository is required",
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			assert := assert.New(t)
+
+			s, err := agent.NewSession(context.Background(), test.config)
+			assert.Nil(s)
+			assert.Error(err)
+			assert.ErrorContains(err, test.err)
+			assert.ErrorIs(err, pkgerrors.ErrNotValid)
+		})
+	}
+}
+
 func TestNewSessionInitialMessagesPersistence(t *testing.T) {
 	assert := assert.New(t)
 	require := require.New(t)
@@ -141,12 +191,12 @@ func TestNewSessionInitialMessagesPersistence(t *testing.T) {
 		{ID: "m2", Kind: model.MessageKindLLM, Metadata: &model.MessageMetadata{Usage: &model.Usage{InputTokens: 1, OutputTokens: 1}}},
 	}
 
-	s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+	s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 		Provider:          fake.NewEchoProvider(),
 		SessionRepository: repo,
 		MessageRepository: repo,
 		Messages:          messages,
-	})
+	}))
 	require.NoError(err)
 
 	stored, err := repo.ListMessages(context.Background(), s.Session().ID, store.ListOpts{})
@@ -167,10 +217,10 @@ func TestNewSessionInitialMessagesAreCopied(t *testing.T) {
 
 	messages := []model.Message{{ID: "m1", Kind: model.MessageKindUser}}
 
-	s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+	s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 		Provider: fake.NewEchoProvider(),
 		Messages: messages,
-	})
+	}))
 	require.NoError(err)
 
 	messages[0].ID = "mutated"
@@ -298,7 +348,7 @@ func TestLoadSession(t *testing.T) {
 			},
 		},
 
-		"Provided empty messages should load an empty history.": {
+		"Provided empty messages should behave like nil and load from repository.": {
 			prepare: func(t *testing.T) agent.LoadSessionConfig {
 				t.Helper()
 				require := require.New(t)
@@ -321,7 +371,9 @@ func TestLoadSession(t *testing.T) {
 				t.Helper()
 				assert := assert.New(t)
 
-				assert.Len(s.Messages(), 0)
+				msgs := s.Messages()
+				assert.Len(msgs, 1)
+				assert.Equal("repo-m1", msgs[0].ID)
 				assert.Equal(model.Usage{}, s.Usage())
 			},
 		},
@@ -697,7 +749,7 @@ func TestSessionPrompt(t *testing.T) {
 				toolmock.NewMockTool(t),
 			}
 
-			cfg := test.mock(mockTools)
+			cfg := withRequiredRepos(test.mock(mockTools))
 			session, err := agent.NewSession(context.Background(), cfg)
 			require.NoError(err)
 
@@ -736,7 +788,7 @@ func TestSessionContinue(t *testing.T) {
 				t.Helper()
 				require := require.New(t)
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider()})
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{Provider: fake.NewEchoProvider()}))
 				require.NoError(err)
 
 				return s
@@ -749,7 +801,7 @@ func TestSessionContinue(t *testing.T) {
 				t.Helper()
 				require := require.New(t)
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
 						return &llm.Response{
 							Message: model.Message{
@@ -767,7 +819,7 @@ func TestSessionContinue(t *testing.T) {
 						Kind:    model.MessageKindUser,
 						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "injected"}},
 					}},
-				})
+				}))
 				require.NoError(err)
 
 				return s
@@ -820,7 +872,7 @@ func TestSessionState(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider()})
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{Provider: fake.NewEchoProvider()}))
 				require.NoError(err)
 
 				state := s.State()
@@ -839,7 +891,7 @@ func TestSessionState(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
 						return &llm.Response{
 							Message: model.Message{
@@ -852,7 +904,7 @@ func TestSessionState(t *testing.T) {
 							},
 						}, nil
 					}),
-				})
+				}))
 				require.NoError(err)
 
 				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "first"}}, agent.PromptOptions{})
@@ -879,13 +931,13 @@ func TestSessionState(t *testing.T) {
 
 				started := make(chan struct{})
 				release := make(chan struct{})
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
 						close(started)
 						<-release
 						return &llm.Response{Message: model.Message{Kind: model.MessageKindLLM, Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete}}}, nil
 					}),
-				})
+				}))
 				require.NoError(err)
 
 				errCh := make(chan error, 1)
@@ -924,11 +976,11 @@ func TestSessionState(t *testing.T) {
 					return &agentcontext.CompactResult{Messages: msgs}, nil
 				}}
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider:  fake.NewEchoProvider(),
 					Compactor: compactor,
 					Messages:  []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
-				})
+				}))
 				require.NoError(err)
 
 				errCh := make(chan error, 1)
@@ -959,11 +1011,11 @@ func TestSessionState(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
 						return nil, fmt.Errorf("boom")
 					}),
-				})
+				}))
 				require.NoError(err)
 
 				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}, agent.PromptOptions{})
@@ -1040,7 +1092,7 @@ func TestSessionConcurrency(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			require := require.New(t)
 
-			session, err := agent.NewSession(context.Background(), agent.SessionConfig{
+			session, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 				Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
 					// Simulate a slow LLM call.
 					time.Sleep(200 * time.Millisecond)
@@ -1058,7 +1110,7 @@ func TestSessionConcurrency(t *testing.T) {
 					Kind:    model.MessageKindUser,
 					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "msg"}},
 				}},
-			})
+			}))
 			require.NoError(err)
 
 			test.run(t, session)
@@ -1076,10 +1128,10 @@ func TestSessionMutators(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider: fake.NewEchoProvider(),
 					Messages: []model.Message{{ID: "1", Kind: model.MessageKindUser}},
-				})
+				}))
 				require.NoError(err)
 
 				msgs := s.Messages()
@@ -1096,7 +1148,7 @@ func TestSessionMutators(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, req llm.Request) (*llm.Response, error) {
 						return &llm.Response{
 							Message: model.Message{
@@ -1107,7 +1159,7 @@ func TestSessionMutators(t *testing.T) {
 						}, nil
 					}),
 					SystemPrompt: "default",
-				})
+				}))
 				require.NoError(err)
 
 				r1, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}, agent.PromptOptions{})
@@ -1126,7 +1178,7 @@ func TestSessionMutators(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
 						return &llm.Response{Message: model.Message{
 							Kind: model.MessageKindLLM,
@@ -1139,7 +1191,7 @@ func TestSessionMutators(t *testing.T) {
 						}}, nil
 					}),
 					TurnMaxIterations: 2,
-				})
+				}))
 				require.NoError(err)
 
 				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}, agent.PromptOptions{TurnMaxIterations: 1})
@@ -1154,7 +1206,7 @@ func TestSessionMutators(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
 						return &llm.Response{
 							Message: model.Message{
@@ -1164,7 +1216,7 @@ func TestSessionMutators(t *testing.T) {
 							},
 						}, nil
 					}),
-				})
+				}))
 				require.NoError(err)
 
 				original := s.Session()
@@ -1188,10 +1240,10 @@ func TestSessionMutators(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				s1, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider()})
+				s1, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{Provider: fake.NewEchoProvider()}))
 				require.NoError(err)
 
-				s2, err := agent.NewSession(context.Background(), agent.SessionConfig{Provider: fake.NewEchoProvider()})
+				s2, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{Provider: fake.NewEchoProvider()}))
 				require.NoError(err)
 
 				assert.NotEqual(s1.Session().ID, s2.Session().ID)
@@ -1450,12 +1502,13 @@ func TestSessionPersistence(t *testing.T) {
 			},
 		},
 
-		"Without repos, session should work as before (no persistence).": {
+		"Session should work with required repositories.": {
 			run: func(t *testing.T) {
 				t.Helper()
 				assert := assert.New(t)
 				require := require.New(t)
 
+				repo := memory.NewRepository()
 				ctx := context.Background()
 
 				s, err := agent.NewSession(ctx, agent.SessionConfig{
@@ -1468,7 +1521,8 @@ func TestSessionPersistence(t *testing.T) {
 							},
 						}, nil
 					}),
-					// No repos — purely in-memory.
+					SessionRepository: repo,
+					MessageRepository: repo,
 				})
 				require.NoError(err)
 
@@ -1493,12 +1547,14 @@ func TestSessionPersistence(t *testing.T) {
 				s1, err := agent.NewSession(ctx, agent.SessionConfig{
 					Provider:          fake.NewEchoProvider(),
 					SessionRepository: repo,
+					MessageRepository: repo,
 				})
 				require.NoError(err)
 
 				s2, err := agent.NewSession(ctx, agent.SessionConfig{
 					Provider:          fake.NewEchoProvider(),
 					SessionRepository: repo,
+					MessageRepository: repo,
 				})
 				require.NoError(err)
 
@@ -1540,7 +1596,7 @@ func TestSessionCompact(t *testing.T) {
 					},
 				}
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider:  fake.NewEchoProvider(),
 					Compactor: compactor,
 					Messages: []model.Message{{
@@ -1548,7 +1604,7 @@ func TestSessionCompact(t *testing.T) {
 						Kind:    model.MessageKindUser,
 						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}},
 					}},
-				})
+				}))
 				require.NoError(err)
 
 				result, err := s.Compact(context.Background())
@@ -1567,11 +1623,11 @@ func TestSessionCompact(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider: fake.NewEchoProvider(),
 					Messages: []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
 					// No compactor — NoopCompactor used.
-				})
+				}))
 				require.NoError(err)
 
 				result, err := s.Compact(context.Background())
@@ -1606,7 +1662,7 @@ func TestSessionCompact(t *testing.T) {
 					},
 				}
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider:  fake.NewEchoProvider(),
 					Compactor: compactor,
 					Messages: []model.Message{{
@@ -1614,7 +1670,7 @@ func TestSessionCompact(t *testing.T) {
 						Kind:    model.MessageKindUser,
 						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}},
 					}},
-				})
+				}))
 				require.NoError(err)
 
 				result, err := s.Compact(context.Background())
@@ -1689,7 +1745,7 @@ func TestSessionCompact(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
 						// Simulate slow LLM.
 						time.Sleep(200 * time.Millisecond)
@@ -1702,7 +1758,7 @@ func TestSessionCompact(t *testing.T) {
 						}, nil
 					}),
 					Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}}},
-				})
+				}))
 				require.NoError(err)
 
 				// Start a turn.
@@ -1736,11 +1792,11 @@ func TestSessionCompact(t *testing.T) {
 					},
 				}
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider:  fake.NewEchoProvider(),
 					Compactor: compactor,
 					Messages:  []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
-				})
+				}))
 				require.NoError(err)
 
 				_, err = s.Compact(context.Background())
@@ -1775,13 +1831,13 @@ func TestSessionRuntimeContextValues(t *testing.T) {
 				var gotSessionID string
 				var gotInfo *model.LLMModelInfo
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider: fake.NewProviderWithModelInfo(func(ctx context.Context, _ llm.Request) (*llm.Response, error) {
 						gotSessionID = agent.SessionIDFromCtx(ctx)
 						gotInfo = agent.LLMModelInfoFromCtx(ctx)
 						return &llm.Response{Message: model.Message{Kind: model.MessageKindLLM, Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete}}}, nil
 					}, wantInfo),
-				})
+				}))
 				if err != nil {
 					return "", "", nil, err
 				}
@@ -1806,7 +1862,7 @@ func TestSessionRuntimeContextValues(t *testing.T) {
 					},
 				}
 
-				s, err := agent.NewSession(context.Background(), agent.SessionConfig{
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
 					Provider:  fake.NewProviderWithModelInfo(func(_ context.Context, _ llm.Request) (*llm.Response, error) { return nil, nil }, wantInfo),
 					Compactor: compactor,
 					Messages: []model.Message{{
@@ -1814,7 +1870,7 @@ func TestSessionRuntimeContextValues(t *testing.T) {
 						Kind:    model.MessageKindUser,
 						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}},
 					}},
-				})
+				}))
 				if err != nil {
 					return "", "", nil, err
 				}

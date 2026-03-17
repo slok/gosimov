@@ -162,13 +162,20 @@ func (a *app) handleLoadSession(w http.ResponseWriter, r *http.Request) {
 	// not cut anything, sanitization removes incomplete tool-use tails that would
 	// be rejected by strict providers on the next continue.
 	trimmed := trimLoadedMessages(loaded, a.cfg.maxHistory)
-	if trimmed == nil {
-		trimmed = []model.Message{}
-	}
-
 	if len(trimmed) != loadedMsgs {
 		log.Printf("load-session trimmed history session_id=%s from=%d to=%d", sessionID, loadedMsgs, len(trimmed))
 		loadedMsgs = len(trimmed)
+	}
+
+	if len(loaded) > 0 && len(trimmed) == 0 {
+		log.Printf("load-session rejected reset-like history session_id=%s original=%d", sessionID, len(loaded))
+		http.Error(w, "loaded history was sanitized to empty; create a new session to reset history", http.StatusBadRequest)
+		return
+	}
+
+	customMessages := trimmed
+	if len(customMessages) == 0 {
+		customMessages = nil
 	}
 
 	session, err := agent.LoadSession(r.Context(), agent.LoadSessionConfig{
@@ -179,7 +186,7 @@ func (a *app) handleLoadSession(w http.ResponseWriter, r *http.Request) {
 		Tools:             tools,
 		SessionRepository: a.sessRepo,
 		MessageRepository: a.msgRepo,
-		Messages:          trimmed,
+		Messages:          customMessages,
 		TurnMaxIterations: a.cfg.maxIterations,
 		Logger:            a.sdkLogger,
 	})

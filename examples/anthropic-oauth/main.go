@@ -24,6 +24,7 @@ import (
 	"github.com/slok/gosimov/pkg/agent"
 	"github.com/slok/gosimov/pkg/llm/anthropic"
 	"github.com/slok/gosimov/pkg/model"
+	"github.com/slok/gosimov/pkg/store/memory"
 )
 
 const (
@@ -139,9 +140,13 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("creating provider: %w", err)
 	}
 
+	repo := memory.NewRepository()
+
 	session, err := agent.NewSession(ctx, agent.SessionConfig{
-		Provider:     provider,
-		SystemPrompt: "You are a concise assistant.",
+		Provider:          provider,
+		SystemPrompt:      "You are a concise assistant.",
+		SessionRepository: repo,
+		MessageRepository: repo,
 	})
 	if err != nil {
 		return fmt.Errorf("creating session: %w", err)

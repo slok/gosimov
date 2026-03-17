@@ -47,7 +47,7 @@ Optional flags:
 - `--model` (default depends on `--provider`)
 - `--system-prompt` (optional)
 - `--max-iterations` (default `100`)
-- `--max-history-messages` (default `60`, used when loading existing sessions; the trimmed/sanitized history is passed via `LoadSessionConfig.Messages`)
+- `--max-history-messages` (default `60`, used when loading existing sessions; non-empty trimmed/sanitized history is passed via `LoadSessionConfig.Messages`)
 - `--compaction-keep-recent-tokens` (default `1200`)
 - `--compaction-summary-model` (default same as `--model`)
 - `--store-dir` (default `/tmp/gosimov-chat-store`)

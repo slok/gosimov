@@ -34,11 +34,11 @@ type SessionConfig struct {
 	// DisablePromptCache disables provider-side prompt caching.
 	// By default prompt caching is enabled.
 	DisablePromptCache bool
-	// SessionRepository persists session identity (optional).
-	// If set, the session is stored on creation via [store.SessionRepository.CreateSession].
+	// SessionRepository persists session identity (required).
+	// The session is stored on creation via [store.SessionRepository.CreateSession].
 	SessionRepository store.SessionRepository
-	// MessageRepository persists messages (optional).
-	// If set, each message is persisted individually as it is produced:
+	// MessageRepository persists messages (required).
+	// Each message is persisted individually as it is produced:
 	// user messages before the turn, LLM responses and tool results during the turn.
 	MessageRepository store.MessageRepository
 	// Messages preloads initial history (advanced customization, optional).
@@ -47,7 +47,7 @@ type SessionConfig struct {
 	// Set this when creating a branched session from existing history.
 	//
 	// When set, the session copies these messages, reconstructs usage from their
-	// metadata, and persists them on creation if MessageRepository is configured.
+	// metadata, and persists them on creation.
 	Messages []model.Message
 	// Compactor manages context compaction within the agent loop (optional).
 	// If set, it runs on every LLM call within a turn before the context processor.
@@ -66,6 +66,14 @@ type SessionConfig struct {
 func (c *SessionConfig) defaults() error {
 	if c.Provider == nil {
 		return fmt.Errorf("provider is required: %w", pkgerrors.ErrNotValid)
+	}
+
+	if c.SessionRepository == nil {
+		return fmt.Errorf("session repository is required: %w", pkgerrors.ErrNotValid)
+	}
+
+	if c.MessageRepository == nil {
+		return fmt.Errorf("message repository is required: %w", pkgerrors.ErrNotValid)
 	}
 
 	if c.Compactor == nil {
@@ -100,15 +108,15 @@ type LoadSessionConfig struct {
 	DisablePromptCache bool
 	// SessionRepository is used to load the existing session identity (required).
 	SessionRepository store.SessionRepository
-	// MessageRepository is required and used to preload history when Messages is nil.
+	// MessageRepository is required and used to preload history when Messages is empty.
 	MessageRepository store.MessageRepository
-	// Messages overrides repository preloading when non-nil (advanced customization, optional).
+	// Messages overrides repository preloading when non-empty (advanced customization, optional).
 	//
 	// Most callers should leave this nil and let MessageRepository preload the
 	// persisted conversation.
 	//
-	// When set (including an explicit empty slice), these messages are copied and
-	// used as the in-memory history instead of loading from MessageRepository.
+	// When non-empty, these messages are copied and used as the in-memory history
+	// instead of loading from MessageRepository.
 	Messages []model.Message
 	// Compactor manages context compaction within the agent loop (optional).
 	Compactor agentcontext.Compactor
@@ -212,7 +220,7 @@ type Session struct {
 
 // NewSession creates a new session.
 //
-// If [SessionConfig.SessionRepository] is set, the session is persisted on creation.
+// Session identity is always persisted on creation.
 func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 	if err := cfg.defaults(); err != nil {
 		return nil, fmt.Errorf("invalid session config: %w", err)
@@ -228,14 +236,12 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		CreatedAt: time.Now(),
 	}
 
-	if cfg.SessionRepository != nil {
-		if err := cfg.SessionRepository.CreateSession(ctx, sess); err != nil {
-			return nil, fmt.Errorf("persisting session: %w", err)
-		}
+	if err := cfg.SessionRepository.CreateSession(ctx, sess); err != nil {
+		return nil, fmt.Errorf("persisting session: %w", err)
 	}
 
 	initialMessages := cloneMessages(cfg.Messages)
-	if cfg.MessageRepository != nil && len(initialMessages) > 0 {
+	if len(initialMessages) > 0 {
 		if err := cfg.MessageRepository.StoreMessages(ctx, sess.ID, initialMessages); err != nil {
 			return nil, fmt.Errorf("persisting initial messages: %w", err)
 		}
@@ -266,7 +272,7 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 //
 // The session identity is loaded from SessionRepository.
 //
-// If [LoadSessionConfig.Messages] is non-nil, those messages are copied and used
+// If [LoadSessionConfig.Messages] is non-empty, those messages are copied and used
 // as the in-memory history. Otherwise, history is loaded from MessageRepository.
 func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 	if err := cfg.defaults(); err != nil {
@@ -299,7 +305,7 @@ func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 		logger:             cfg.Logger,
 	}
 
-	if cfg.Messages != nil {
+	if len(cfg.Messages) > 0 {
 		s.messages = cloneMessages(cfg.Messages)
 		s.usage = usageFromMessages(s.messages)
 		return s, nil
