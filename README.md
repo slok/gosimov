@@ -105,6 +105,9 @@ ZEN_API_KEY="$ZEN_API_KEY" go run ./examples/compaction
 
 # Browser chat UI
 go run ./examples/chat --provider zen --api-key "$ZEN_API_KEY"
+
+# Automated PR review (requires gh auth)
+go run ./examples/pr-review --api-key "$OPENCODE_GO_API_KEY" --repo owner/repo --pr 123
 ```
 
 ## Tool Usage Example
@@ -303,3 +306,5 @@ Useful for context-window math and UX telemetry.
 - `examples/compaction/main.go`
 - `examples/chat/main.go`
 - `examples/chat/README.md`
+- `examples/pr-review/main.go`
+- `examples/pr-review/README.md`

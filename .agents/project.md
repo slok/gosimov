@@ -48,6 +48,7 @@ github.com/slok/gosimov/
     chat/         # Browser chat server (HTTP + SSE) using subscriber-backed message persistence
     compaction/   # Multi-turn example with Zen provider + simple compactor + forced Session.Compact
     openai-oauth/ # OAuth auth-code+PKCE example with file-backed credentials and auto refresh
+    pr-review/    # CI-ready PR reviewer using dedicated GitHub tools (no generic shell)
     simple/       # Minimal usage example (fake provider, all 5 tools)
     zen/          # End-to-end example with OpenCode Zen API
     viewer/       # HTTP server for browsing JSONL sessions as HTML conversations
@@ -830,6 +831,7 @@ GOSIMOV_INTEGRATION=true INTEGRATION_OPENCODE_GO_API_KEY=<key> go test -v -count
 - **Check job:** golangci-lint in `golangci/golangci-lint:v2.10.1-alpine` container
 - **Unit test job:** `actions/setup-go` with Go >= 1.25, runs `make test`
 - **Integration test job:** `actions/setup-go` with Go >= 1.25, runs `go test -v -count=1 ./tests/integration/session/` when `OPENCODE_GO_API_KEY` secret is configured (uses `INTEGRATION_OPENCODE_GO_API_KEY` env var)
+- **PR review job:** `.github/workflows/pr-review.yml` triggers on `@gosimov-review` mentions and runs `go run ./examples/pr-review` with trusted associations only (`OWNER`, `MEMBER`, `COLLABORATOR`)
 - Triggered on push and pull request
 
 ## Code Generation
