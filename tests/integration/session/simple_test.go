@@ -35,9 +35,8 @@ func TestSimpleResponse(t *testing.T) {
 	require.NoError(t, err)
 
 	// Prompt with a simple deterministic question.
-	result, err := promptWithRetry(t, ctx, session, []model.ContentPart{
-		{Type: model.ContentPartTypeText, Text: "What is 2+2? Reply with just the number, nothing else."},
-	})
+	result, err := promptWithRetry(t, ctx, session, []model.ContentPart{model.NewContentText(
+		"What is 2+2? Reply with just the number, nothing else.")})
 	require.NoError(t, err)
 
 	// The response should be a complete LLM message.

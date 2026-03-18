@@ -225,7 +225,7 @@ func convertResponse(resp chatResponse) model.Message {
 		_ = json.Unmarshal(choice.Message.Content, &text)
 	}
 	if text != "" {
-		msg.Content = []model.ContentPart{{Type: model.ContentPartTypeText, Text: text}}
+		msg.Content = []model.ContentPart{model.NewContentText(text)}
 	}
 	if len(choice.Message.ToolCalls) > 0 {
 		msg.ToolCallRequests = make([]model.ToolCallRequest, len(choice.Message.ToolCalls))

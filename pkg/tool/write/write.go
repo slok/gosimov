@@ -112,6 +112,6 @@ func (t *Tool) Execute(_ context.Context, args json.RawMessage) (*tool.Result, e
 	text := fmt.Sprintf("%s %s (%d bytes)", action, in.Path, len(data))
 
 	return &tool.Result{
-		Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: text}},
+		Content: []model.ContentPart{model.NewContentText(text)},
 	}, nil
 }

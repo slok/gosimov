@@ -205,7 +205,7 @@ func firstText(msg model.Message) string {
 }
 
 func textParts(text string) []model.ContentPart {
-	return []model.ContentPart{{Type: model.ContentPartTypeText, Text: text}}
+	return []model.ContentPart{model.NewContentText(text)}
 }
 
 func truncate(s string, max int) string {

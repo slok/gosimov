@@ -139,7 +139,7 @@ func run(ctx context.Context) error {
 	fmt.Printf("Session:   %s\n\n", session.Session().ID)
 	fmt.Printf("User: %s\n\n", cfg.prompt)
 
-	result, err := session.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: cfg.prompt}}, agent.PromptOptions{})
+	result, err := session.Prompt(ctx, []model.ContentPart{model.NewContentText(cfg.prompt)}, agent.PromptOptions{})
 	if err != nil {
 		return fmt.Errorf("prompt failed: %w", err)
 	}

@@ -150,8 +150,8 @@ func (t *Tool) Execute(_ context.Context, args json.RawMessage) (*tool.Result, e
 func (t *Tool) imageResult(data []byte, mimeType string, mtime time.Time) *tool.Result {
 	return &tool.Result{
 		Content: []model.ContentPart{
-			{Type: model.ContentPartTypeText, Text: fmt.Sprintf("Read image file (%s, modified %s)", mimeType, mtime.Format(time.RFC3339))},
-			{Type: model.ContentPartTypeImage, Image: &model.ImageData{Data: data, MimeType: mimeType}},
+			model.NewContentText(fmt.Sprintf("Read image file (%s, modified %s)", mimeType, mtime.Format(time.RFC3339))),
+			model.NewContentImage(data, mimeType),
 		},
 	}
 }
@@ -214,6 +214,6 @@ func (t *Tool) textResult(data []byte, in input, mtime time.Time) (*tool.Result,
 	output += "\n\n[" + strings.Join(notices, " ") + "]"
 
 	return &tool.Result{
-		Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: output}},
+		Content: []model.ContentPart{model.NewContentText(output)},
 	}, nil
 }

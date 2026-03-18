@@ -189,6 +189,6 @@ func (t *Tool) Execute(_ context.Context, args json.RawMessage) (*tool.Result, e
 
 func textResult(text string) *tool.Result {
 	return &tool.Result{
-		Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: text}},
+		Content: []model.ContentPart{model.NewContentText(text)},
 	}
 }

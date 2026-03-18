@@ -43,9 +43,8 @@ func TestSessionJSONLExport(t *testing.T) {
 	require.NotEmpty(t, sessionID)
 
 	// Prompt.
-	_, err = promptWithRetry(t, ctx, session, []model.ContentPart{
-		{Type: model.ContentPartTypeText, Text: "Name three primary colors. Be brief."},
-	})
+	_, err = promptWithRetry(t, ctx, session, []model.ContentPart{model.NewContentText(
+		"Name three primary colors. Be brief.")})
 	require.NoError(t, err)
 
 	// Verify the JSONL file exists and has the correct structure.
@@ -109,9 +108,8 @@ func TestSessionLoadFromJSONL(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = promptWithRetry(t, ctx, session, []model.ContentPart{
-		{Type: model.ContentPartTypeText, Text: "Say 'hello' and nothing else."},
-	})
+	_, err = promptWithRetry(t, ctx, session, []model.ContentPart{model.NewContentText(
+		"Say 'hello' and nothing else.")})
 	require.NoError(t, err)
 
 	originalID := session.Session().ID
@@ -170,9 +168,8 @@ func TestTokenUsageAccumulation(t *testing.T) {
 	require.NoError(t, err)
 
 	// Turn 1.
-	turn1, err := promptWithRetry(t, ctx, session, []model.ContentPart{
-		{Type: model.ContentPartTypeText, Text: "What color is the sky?"},
-	})
+	turn1, err := promptWithRetry(t, ctx, session, []model.ContentPart{model.NewContentText(
+		"What color is the sky?")})
 	require.NoError(t, err)
 	turn1Usage := turn1.Usage
 	assert.Greater(t, turn1Usage.TotalTokens, 0)
@@ -182,9 +179,8 @@ func TestTokenUsageAccumulation(t *testing.T) {
 	usageAfterTurn1 := session.Usage()
 
 	// Turn 2.
-	turn2, err := promptWithRetry(t, ctx, session, []model.ContentPart{
-		{Type: model.ContentPartTypeText, Text: "What color is grass?"},
-	})
+	turn2, err := promptWithRetry(t, ctx, session, []model.ContentPart{model.NewContentText(
+		"What color is grass?")})
 	require.NoError(t, err)
 	turn2Usage := turn2.Usage
 	assert.Greater(t, turn2Usage.TotalTokens, 0)

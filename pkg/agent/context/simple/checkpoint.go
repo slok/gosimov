@@ -89,10 +89,10 @@ func createCheckpoint(summary, firstKeptID string, tokensBefore int) model.Messa
 		ID:        id.NewULID(conventions.IDPrefixCompaction),
 		Kind:      model.MessageKindCompaction,
 		CreatedAt: time.Now(),
-		Content: []model.ContentPart{{
-			Type: model.ContentPartTypeText,
-			Text: summary,
-		}},
+		Content: []model.ContentPart{model.NewContentText(
+
+			summary)},
+
 		Compaction: &model.CompactionData{
 			FirstKeptID:  firstKeptID,
 			TokensBefore: tokensBefore,

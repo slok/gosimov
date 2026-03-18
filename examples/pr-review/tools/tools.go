@@ -339,10 +339,9 @@ func (s *State) SummaryCommentAction() string {
 
 func textResult(text string) *tool.Result {
 	return &tool.Result{
-		Content: []model.ContentPart{{
-			Type: model.ContentPartTypeText,
-			Text: text,
-		}},
+		Content: []model.ContentPart{model.NewContentText(
+
+			text)},
 	}
 }
 

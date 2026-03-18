@@ -70,8 +70,8 @@ func TestCompactorCompact(t *testing.T) {
 				return c
 			},
 			msgs: []model.Message{
-				{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
-				{ID: "m2", Kind: model.MessageKindLLM, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+				{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
+				{ID: "m2", Kind: model.MessageKindLLM, Content: []model.ContentPart{model.NewContentText("hi")}},
 			},
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
 				assert := assert.New(t)
@@ -423,7 +423,7 @@ func TestCompactorCompact(t *testing.T) {
 }
 
 func textContent(text string) []model.ContentPart {
-	return []model.ContentPart{{Type: model.ContentPartTypeText, Text: text}}
+	return []model.ContentPart{model.NewContentText(text)}
 }
 
 func firstTextFromMessage(msg model.Message) string {

@@ -210,7 +210,7 @@ func convertCodexResponse(resp codexResponse) model.Message {
 			}
 			text := extractCodexText(out.Content)
 			if text != "" {
-				msg.Content = append(msg.Content, model.ContentPart{Type: model.ContentPartTypeText, Text: text})
+				msg.Content = append(msg.Content, model.NewContentText(text))
 			}
 		case "function_call":
 			callID := strings.TrimSpace(out.CallID)

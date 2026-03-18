@@ -139,7 +139,7 @@ func (t *Tool) Execute(ctx context.Context, args json.RawMessage) (*tool.Result,
 	text := t.formatOutput(result)
 
 	return &tool.Result{
-		Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: text}},
+		Content: []model.ContentPart{model.NewContentText(text)},
 	}, nil
 }
 

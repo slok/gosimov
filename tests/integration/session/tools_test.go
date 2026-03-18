@@ -67,14 +67,13 @@ func TestToolUsageWriteEditRead(t *testing.T) {
 	require.NoError(t, err)
 
 	// Prompt: multi-step file task requiring write, edit, and read tools.
-	result, err := promptWithRetry(t, ctx, session, []model.ContentPart{
-		{Type: model.ContentPartTypeText, Text: `Do the following steps using tools:
+	result, err := promptWithRetry(t, ctx, session, []model.ContentPart{model.NewContentText(
+		`Do the following steps using tools:
 1. Write a file called "greeting.txt" with exactly this content (two lines):
 hello world
 goodbye world
 2. Edit the file to replace "world" with "gosimov" on the FIRST line only (use old_text="hello world" and new_text="hello gosimov").
-3. Read the file and tell me its exact contents.`},
-	})
+3. Read the file and tell me its exact contents.`)})
 	require.NoError(t, err)
 
 	// Verify the file was created with the expected final content.
@@ -134,9 +133,8 @@ func TestToolUsageListDirectory(t *testing.T) {
 	require.NoError(t, err)
 
 	// Prompt: list directory and report contents.
-	result, err := promptWithRetry(t, ctx, session, []model.ContentPart{
-		{Type: model.ContentPartTypeText, Text: "List the files in the current directory using the ls tool and tell me what files exist."},
-	})
+	result, err := promptWithRetry(t, ctx, session, []model.ContentPart{model.NewContentText(
+		"List the files in the current directory using the ls tool and tell me what files exist.")})
 	require.NoError(t, err)
 
 	// The final response should mention the files.
