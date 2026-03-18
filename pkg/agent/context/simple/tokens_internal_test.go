@@ -14,11 +14,11 @@ func TestEstimateMessageTokens(t *testing.T) {
 		exp int
 	}{
 		"Text token estimation should use chars divided by four.": {
-			msg: model.Message{Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "12345678"}}},
+			msg: model.Message{Content: []model.ContentPart{model.NewContentText("12345678")}},
 			exp: 2,
 		},
 		"Very short text should have minimum of one token.": {
-			msg: model.Message{Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "a"}}},
+			msg: model.Message{Content: []model.ContentPart{model.NewContentText("a")}},
 			exp: 1,
 		},
 		"Tool call arguments should be included in token estimate.": {
@@ -26,7 +26,7 @@ func TestEstimateMessageTokens(t *testing.T) {
 			exp: 5,
 		},
 		"Non text content should not increase token estimate.": {
-			msg: model.Message{Content: []model.ContentPart{{Type: model.ContentPartTypeImage, Image: &model.ImageData{Data: []byte("abcd"), MimeType: "image/png"}}}},
+			msg: model.Message{Content: []model.ContentPart{model.NewContentImage([]byte("abcd"), "image/png")}},
 			exp: 0,
 		},
 		"Empty message should have zero tokens.": {
@@ -53,8 +53,8 @@ func TestEstimateMessagesTokens(t *testing.T) {
 		},
 		"Multiple messages should be summed.": {
 			msgs: []model.Message{
-				{Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "12345678"}}}, // 2
-				{Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "1234"}}},     // 1
+				{Content: []model.ContentPart{model.NewContentText("12345678")}},
+				{Content: []model.ContentPart{model.NewContentText("1234")}},
 			},
 			exp: 3,
 		},
@@ -80,34 +80,34 @@ func TestFindCutIndex(t *testing.T) {
 		},
 		"Target bigger than total should return -1.": {
 			msgs: []model.Message{
-				{Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "1234"}}},
+				{Content: []model.ContentPart{model.NewContentText("1234")}},
 			},
 			keepRecentTokens: 20,
 			exp:              -1,
 		},
 		"Target matching full window should return zero.": {
 			msgs: []model.Message{
-				{Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "1234"}}},
-				{Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "5678"}}},
+				{Content: []model.ContentPart{model.NewContentText("1234")}},
+				{Content: []model.ContentPart{model.NewContentText("5678")}},
 			},
 			keepRecentTokens: 2,
 			exp:              0,
 		},
 		"Target reached in middle should return middle index.": {
 			msgs: []model.Message{
-				{Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "12345678"}}},
-				{Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "12345678"}}},
-				{Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "1234"}}},
+				{Content: []model.ContentPart{model.NewContentText("12345678")}},
+				{Content: []model.ContentPart{model.NewContentText("12345678")}},
+				{Content: []model.ContentPart{model.NewContentText("1234")}},
 			},
 			keepRecentTokens: 2,
 			exp:              1,
 		},
 		"Cut should move back when landing on tool result.": {
 			msgs: []model.Message{
-				{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "12345678"}}},
-				{Kind: model.MessageKindLLM, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "x"}}},
-				{Kind: model.MessageKindToolResult, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "x"}}},
-				{Kind: model.MessageKindLLM, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "x"}}},
+				{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("12345678")}},
+				{Kind: model.MessageKindLLM, Content: []model.ContentPart{model.NewContentText("x")}},
+				{Kind: model.MessageKindToolResult, Content: []model.ContentPart{model.NewContentText("x")}},
+				{Kind: model.MessageKindLLM, Content: []model.ContentPart{model.NewContentText("x")}},
 			},
 			keepRecentTokens: 2,
 			exp:              1,

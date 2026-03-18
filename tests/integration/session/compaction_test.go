@@ -233,7 +233,7 @@ func TestCompactionNoopWhenNotForced(t *testing.T) {
 
 // textParts is a helper to create simple text content parts.
 func textParts(text string) []model.ContentPart {
-	return []model.ContentPart{{Type: model.ContentPartTypeText, Text: text}}
+	return []model.ContentPart{model.NewContentText(text)}
 }
 
 // containsAny checks if s contains any of the substrings (case-sensitive).

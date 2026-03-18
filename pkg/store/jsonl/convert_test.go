@@ -88,7 +88,7 @@ func TestMessageRoundTrip(t *testing.T) {
 			msg: model.Message{
 				ID:        "m1",
 				Kind:      model.MessageKindUser,
-				Content:   []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello world"}},
+				Content:   []model.ContentPart{model.NewContentText("hello world")},
 				CreatedAt: time.Date(2026, 2, 20, 16, 0, 1, 0, time.UTC),
 			},
 		},
@@ -97,7 +97,7 @@ func TestMessageRoundTrip(t *testing.T) {
 			msg: model.Message{
 				ID:      "m2",
 				Kind:    model.MessageKindLLM,
-				Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "I can help"}},
+				Content: []model.ContentPart{model.NewContentText("I can help")},
 				Metadata: &model.MessageMetadata{
 					StopReason: model.StopReasonComplete,
 					Model:      "kimi-k2.5-free",
@@ -139,7 +139,7 @@ func TestMessageRoundTrip(t *testing.T) {
 			msg: model.Message{
 				ID:         "m4",
 				Kind:       model.MessageKindToolResult,
-				Content:    []model.ContentPart{{Type: model.ContentPartTypeText, Text: "file contents"}},
+				Content:    []model.ContentPart{model.NewContentText("file contents")},
 				ToolCallID: "tc1",
 				CreatedAt:  time.Date(2026, 2, 20, 16, 0, 4, 0, time.UTC),
 			},
@@ -149,7 +149,7 @@ func TestMessageRoundTrip(t *testing.T) {
 			msg: model.Message{
 				ID:         "m5",
 				Kind:       model.MessageKindToolResult,
-				Content:    []model.ContentPart{{Type: model.ContentPartTypeText, Text: "file not found"}},
+				Content:    []model.ContentPart{model.NewContentText("file not found")},
 				ToolCallID: "tc1",
 				IsError:    true,
 				CreatedAt:  time.Date(2026, 2, 20, 16, 0, 5, 0, time.UTC),
@@ -161,11 +161,8 @@ func TestMessageRoundTrip(t *testing.T) {
 				ID:   "m6",
 				Kind: model.MessageKindUser,
 				Content: []model.ContentPart{
-					{Type: model.ContentPartTypeText, Text: "look at this"},
-					{Type: model.ContentPartTypeImage, Image: &model.ImageData{
-						Data:     []byte{0x89, 0x50, 0x4E, 0x47}, // PNG header bytes.
-						MimeType: "image/png",
-					}},
+					model.NewContentText("look at this"),
+					model.NewContentImage([]byte{0x89, 0x50, 0x4E, 0x47}, "image/png"), // PNG header bytes.
 				},
 				CreatedAt: time.Date(2026, 2, 20, 16, 0, 6, 0, time.UTC),
 			},
@@ -175,7 +172,7 @@ func TestMessageRoundTrip(t *testing.T) {
 			msg: model.Message{
 				ID:      "m7",
 				Kind:    model.MessageKindLLM,
-				Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "done"}},
+				Content: []model.ContentPart{model.NewContentText("done")},
 				Metadata: &model.MessageMetadata{
 					StopReason: model.StopReasonComplete,
 					Model:      "gpt-4o",
@@ -205,7 +202,7 @@ func TestMessageRoundTrip(t *testing.T) {
 			msg: model.Message{
 				ID:      "m9",
 				Kind:    model.MessageKindCompaction,
-				Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "Summary of the conversation so far"}},
+				Content: []model.ContentPart{model.NewContentText("Summary of the conversation so far")},
 				Compaction: &model.CompactionData{
 					FirstKeptID:  "m5",
 					TokensBefore: 4200,
@@ -218,7 +215,7 @@ func TestMessageRoundTrip(t *testing.T) {
 			msg: model.Message{
 				ID:      "m10",
 				Kind:    model.MessageKindCompaction,
-				Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "Minimal compaction"}},
+				Content: []model.ContentPart{model.NewContentText("Minimal compaction")},
 				Compaction: &model.CompactionData{
 					FirstKeptID: "m1",
 				},
@@ -305,7 +302,7 @@ func TestMessageLineJSONRoundTrip(t *testing.T) {
 			msg: model.Message{
 				ID:      "m1",
 				Kind:    model.MessageKindLLM,
-				Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}},
+				Content: []model.ContentPart{model.NewContentText("hello")},
 				ToolCallRequests: []model.ToolCallRequest{
 					{ID: "tc1", ToolID: "read", Arguments: json.RawMessage(`{"path":"foo"}`)},
 				},
@@ -331,7 +328,7 @@ func TestMessageLineJSONRoundTrip(t *testing.T) {
 			msg: model.Message{
 				ID:      "c1",
 				Kind:    model.MessageKindCompaction,
-				Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "Summary of conversation"}},
+				Content: []model.ContentPart{model.NewContentText("Summary of conversation")},
 				Compaction: &model.CompactionData{
 					FirstKeptID:  "m5",
 					TokensBefore: 3500,

@@ -80,7 +80,7 @@ func TestAnthropicProviderCall(t *testing.T) {
 					"cache_creation_input_tokens": 3,
 				},
 			}),
-			req: llm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}}}},
+			req: llm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}}}},
 			assertResp: func(t *testing.T, resp *llm.Response) {
 				t.Helper()
 				assert := assert.New(t)
@@ -125,7 +125,7 @@ func TestAnthropicProviderCall(t *testing.T) {
 					"input": map[string]any{"path": "main.go"},
 				}},
 			}),
-			req: llm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "read main.go"}}}}},
+			req: llm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("read main.go")}}}},
 			assertResp: func(t *testing.T, resp *llm.Response) {
 				t.Helper()
 				assert := assert.New(t)
@@ -151,7 +151,7 @@ func TestAnthropicProviderCall(t *testing.T) {
 				SystemPrompt: "be concise",
 				Messages: []model.Message{{
 					Kind:    model.MessageKindUser,
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}},
+					Content: []model.ContentPart{model.NewContentText("hi")},
 				}},
 				Config: llm.RequestConfig{EnablePromptCache: true},
 			},
@@ -202,7 +202,7 @@ func TestAnthropicProviderCall(t *testing.T) {
 					"message": "rate limit",
 				},
 			}),
-			req:      llm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}}}},
+			req:      llm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}}}},
 			expErr:   true,
 			expErrIs: pkgerrors.ErrLLMError,
 		},
@@ -341,7 +341,7 @@ func TestClaudeProviderCall(t *testing.T) {
 					SystemPrompt: "Keep it short",
 					Messages: []model.Message{{
 						Kind:    model.MessageKindUser,
-						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "read main.go"}},
+						Content: []model.ContentPart{model.NewContentText("read main.go")},
 					}},
 				})
 				require.NoError(err)

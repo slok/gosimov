@@ -316,7 +316,7 @@ func newToolResultMessage(toolCallID string, content []model.ContentPart, isErro
 
 // errorContent creates content parts for an error message.
 func errorContent(msg string) []model.ContentPart {
-	return []model.ContentPart{{Type: model.ContentPartTypeText, Text: msg}}
+	return []model.ContentPart{model.NewContentText(msg)}
 }
 
 // notifyMessages calls the onMessages callback if it is set.

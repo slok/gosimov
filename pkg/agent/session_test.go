@@ -66,7 +66,7 @@ func TestNewSession(t *testing.T) {
 			config: agent.SessionConfig{
 				Provider: fake.NewEchoProvider(),
 				Messages: []model.Message{
-					{ID: "u1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+					{ID: "u1", Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 					{
 						ID:   "a1",
 						Kind: model.MessageKindLLM,
@@ -264,11 +264,11 @@ func TestLoadSession(t *testing.T) {
 				require.NoError(repo.CreateSession(context.Background(), sess))
 
 				msgs := []model.Message{
-					{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+					{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 					{
 						ID:      "m2",
 						Kind:    model.MessageKindLLM,
-						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}},
+						Content: []model.ContentPart{model.NewContentText("hi")},
 						Metadata: &model.MessageMetadata{Usage: &model.Usage{
 							InputTokens:  7,
 							OutputTokens: 3,
@@ -569,7 +569,7 @@ func TestSessionPrompt(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello back"}},
+								Content: []model.ContentPart{model.NewContentText("hello back")},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonComplete,
 									Usage:      &model.Usage{InputTokens: 10, OutputTokens: 5},
@@ -580,7 +580,7 @@ func TestSessionPrompt(t *testing.T) {
 				}
 			},
 			prompts: [][]model.ContentPart{
-				{{Type: model.ContentPartTypeText, Text: "hello"}},
+				{model.NewContentText("hello")},
 			},
 			expResp: func(t *testing.T, results []*agent.TurnResult, session *agent.Session) {
 				t.Helper()
@@ -615,7 +615,7 @@ func TestSessionPrompt(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: fmt.Sprintf("response %d (saw %d msgs)", callCount, len(req.Messages))}},
+								Content: []model.ContentPart{model.NewContentText(fmt.Sprintf("response %d (saw %d msgs)", callCount, len(req.Messages)))},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonComplete,
 									Usage:      &model.Usage{InputTokens: 10 * callCount, OutputTokens: 5 * callCount},
@@ -626,9 +626,9 @@ func TestSessionPrompt(t *testing.T) {
 				}
 			},
 			prompts: [][]model.ContentPart{
-				{{Type: model.ContentPartTypeText, Text: "first"}},
-				{{Type: model.ContentPartTypeText, Text: "second"}},
-				{{Type: model.ContentPartTypeText, Text: "third"}},
+				{model.NewContentText("first")},
+				{model.NewContentText("second")},
+				{model.NewContentText("third")},
 			},
 			expResp: func(t *testing.T, results []*agent.TurnResult, session *agent.Session) {
 				t.Helper()
@@ -675,7 +675,7 @@ func TestSessionPrompt(t *testing.T) {
 					return &llm.Response{
 						Message: model.Message{
 							Kind:     model.MessageKindLLM,
-							Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "done"}},
+							Content:  []model.ContentPart{model.NewContentText("done")},
 							Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
 						},
 					}, nil
@@ -683,7 +683,7 @@ func TestSessionPrompt(t *testing.T) {
 
 				tools[0].On("ID").Return("calc")
 				tools[0].On("Execute", mock.Anything, mock.Anything).Return(&tool.Result{
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "42"}},
+					Content: []model.ContentPart{model.NewContentText("42")},
 				}, nil)
 
 				return agent.SessionConfig{
@@ -692,7 +692,7 @@ func TestSessionPrompt(t *testing.T) {
 				}
 			},
 			prompts: [][]model.ContentPart{
-				{{Type: model.ContentPartTypeText, Text: "calculate"}},
+				{model.NewContentText("calculate")},
 			},
 			expResp: func(t *testing.T, results []*agent.TurnResult, session *agent.Session) {
 				t.Helper()
@@ -724,7 +724,7 @@ func TestSessionPrompt(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:     model.MessageKindLLM,
-								Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "recovered"}},
+								Content:  []model.ContentPart{model.NewContentText("recovered")},
 								Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
 							},
 						}, nil
@@ -732,7 +732,7 @@ func TestSessionPrompt(t *testing.T) {
 				}
 			},
 			prompts: [][]model.ContentPart{
-				{{Type: model.ContentPartTypeText, Text: "hello"}},
+				{model.NewContentText("hello")},
 			},
 			expErr: true,
 			expResp: func(t *testing.T, _ []*agent.TurnResult, session *agent.Session) {
@@ -756,7 +756,7 @@ func TestSessionPrompt(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:     model.MessageKindLLM,
-								Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: text}},
+								Content:  []model.ContentPart{model.NewContentText(text)},
 								Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
 							},
 						}, nil
@@ -765,8 +765,8 @@ func TestSessionPrompt(t *testing.T) {
 			},
 			prompts: [][]model.ContentPart{
 				{
-					{Type: model.ContentPartTypeText, Text: "what is this?"},
-					{Type: model.ContentPartTypeImage, Image: &model.ImageData{Data: []byte("fake-png"), MimeType: "image/png"}},
+					model.NewContentText("what is this?"),
+					model.NewContentImage([]byte("fake-png"), "image/png"),
 				},
 			},
 			expResp: func(t *testing.T, results []*agent.TurnResult, _ *agent.Session) {
@@ -846,7 +846,7 @@ func TestSessionContinue(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "continued"}},
+								Content: []model.ContentPart{model.NewContentText("continued")},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonComplete,
 									Usage:      &model.Usage{InputTokens: 5},
@@ -857,7 +857,7 @@ func TestSessionContinue(t *testing.T) {
 					Messages: []model.Message{{
 						ID:      "manual-1",
 						Kind:    model.MessageKindUser,
-						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "injected"}},
+						Content: []model.ContentPart{model.NewContentText("injected")},
 					}},
 				}))
 				require.NoError(err)
@@ -936,7 +936,7 @@ func TestSessionState(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ok"}},
+								Content: []model.ContentPart{model.NewContentText("ok")},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonComplete,
 									Usage:      &model.Usage{InputTokens: 11, OutputTokens: 7},
@@ -947,10 +947,10 @@ func TestSessionState(t *testing.T) {
 				}))
 				require.NoError(err)
 
-				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "first"}}, agent.PromptOptions{})
+				_, err = s.Prompt(context.Background(), []model.ContentPart{model.NewContentText("first")}, agent.PromptOptions{})
 				require.NoError(err)
 
-				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "second"}}, agent.PromptOptions{})
+				_, err = s.Prompt(context.Background(), []model.ContentPart{model.NewContentText("second")}, agent.PromptOptions{})
 				require.NoError(err)
 
 				state := s.State()
@@ -982,7 +982,7 @@ func TestSessionState(t *testing.T) {
 
 				errCh := make(chan error, 1)
 				go func() {
-					_, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "slow"}}, agent.PromptOptions{})
+					_, err := s.Prompt(context.Background(), []model.ContentPart{model.NewContentText("slow")}, agent.PromptOptions{})
 					errCh <- err
 				}()
 
@@ -1058,7 +1058,7 @@ func TestSessionState(t *testing.T) {
 				}))
 				require.NoError(err)
 
-				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}, agent.PromptOptions{})
+				_, err = s.Prompt(context.Background(), []model.ContentPart{model.NewContentText("hi")}, agent.PromptOptions{})
 				require.Error(err)
 
 				state := s.State()
@@ -1089,14 +1089,14 @@ func TestSessionConcurrency(t *testing.T) {
 				wg.Add(1)
 				go func() {
 					defer wg.Done()
-					_, _ = session.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "slow"}}, agent.PromptOptions{})
+					_, _ = session.Prompt(context.Background(), []model.ContentPart{model.NewContentText("slow")}, agent.PromptOptions{})
 				}()
 
 				// Give the first prompt time to start.
 				time.Sleep(50 * time.Millisecond)
 
 				// Second prompt should get ErrSessionBusy.
-				_, err := session.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "fast"}}, agent.PromptOptions{})
+				_, err := session.Prompt(context.Background(), []model.ContentPart{model.NewContentText("fast")}, agent.PromptOptions{})
 				assert.ErrorIs(err, pkgerrors.ErrSessionBusy)
 
 				wg.Wait()
@@ -1139,7 +1139,7 @@ func TestSessionConcurrency(t *testing.T) {
 					return &llm.Response{
 						Message: model.Message{
 							Kind:    model.MessageKindLLM,
-							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "done"}},
+							Content: []model.ContentPart{model.NewContentText("done")},
 							Metadata: &model.MessageMetadata{
 								StopReason: model.StopReasonComplete,
 							},
@@ -1148,7 +1148,7 @@ func TestSessionConcurrency(t *testing.T) {
 				}),
 				Messages: []model.Message{{
 					Kind:    model.MessageKindUser,
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "msg"}},
+					Content: []model.ContentPart{model.NewContentText("msg")},
 				}},
 			}))
 			require.NoError(err)
@@ -1193,7 +1193,7 @@ func TestSessionMutators(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:     model.MessageKindLLM,
-								Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: req.SystemPrompt}},
+								Content:  []model.ContentPart{model.NewContentText(req.SystemPrompt)},
 								Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
 							},
 						}, nil
@@ -1202,11 +1202,11 @@ func TestSessionMutators(t *testing.T) {
 				}))
 				require.NoError(err)
 
-				r1, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}, agent.PromptOptions{})
+				r1, err := s.Prompt(context.Background(), []model.ContentPart{model.NewContentText("hi")}, agent.PromptOptions{})
 				require.NoError(err)
 				assert.Equal("default", r1.Message.Content[0].Text)
 
-				r2, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}, agent.PromptOptions{SystemPrompt: "override"})
+				r2, err := s.Prompt(context.Background(), []model.ContentPart{model.NewContentText("hi")}, agent.PromptOptions{SystemPrompt: "override"})
 				require.NoError(err)
 				assert.Equal("override", r2.Message.Content[0].Text)
 			},
@@ -1234,7 +1234,7 @@ func TestSessionMutators(t *testing.T) {
 				}))
 				require.NoError(err)
 
-				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}, agent.PromptOptions{TurnMaxIterations: 1})
+				_, err = s.Prompt(context.Background(), []model.ContentPart{model.NewContentText("hello")}, agent.PromptOptions{TurnMaxIterations: 1})
 				require.Error(err)
 				assert.ErrorIs(err, pkgerrors.ErrMaxIterations)
 			},
@@ -1251,7 +1251,7 @@ func TestSessionMutators(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:     model.MessageKindLLM,
-								Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ok"}},
+								Content:  []model.ContentPart{model.NewContentText("ok")},
 								Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
 							},
 						}, nil
@@ -1263,7 +1263,7 @@ func TestSessionMutators(t *testing.T) {
 
 				// Run several turns.
 				for range 3 {
-					_, err := s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}, agent.PromptOptions{})
+					_, err := s.Prompt(context.Background(), []model.ContentPart{model.NewContentText("hi")}, agent.PromptOptions{})
 					require.NoError(err)
 				}
 
@@ -1348,7 +1348,7 @@ func TestSessionPersistence(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:     model.MessageKindLLM,
-								Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi back"}},
+								Content:  []model.ContentPart{model.NewContentText("hi back")},
 								Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
 							},
 						}, nil
@@ -1360,7 +1360,7 @@ func TestSessionPersistence(t *testing.T) {
 
 				sessionID = s.Session().ID
 
-				_, err = s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}, agent.PromptOptions{})
+				_, err = s.Prompt(ctx, []model.ContentPart{model.NewContentText("hello")}, agent.PromptOptions{})
 				require.NoError(err)
 
 				// User message was persisted before the LLM call.
@@ -1392,7 +1392,7 @@ func TestSessionPersistence(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:     model.MessageKindLLM,
-								Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "continued"}},
+								Content:  []model.ContentPart{model.NewContentText("continued")},
 								Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
 							},
 						}, nil
@@ -1402,7 +1402,7 @@ func TestSessionPersistence(t *testing.T) {
 					Messages: []model.Message{{
 						ID:      "manual-1",
 						Kind:    model.MessageKindUser,
-						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "injected"}},
+						Content: []model.ContentPart{model.NewContentText("injected")},
 					}},
 				})
 				require.NoError(err)
@@ -1433,7 +1433,7 @@ func TestSessionPersistence(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:     model.MessageKindLLM,
-								Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ok"}},
+								Content:  []model.ContentPart{model.NewContentText("ok")},
 								Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
 							},
 						}, nil
@@ -1444,7 +1444,7 @@ func TestSessionPersistence(t *testing.T) {
 				require.NoError(err)
 
 				for range 3 {
-					_, err := s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}, agent.PromptOptions{})
+					_, err := s.Prompt(ctx, []model.ContentPart{model.NewContentText("hi")}, agent.PromptOptions{})
 					require.NoError(err)
 				}
 
@@ -1496,7 +1496,7 @@ func TestSessionPersistence(t *testing.T) {
 					return &llm.Response{
 						Message: model.Message{
 							Kind:     model.MessageKindLLM,
-							Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "done"}},
+							Content:  []model.ContentPart{model.NewContentText("done")},
 							Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
 						},
 					}, nil
@@ -1505,7 +1505,7 @@ func TestSessionPersistence(t *testing.T) {
 				mockTool := toolmock.NewMockTool(t)
 				mockTool.On("ID").Return("calc")
 				mockTool.On("Execute", mock.Anything, mock.Anything).Return(&tool.Result{
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "42"}},
+					Content: []model.ContentPart{model.NewContentText("42")},
 				}, nil)
 
 				s, err := agent.NewSession(ctx, agent.SessionConfig{
@@ -1518,7 +1518,7 @@ func TestSessionPersistence(t *testing.T) {
 
 				sessionID = s.Session().ID
 
-				_, err = s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "calculate"}}, agent.PromptOptions{})
+				_, err = s.Prompt(ctx, []model.ContentPart{model.NewContentText("calculate")}, agent.PromptOptions{})
 				require.NoError(err)
 
 				// At first LLM call: only user message persisted.
@@ -1556,7 +1556,7 @@ func TestSessionPersistence(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:     model.MessageKindLLM,
-								Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ok"}},
+								Content:  []model.ContentPart{model.NewContentText("ok")},
 								Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
 							},
 						}, nil
@@ -1566,7 +1566,7 @@ func TestSessionPersistence(t *testing.T) {
 				})
 				require.NoError(err)
 
-				_, err = s.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}, agent.PromptOptions{})
+				_, err = s.Prompt(ctx, []model.ContentPart{model.NewContentText("hi")}, agent.PromptOptions{})
 				require.NoError(err)
 
 				// Session should still work.
@@ -1642,7 +1642,7 @@ func TestSessionCompact(t *testing.T) {
 					Messages: []model.Message{{
 						ID:      "m1",
 						Kind:    model.MessageKindUser,
-						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}},
+						Content: []model.ContentPart{model.NewContentText("hello")},
 					}},
 				}))
 				require.NoError(err)
@@ -1688,7 +1688,7 @@ func TestSessionCompact(t *testing.T) {
 				compactionMsg := model.Message{
 					ID:         "compact-1",
 					Kind:       model.MessageKindCompaction,
-					Content:    []model.ContentPart{{Type: model.ContentPartTypeText, Text: "summary"}},
+					Content:    []model.ContentPart{model.NewContentText("summary")},
 					Compaction: &model.CompactionData{FirstKeptID: "m1"},
 				}
 
@@ -1708,7 +1708,7 @@ func TestSessionCompact(t *testing.T) {
 					Messages: []model.Message{{
 						ID:      "m1",
 						Kind:    model.MessageKindUser,
-						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}},
+						Content: []model.ContentPart{model.NewContentText("hello")},
 					}},
 				}))
 				require.NoError(err)
@@ -1743,7 +1743,7 @@ func TestSessionCompact(t *testing.T) {
 				compactionMsg := model.Message{
 					ID:         "compact-1",
 					Kind:       model.MessageKindCompaction,
-					Content:    []model.ContentPart{{Type: model.ContentPartTypeText, Text: "summary"}},
+					Content:    []model.ContentPart{model.NewContentText("summary")},
 					Compaction: &model.CompactionData{FirstKeptID: "m1"},
 				}
 
@@ -1792,12 +1792,12 @@ func TestSessionCompact(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:     model.MessageKindLLM,
-								Content:  []model.ContentPart{{Type: model.ContentPartTypeText, Text: "done"}},
+								Content:  []model.ContentPart{model.NewContentText("done")},
 								Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
 							},
 						}, nil
 					}),
-					Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}}},
+					Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}}},
 				}))
 				require.NoError(err)
 
@@ -1882,7 +1882,7 @@ func TestSessionRuntimeContextValues(t *testing.T) {
 					return "", "", nil, err
 				}
 
-				_, err = s.Prompt(context.Background(), []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}, agent.PromptOptions{})
+				_, err = s.Prompt(context.Background(), []model.ContentPart{model.NewContentText("hello")}, agent.PromptOptions{})
 				return s.Session().ID, gotSessionID, gotInfo, err
 			},
 		},
@@ -1908,7 +1908,7 @@ func TestSessionRuntimeContextValues(t *testing.T) {
 					Messages: []model.Message{{
 						ID:      "m1",
 						Kind:    model.MessageKindUser,
-						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}},
+						Content: []model.ContentPart{model.NewContentText("hello")},
 					}},
 				}))
 				if err != nil {

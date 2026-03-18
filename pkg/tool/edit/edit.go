@@ -162,7 +162,7 @@ func (t *Tool) Execute(_ context.Context, args json.RawMessage) (*tool.Result, e
 	text := fmt.Sprintf("Edited %s successfully.\n\n%s", in.Path, diff)
 
 	return &tool.Result{
-		Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: text}},
+		Content: []model.ContentPart{model.NewContentText(text)},
 	}, nil
 }
 

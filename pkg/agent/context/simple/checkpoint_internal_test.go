@@ -132,8 +132,8 @@ func TestLatestSummaryText(t *testing.T) {
 		},
 		"Latest checkpoint should return first text.": {
 			msgs: []model.Message{
-				{ID: "c1", Kind: model.MessageKindCompaction, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "old"}}, Compaction: &model.CompactionData{FirstKeptID: "m1"}},
-				{ID: "c2", Kind: model.MessageKindCompaction, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "new"}}, Compaction: &model.CompactionData{FirstKeptID: "m2"}},
+				{ID: "c1", Kind: model.MessageKindCompaction, Content: []model.ContentPart{model.NewContentText("old")}, Compaction: &model.CompactionData{FirstKeptID: "m1"}},
+				{ID: "c2", Kind: model.MessageKindCompaction, Content: []model.ContentPart{model.NewContentText("new")}, Compaction: &model.CompactionData{FirstKeptID: "m2"}},
 			},
 			exp: "new",
 		},

@@ -300,8 +300,8 @@ func TestStoreMessages(t *testing.T) {
 			},
 			sessionID: "s1",
 			msgs: []model.Message{
-				{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
-				{ID: "m2", Kind: model.MessageKindLLM, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+				{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
+				{ID: "m2", Kind: model.MessageKindLLM, Content: []model.ContentPart{model.NewContentText("hi")}},
 			},
 		},
 
@@ -542,13 +542,13 @@ func TestFileContents(t *testing.T) {
 					{
 						ID:        "m1",
 						Kind:      model.MessageKindUser,
-						Content:   []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}},
+						Content:   []model.ContentPart{model.NewContentText("hello")},
 						CreatedAt: time.Date(2026, 2, 20, 16, 0, 1, 0, time.UTC),
 					},
 					{
 						ID:      "m2",
 						Kind:    model.MessageKindLLM,
-						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi there"}},
+						Content: []model.ContentPart{model.NewContentText("hi there")},
 						Metadata: &model.MessageMetadata{
 							StopReason: model.StopReasonComplete,
 							Model:      "test-model",
@@ -604,13 +604,13 @@ func TestFileContents(t *testing.T) {
 					{
 						ID:        "m1",
 						Kind:      model.MessageKindUser,
-						Content:   []model.ContentPart{{Type: model.ContentPartTypeText, Text: "old message"}},
+						Content:   []model.ContentPart{model.NewContentText("old message")},
 						CreatedAt: time.Date(2026, 2, 20, 16, 0, 0, 0, time.UTC),
 					},
 					{
 						ID:      "m2",
 						Kind:    model.MessageKindLLM,
-						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "old response"}},
+						Content: []model.ContentPart{model.NewContentText("old response")},
 						Metadata: &model.MessageMetadata{
 							StopReason: model.StopReasonComplete,
 						},
@@ -619,7 +619,7 @@ func TestFileContents(t *testing.T) {
 					{
 						ID:      "c1",
 						Kind:    model.MessageKindCompaction,
-						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "Summary of earlier conversation"}},
+						Content: []model.ContentPart{model.NewContentText("Summary of earlier conversation")},
 						Compaction: &model.CompactionData{
 							FirstKeptID:  "m2",
 							TokensBefore: 5000,
@@ -629,7 +629,7 @@ func TestFileContents(t *testing.T) {
 					{
 						ID:        "m3",
 						Kind:      model.MessageKindUser,
-						Content:   []model.ContentPart{{Type: model.ContentPartTypeText, Text: "new message"}},
+						Content:   []model.ContentPart{model.NewContentText("new message")},
 						CreatedAt: time.Date(2026, 2, 20, 16, 0, 3, 0, time.UTC),
 					},
 				}))
@@ -678,9 +678,8 @@ func TestFileContents(t *testing.T) {
 					{
 						ID:   "m1",
 						Kind: model.MessageKindUser,
-						Content: []model.ContentPart{
-							{Type: model.ContentPartTypeImage, Image: &model.ImageData{Data: imgData, MimeType: "image/png"}},
-						},
+						Content: []model.ContentPart{model.NewContentImage(
+							imgData, "image/png")},
 					},
 				}))
 

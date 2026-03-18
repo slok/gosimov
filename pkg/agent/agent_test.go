@@ -84,7 +84,7 @@ func TestRunTurn(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello back"}},
+								Content: []model.ContentPart{model.NewContentText("hello back")},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonComplete,
 									Usage:      &model.Usage{InputTokens: 10, OutputTokens: 5},
@@ -93,7 +93,7 @@ func TestRunTurn(t *testing.T) {
 						}, nil
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 					},
 				}
 			},
@@ -118,7 +118,7 @@ func TestRunTurn(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: req.SystemPrompt}},
+								Content: []model.ContentPart{model.NewContentText(req.SystemPrompt)},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonComplete,
 								},
@@ -127,7 +127,7 @@ func TestRunTurn(t *testing.T) {
 					}),
 					systemPrompt: "be helpful",
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 				}
 			},
@@ -146,7 +146,7 @@ func TestRunTurn(t *testing.T) {
 						return nil, fmt.Errorf("connection refused")
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 				}
 			},
@@ -167,7 +167,7 @@ func TestRunTurn(t *testing.T) {
 						}, nil
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 				}
 			},
@@ -189,7 +189,7 @@ func TestRunTurn(t *testing.T) {
 						}, nil
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 				}
 			},
@@ -204,7 +204,7 @@ func TestRunTurn(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "truncated"}},
+								Content: []model.ContentPart{model.NewContentText("truncated")},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonMaxTokens,
 								},
@@ -212,7 +212,7 @@ func TestRunTurn(t *testing.T) {
 						}, nil
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 				}
 			},
@@ -238,7 +238,7 @@ func TestRunTurn(t *testing.T) {
 						}, nil
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 				}
 			},
@@ -269,7 +269,7 @@ func TestRunTurn(t *testing.T) {
 					return &llm.Response{
 						Message: model.Message{
 							Kind:    model.MessageKindLLM,
-							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "The answer is 4"}},
+							Content: []model.ContentPart{model.NewContentText("The answer is 4")},
 							Metadata: &model.MessageMetadata{
 								StopReason: model.StopReasonComplete,
 								Usage:      &model.Usage{InputTokens: 20, OutputTokens: 10},
@@ -280,13 +280,13 @@ func TestRunTurn(t *testing.T) {
 
 				tools[0].On("ID").Return("calculator")
 				tools[0].On("Execute", mock.Anything, json.RawMessage(`{"expr":"2+2"}`)).Return(&tool.Result{
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "4"}},
+					Content: []model.ContentPart{model.NewContentText("4")},
 				}, nil)
 
 				return turnConfig{
 					provider: provider,
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "what is 2+2"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("what is 2+2")}},
 					},
 					toolIndex: testToolIndex(tools[0]),
 				}
@@ -332,7 +332,7 @@ func TestRunTurn(t *testing.T) {
 					return &llm.Response{
 						Message: model.Message{
 							Kind:    model.MessageKindLLM,
-							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "done"}},
+							Content: []model.ContentPart{model.NewContentText("done")},
 							Metadata: &model.MessageMetadata{
 								StopReason: model.StopReasonComplete,
 							},
@@ -345,12 +345,12 @@ func TestRunTurn(t *testing.T) {
 					_, ok := ctx.Deadline()
 					return ok
 				}), json.RawMessage(`{}`)).Return(&tool.Result{
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ok"}},
+					Content: []model.ContentPart{model.NewContentText("ok")},
 				}, nil)
 
 				return turnConfig{
 					provider:    provider,
-					messages:    []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "run"}}}},
+					messages:    []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("run")}}},
 					toolIndex:   testToolIndex(tools[0]),
 					toolTimeout: 2 * time.Second,
 				}
@@ -383,7 +383,7 @@ func TestRunTurn(t *testing.T) {
 					return &llm.Response{
 						Message: model.Message{
 							Kind:    model.MessageKindLLM,
-							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "done"}},
+							Content: []model.ContentPart{model.NewContentText("done")},
 							Metadata: &model.MessageMetadata{
 								StopReason: model.StopReasonComplete,
 							},
@@ -393,18 +393,18 @@ func TestRunTurn(t *testing.T) {
 
 				tools[0].On("ID").Return("tool-a")
 				tools[0].On("Execute", mock.Anything, json.RawMessage(`{"a":1}`)).Return(&tool.Result{
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "result-a"}},
+					Content: []model.ContentPart{model.NewContentText("result-a")},
 				}, nil)
 
 				tools[1].On("ID").Return("tool-b")
 				tools[1].On("Execute", mock.Anything, json.RawMessage(`{"b":2}`)).Return(&tool.Result{
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "result-b"}},
+					Content: []model.ContentPart{model.NewContentText("result-b")},
 				}, nil)
 
 				return turnConfig{
 					provider: provider,
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "do both"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("do both")}},
 					},
 					toolIndex: testToolIndex(tools[0], tools[1]),
 				}
@@ -453,7 +453,7 @@ func TestRunTurn(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "all done"}},
+								Content: []model.ContentPart{model.NewContentText("all done")},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonComplete,
 								},
@@ -464,16 +464,16 @@ func TestRunTurn(t *testing.T) {
 
 				tools[0].On("ID").Return("step")
 				tools[0].On("Execute", mock.Anything, json.RawMessage(`{"n":1}`)).Return(&tool.Result{
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "step-1-done"}},
+					Content: []model.ContentPart{model.NewContentText("step-1-done")},
 				}, nil).Once()
 				tools[0].On("Execute", mock.Anything, json.RawMessage(`{"n":2}`)).Return(&tool.Result{
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "step-2-done"}},
+					Content: []model.ContentPart{model.NewContentText("step-2-done")},
 				}, nil).Once()
 
 				return turnConfig{
 					provider: provider,
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "do steps"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("do steps")}},
 					},
 					toolIndex: testToolIndex(tools[0]),
 				}
@@ -508,7 +508,7 @@ func TestRunTurn(t *testing.T) {
 					return &llm.Response{
 						Message: model.Message{
 							Kind:    model.MessageKindLLM,
-							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "I see the error"}},
+							Content: []model.ContentPart{model.NewContentText("I see the error")},
 							Metadata: &model.MessageMetadata{
 								StopReason: model.StopReasonComplete,
 							},
@@ -522,7 +522,7 @@ func TestRunTurn(t *testing.T) {
 				return turnConfig{
 					provider: provider,
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "use broken tool"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("use broken tool")}},
 					},
 					toolIndex: testToolIndex(tools[0]),
 				}
@@ -560,7 +560,7 @@ func TestRunTurn(t *testing.T) {
 					return &llm.Response{
 						Message: model.Message{
 							Kind:    model.MessageKindLLM,
-							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "tool was missing"}},
+							Content: []model.ContentPart{model.NewContentText("tool was missing")},
 							Metadata: &model.MessageMetadata{
 								StopReason: model.StopReasonComplete,
 							},
@@ -571,7 +571,7 @@ func TestRunTurn(t *testing.T) {
 				return turnConfig{
 					provider: provider,
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "call missing tool"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("call missing tool")}},
 					},
 					// No tools provided.
 				}
@@ -604,12 +604,12 @@ func TestRunTurn(t *testing.T) {
 
 				tools[0].On("ID").Return("loop")
 				tools[0].On("Execute", mock.Anything, mock.Anything).Return(&tool.Result{
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "again"}},
+					Content: []model.ContentPart{model.NewContentText("again")},
 				}, nil)
 
 				return turnConfig{
 					provider:      provider,
-					messages:      []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "loop"}}}},
+					messages:      []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("loop")}}},
 					toolIndex:     testToolIndex(tools[0]),
 					maxIterations: 3,
 				}
@@ -626,7 +626,7 @@ func TestRunTurn(t *testing.T) {
 				return turnConfig{
 					provider: provider,
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 				}
 			},
@@ -640,7 +640,7 @@ func TestRunTurn(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ok"}},
+								Content: []model.ContentPart{model.NewContentText("ok")},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonComplete,
 								},
@@ -648,7 +648,7 @@ func TestRunTurn(t *testing.T) {
 						}, nil
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "original"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("original")}},
 					},
 				}
 			},
@@ -666,12 +666,12 @@ func TestRunTurn(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "no metadata"}},
+								Content: []model.ContentPart{model.NewContentText("no metadata")},
 							},
 						}, nil
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 				}
 			},
@@ -707,7 +707,7 @@ func TestRunTurn(t *testing.T) {
 					return &llm.Response{
 						Message: model.Message{
 							Kind:    model.MessageKindLLM,
-							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "done"}},
+							Content: []model.ContentPart{model.NewContentText("done")},
 							Metadata: &model.MessageMetadata{
 								StopReason: model.StopReasonComplete,
 								Usage:      &model.Usage{InputTokens: 200, OutputTokens: 100},
@@ -718,13 +718,13 @@ func TestRunTurn(t *testing.T) {
 
 				tools[0].On("ID").Return("t")
 				tools[0].On("Execute", mock.Anything, mock.Anything).Return(&tool.Result{
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ok"}},
+					Content: []model.ContentPart{model.NewContentText("ok")},
 				}, nil)
 
 				return turnConfig{
 					provider: provider,
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 					toolIndex: testToolIndex(tools[0]),
 				}
@@ -762,7 +762,7 @@ func TestRunTurn(t *testing.T) {
 					return &llm.Response{
 						Message: model.Message{
 							Kind:    model.MessageKindLLM,
-							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: fmt.Sprintf("saw %d messages", secondCallMsgCount)}},
+							Content: []model.ContentPart{model.NewContentText(fmt.Sprintf("saw %d messages", secondCallMsgCount))},
 							Metadata: &model.MessageMetadata{
 								StopReason: model.StopReasonComplete,
 							},
@@ -772,13 +772,13 @@ func TestRunTurn(t *testing.T) {
 
 				tools[0].On("ID").Return("t")
 				tools[0].On("Execute", mock.Anything, mock.Anything).Return(&tool.Result{
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ok"}},
+					Content: []model.ContentPart{model.NewContentText("ok")},
 				}, nil)
 
 				return turnConfig{
 					provider: provider,
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 					toolIndex: testToolIndex(tools[0]),
 				}
@@ -812,7 +812,7 @@ func TestRunTurn(t *testing.T) {
 					return &llm.Response{
 						Message: model.Message{
 							Kind:    model.MessageKindLLM,
-							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "noted"}},
+							Content: []model.ContentPart{model.NewContentText("noted")},
 							Metadata: &model.MessageMetadata{
 								StopReason: model.StopReasonComplete,
 							},
@@ -826,7 +826,7 @@ func TestRunTurn(t *testing.T) {
 				return turnConfig{
 					provider: provider,
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "validate"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("validate")}},
 					},
 					toolIndex: testToolIndex(tools[0]),
 				}
@@ -849,7 +849,7 @@ func TestRunTurn(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: fmt.Sprintf("saw %d messages", len(req.Messages))}},
+								Content: []model.ContentPart{model.NewContentText(fmt.Sprintf("saw %d messages", len(req.Messages)))},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonComplete,
 								},
@@ -857,14 +857,14 @@ func TestRunTurn(t *testing.T) {
 						}, nil
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 					contextProcessor: processorFunc(func(_ context.Context, msgs []model.Message) ([]model.Message, error) {
 						// Prepend a synthetic message.
 						result := make([]model.Message, 0, len(msgs)+1)
 						result = append(result, model.Message{
 							Kind:    model.MessageKindUser,
-							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "injected context"}},
+							Content: []model.ContentPart{model.NewContentText("injected context")},
 						})
 						result = append(result, msgs...)
 						return result, nil
@@ -884,7 +884,7 @@ func TestRunTurn(t *testing.T) {
 				return turnConfig{
 					provider: fake.NewEchoProvider(),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 					contextProcessor: processorFunc(func(_ context.Context, _ []model.Message) ([]model.Message, error) {
 						return nil, fmt.Errorf("context processing exploded")
@@ -915,7 +915,7 @@ func TestRunTurn(t *testing.T) {
 					return &llm.Response{
 						Message: model.Message{
 							Kind:    model.MessageKindLLM,
-							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: fmt.Sprintf("processor called %d times", processorCallCount)}},
+							Content: []model.ContentPart{model.NewContentText(fmt.Sprintf("processor called %d times", processorCallCount))},
 							Metadata: &model.MessageMetadata{
 								StopReason: model.StopReasonComplete,
 							},
@@ -925,13 +925,13 @@ func TestRunTurn(t *testing.T) {
 
 				tools[0].On("ID").Return("t")
 				tools[0].On("Execute", mock.Anything, mock.Anything).Return(&tool.Result{
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ok"}},
+					Content: []model.ContentPart{model.NewContentText("ok")},
 				}, nil)
 
 				return turnConfig{
 					provider: provider,
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 					toolIndex: testToolIndex(tools[0]),
 					contextProcessor: processorFunc(func(_ context.Context, msgs []model.Message) ([]model.Message, error) {
@@ -956,7 +956,7 @@ func TestRunTurn(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: fmt.Sprintf("llm saw %d", len(req.Messages))}},
+								Content: []model.ContentPart{model.NewContentText(fmt.Sprintf("llm saw %d", len(req.Messages)))},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonComplete,
 								},
@@ -964,9 +964,9 @@ func TestRunTurn(t *testing.T) {
 						}, nil
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "first"}}},
-						{Kind: model.MessageKindLLM, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "reply"}}},
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "second"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("first")}},
+						{Kind: model.MessageKindLLM, Content: []model.ContentPart{model.NewContentText("reply")}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("second")}},
 					},
 					contextProcessor: processorFunc(func(_ context.Context, msgs []model.Message) ([]model.Message, error) {
 						// Only return the last message.
@@ -991,7 +991,7 @@ func TestRunTurn(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: fmt.Sprintf("saw %d messages", len(req.Messages))}},
+								Content: []model.ContentPart{model.NewContentText(fmt.Sprintf("saw %d messages", len(req.Messages)))},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonComplete,
 								},
@@ -999,9 +999,9 @@ func TestRunTurn(t *testing.T) {
 						}, nil
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "old"}}},
-						{Kind: model.MessageKindLLM, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "old reply"}}},
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "new"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("old")}},
+						{Kind: model.MessageKindLLM, Content: []model.ContentPart{model.NewContentText("old reply")}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("new")}},
 					},
 					compactor: compactorFunc(func(_ context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
 						// Only keep the last message (simulating compaction).
@@ -1021,7 +1021,7 @@ func TestRunTurn(t *testing.T) {
 				return turnConfig{
 					provider: fake.NewEchoProvider(),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 					compactor: compactorFunc(func(_ context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
 						return nil, fmt.Errorf("compaction failed")
@@ -1052,7 +1052,7 @@ func TestRunTurn(t *testing.T) {
 					return &llm.Response{
 						Message: model.Message{
 							Kind:    model.MessageKindLLM,
-							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: fmt.Sprintf("compactor called %d times", compactorCallCount)}},
+							Content: []model.ContentPart{model.NewContentText(fmt.Sprintf("compactor called %d times", compactorCallCount))},
 							Metadata: &model.MessageMetadata{
 								StopReason: model.StopReasonComplete,
 							},
@@ -1062,13 +1062,13 @@ func TestRunTurn(t *testing.T) {
 
 				tools[0].On("ID").Return("t")
 				tools[0].On("Execute", mock.Anything, mock.Anything).Return(&tool.Result{
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ok"}},
+					Content: []model.ContentPart{model.NewContentText("ok")},
 				}, nil)
 
 				return turnConfig{
 					provider: provider,
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 					toolIndex: testToolIndex(tools[0]),
 					compactor: compactorFunc(func(_ context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
@@ -1092,7 +1092,7 @@ func TestRunTurn(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: fmt.Sprintf("saw %d messages", len(req.Messages))}},
+								Content: []model.ContentPart{model.NewContentText(fmt.Sprintf("saw %d messages", len(req.Messages)))},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonComplete,
 								},
@@ -1100,9 +1100,9 @@ func TestRunTurn(t *testing.T) {
 						}, nil
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "a"}}},
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "b"}}},
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "c"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("a")}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("b")}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("c")}},
 					},
 					// Compactor keeps last 2 messages.
 					compactor: compactorFunc(func(_ context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
@@ -1116,7 +1116,7 @@ func TestRunTurn(t *testing.T) {
 						result := make([]model.Message, 0, len(msgs)+1)
 						result = append(result, model.Message{
 							Kind:    model.MessageKindUser,
-							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "injected"}},
+							Content: []model.ContentPart{model.NewContentText("injected")},
 						})
 						result = append(result, msgs...)
 						return result, nil
@@ -1138,7 +1138,7 @@ func TestRunTurn(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: fmt.Sprintf("saw %d messages", len(req.Messages))}},
+								Content: []model.ContentPart{model.NewContentText(fmt.Sprintf("saw %d messages", len(req.Messages)))},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonComplete,
 								},
@@ -1146,8 +1146,8 @@ func TestRunTurn(t *testing.T) {
 						}, nil
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "a"}}},
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "b"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("a")}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("b")}},
 					},
 					// No compactor set — defaults() will use NoopCompactor.
 				}
@@ -1167,7 +1167,7 @@ func TestRunTurn(t *testing.T) {
 						return &llm.Response{
 							Message: model.Message{
 								Kind:    model.MessageKindLLM,
-								Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: fmt.Sprintf("saw %d messages", len(req.Messages))}},
+								Content: []model.ContentPart{model.NewContentText(fmt.Sprintf("saw %d messages", len(req.Messages)))},
 								Metadata: &model.MessageMetadata{
 									StopReason: model.StopReasonComplete,
 								},
@@ -1175,9 +1175,9 @@ func TestRunTurn(t *testing.T) {
 						}, nil
 					}),
 					messages: []model.Message{
-						{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "old"}}},
-						{ID: "m2", Kind: model.MessageKindLLM, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "old reply"}}},
-						{ID: "m3", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "new"}}},
+						{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("old")}},
+						{ID: "m2", Kind: model.MessageKindLLM, Content: []model.ContentPart{model.NewContentText("old reply")}},
+						{ID: "m3", Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("new")}},
 					},
 					onMessages: func(_ context.Context, msgs []model.Message) error {
 						persisted = append(persisted, msgs...)
@@ -1187,7 +1187,7 @@ func TestRunTurn(t *testing.T) {
 						compactionMsg := model.Message{
 							ID:      "c1",
 							Kind:    model.MessageKindCompaction,
-							Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "summary"}},
+							Content: []model.ContentPart{model.NewContentText("summary")},
 							Compaction: &model.CompactionData{
 								FirstKeptID:  "m3",
 								TokensBefore: 500,
@@ -1270,7 +1270,7 @@ func TestRunCompaction(t *testing.T) {
 			config: compactionConfig{
 				// No compactor — defaults() sets NoopCompactor.
 				messages: []model.Message{
-					{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+					{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 				},
 			},
 			expResp: func(t *testing.T, result *agentcontext.CompactResult) {
@@ -1289,7 +1289,7 @@ func TestRunCompaction(t *testing.T) {
 				compactionMsg := model.Message{
 					ID:         "c1",
 					Kind:       model.MessageKindCompaction,
-					Content:    []model.ContentPart{{Type: model.ContentPartTypeText, Text: "summary"}},
+					Content:    []model.ContentPart{model.NewContentText("summary")},
 					Compaction: &model.CompactionData{FirstKeptID: "m2"},
 				}
 				return compactionConfig{

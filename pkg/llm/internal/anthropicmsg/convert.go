@@ -260,7 +260,7 @@ func convertResponse(resp anthropicResponse, restoreToolName func(string) string
 		switch p.Type {
 		case "text":
 			if strings.TrimSpace(p.Text) != "" {
-				msg.Content = append(msg.Content, model.ContentPart{Type: model.ContentPartTypeText, Text: p.Text})
+				msg.Content = append(msg.Content, model.NewContentText(p.Text))
 			}
 		case "tool_use":
 			if strings.TrimSpace(p.ID) == "" || strings.TrimSpace(p.Name) == "" {

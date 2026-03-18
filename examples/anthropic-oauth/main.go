@@ -156,7 +156,7 @@ func run(ctx context.Context) error {
 	fmt.Printf("Model:     %s\n", cfg.modelID)
 	fmt.Printf("Session:   %s\n\n", session.Session().ID)
 
-	res, err := session.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: cfg.prompt}}, agent.PromptOptions{})
+	res, err := session.Prompt(ctx, []model.ContentPart{model.NewContentText(cfg.prompt)}, agent.PromptOptions{})
 	if err != nil {
 		if hint := quotaHint(err); hint != "" {
 			return fmt.Errorf("running prompt: %w\n\n%s", err, hint)

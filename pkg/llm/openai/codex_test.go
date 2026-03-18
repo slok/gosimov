@@ -95,7 +95,7 @@ func TestCodexResponsesCall(t *testing.T) {
 				SystemPrompt: "be concise",
 				Messages: []model.Message{{
 					Kind:    model.MessageKindUser,
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}},
+					Content: []model.ContentPart{model.NewContentText("hi")},
 				}},
 			},
 			assertRequest: func(t *testing.T, req *http.Request, body []byte) {
@@ -144,7 +144,7 @@ func TestCodexResponsesCall(t *testing.T) {
 					"arguments": `{"path":"main.go"}`,
 				}},
 			}),
-			req: gllm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "read main.go"}}}}},
+			req: gllm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("read main.go")}}}},
 			assertResp: func(t *testing.T, resp *gllm.Response) {
 				t.Helper()
 				assert := assert.New(t)
@@ -173,7 +173,7 @@ func TestCodexResponsesCall(t *testing.T) {
 			}),
 			req: gllm.Request{
 				SessionID: "s_123",
-				Messages:  []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}}},
+				Messages:  []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}}},
 				Config:    gllm.RequestConfig{EnablePromptCache: true},
 			},
 			assertRequest: func(t *testing.T, _ *http.Request, body []byte) {
@@ -200,7 +200,7 @@ func TestCodexResponsesCall(t *testing.T) {
 				_, _ = w.Write([]byte("data: {\"type\":\"response.completed\",\"response\":{\"model\":\"gpt-5.3-codex\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"role\":\"assistant\",\"content\":[{\"type\":\"output_text\",\"text\":\"SSE works\"}]}]}}\n\n"))
 				_, _ = w.Write([]byte("data: [DONE]\n\n"))
 			},
-			req: gllm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}}}},
+			req: gllm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}}}},
 			assertResp: func(t *testing.T, resp *gllm.Response) {
 				t.Helper()
 				assert := assert.New(t)
@@ -214,7 +214,7 @@ func TestCodexResponsesCall(t *testing.T) {
 		"Missing account ID in token should fail.": {
 			token:         "abc.def.ghi",
 			serverHandler: jsonHandler(200, map[string]any{"model": "gpt-5.3-codex", "status": "completed", "output": []any{}}),
-			req:           gllm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}}}},
+			req:           gllm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}}}},
 			expErr:        true,
 			expErrIs:      pkgerrors.ErrNotValid,
 		},
@@ -224,7 +224,7 @@ func TestCodexResponsesCall(t *testing.T) {
 			serverHandler: jsonHandler(429, map[string]any{
 				"error": map[string]any{"message": "rate limit", "type": "rate_limit"},
 			}),
-			req:      gllm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hi"}}}}},
+			req:      gllm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}}}},
 			expErr:   true,
 			expErrIs: pkgerrors.ErrLLMError,
 		},

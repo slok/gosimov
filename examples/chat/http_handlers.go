@@ -238,7 +238,7 @@ func (a *app) handlePrompt(w http.ResponseWriter, r *http.Request) {
 	promptCtx := context.WithValue(r.Context(), contextKeySessionID{}, id)
 	promptCtx, finishOp := cSession.startOperation(promptCtx)
 	defer finishOp()
-	result, err := cSession.session.Prompt(promptCtx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: reqText}}, agent.PromptOptions{})
+	result, err := cSession.session.Prompt(promptCtx, []model.ContentPart{model.NewContentText(reqText)}, agent.PromptOptions{})
 	if err != nil {
 		log.Printf("prompt execution error session_id=%s err=%v", id, err)
 		http.Error(w, fmt.Sprintf("prompt failed: %s", err), http.StatusInternalServerError)
@@ -248,7 +248,7 @@ func (a *app) handlePrompt(w http.ResponseWriter, r *http.Request) {
 	if shouldRetryForExecutionEvidence(result) {
 		log.Printf("prompt unverified-claim retry session_id=%s", id)
 		retryText := "Execution policy reminder: you claimed changes were made, but no tool output was produced in the previous step. Now execute the required tools and provide evidence from tool results. Do not claim changes without tool evidence."
-		if _, retryErr := cSession.session.Prompt(promptCtx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: retryText}}, agent.PromptOptions{}); retryErr != nil {
+		if _, retryErr := cSession.session.Prompt(promptCtx, []model.ContentPart{model.NewContentText(retryText)}, agent.PromptOptions{}); retryErr != nil {
 			log.Printf("prompt retry error session_id=%s err=%v", id, retryErr)
 		}
 	}
@@ -302,7 +302,7 @@ func (a *app) handlePromptAny(w http.ResponseWriter, r *http.Request) {
 	promptCtx := context.WithValue(r.Context(), contextKeySessionID{}, id)
 	promptCtx, finishOp := cSession.startOperation(promptCtx)
 	defer finishOp()
-	result, err := cSession.session.Prompt(promptCtx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: req.Text}}, agent.PromptOptions{})
+	result, err := cSession.session.Prompt(promptCtx, []model.ContentPart{model.NewContentText(req.Text)}, agent.PromptOptions{})
 	if err != nil {
 		log.Printf("prompt execution error session_id=%s err=%v", id, err)
 		http.Error(w, fmt.Sprintf("prompt failed: %s", err), http.StatusInternalServerError)
@@ -312,7 +312,7 @@ func (a *app) handlePromptAny(w http.ResponseWriter, r *http.Request) {
 	if shouldRetryForExecutionEvidence(result) {
 		log.Printf("prompt unverified-claim retry session_id=%s", id)
 		retryText := "Execution policy reminder: you claimed changes were made, but no tool output was produced in the previous step. Now execute the required tools and provide evidence from tool results. Do not claim changes without tool evidence."
-		if _, retryErr := cSession.session.Prompt(promptCtx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: retryText}}, agent.PromptOptions{}); retryErr != nil {
+		if _, retryErr := cSession.session.Prompt(promptCtx, []model.ContentPart{model.NewContentText(retryText)}, agent.PromptOptions{}); retryErr != nil {
 			log.Printf("prompt retry error session_id=%s err=%v", id, retryErr)
 		}
 	}

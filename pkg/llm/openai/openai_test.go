@@ -102,7 +102,7 @@ func TestProviderCall(t *testing.T) {
 				return gllm.Request{
 					SystemPrompt: "be helpful",
 					Messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 					},
 				}
 			},
@@ -145,7 +145,7 @@ func TestProviderCall(t *testing.T) {
 			req: func() gllm.Request {
 				return gllm.Request{
 					Messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 					},
 				}
 			},
@@ -184,7 +184,7 @@ func TestProviderCall(t *testing.T) {
 			req: func() gllm.Request {
 				return gllm.Request{
 					Messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "read main.go"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("read main.go")}},
 					},
 				}
 			},
@@ -227,7 +227,7 @@ func TestProviderCall(t *testing.T) {
 			req: func() gllm.Request {
 				return gllm.Request{
 					Messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "read README.md"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("read README.md")}},
 					},
 				}
 			},
@@ -252,7 +252,7 @@ func TestProviderCall(t *testing.T) {
 				return gllm.Request{
 					SystemPrompt: "be helpful",
 					Messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 					},
 				}
 			},
@@ -282,7 +282,7 @@ func TestProviderCall(t *testing.T) {
 			req: func() gllm.Request {
 				return gllm.Request{
 					Messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 					},
 				}
 			},
@@ -301,7 +301,7 @@ func TestProviderCall(t *testing.T) {
 			req: func() gllm.Request {
 				return gllm.Request{
 					Messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 					},
 					Config: gllm.RequestConfig{MaxTokens: 123},
 				}
@@ -329,7 +329,7 @@ func TestProviderCall(t *testing.T) {
 				return gllm.Request{
 					SessionID: "s_abc123",
 					Messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 					},
 					Config: gllm.RequestConfig{EnablePromptCache: true},
 				}
@@ -359,7 +359,7 @@ func TestProviderCall(t *testing.T) {
 			req: func() gllm.Request {
 				return gllm.Request{
 					Messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 					},
 				}
 			},
@@ -377,7 +377,7 @@ func TestProviderCall(t *testing.T) {
 			req: func() gllm.Request {
 				return gllm.Request{
 					Messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 					},
 				}
 			},
@@ -393,7 +393,7 @@ func TestProviderCall(t *testing.T) {
 			req: func() gllm.Request {
 				return gllm.Request{
 					Messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 					},
 				}
 			},
@@ -409,7 +409,7 @@ func TestProviderCall(t *testing.T) {
 			req: func() gllm.Request {
 				return gllm.Request{
 					Messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 					},
 				}
 			},
@@ -430,7 +430,7 @@ func TestProviderCall(t *testing.T) {
 			req: func() gllm.Request {
 				return gllm.Request{
 					Messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 					},
 				}
 			},

@@ -137,7 +137,7 @@ func TestProviderRoutesByModelFormat(t *testing.T) {
 			resp, err := provider.Call(context.Background(), llm.Request{
 				Messages: []model.Message{{
 					Kind:    model.MessageKindUser,
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}},
+					Content: []model.ContentPart{model.NewContentText("hello")},
 				}},
 			})
 			require.NoError(err)
@@ -209,7 +209,7 @@ func TestAnthropicRouteReadsToolMessagesEndpointPayload(t *testing.T) {
 	})
 	require.NoError(err)
 
-	_, err = provider.Call(context.Background(), llm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ping"}}}}})
+	_, err = provider.Call(context.Background(), llm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("ping")}}}})
 	require.NoError(err)
 
 	var payload map[string]any
@@ -247,7 +247,7 @@ func TestOpenAICompatibleRouteSendsPromptCacheKeyWhenEnabled(t *testing.T) {
 		SessionID: "sess-cache-1",
 		Messages: []model.Message{{
 			Kind:    model.MessageKindUser,
-			Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ping"}},
+			Content: []model.ContentPart{model.NewContentText("ping")},
 		}},
 		Config: llm.RequestConfig{EnablePromptCache: true},
 	})
@@ -290,7 +290,7 @@ func TestAnthropicRouteSendsCacheControlWhenEnabled(t *testing.T) {
 		SystemPrompt: "be concise",
 		Messages: []model.Message{{
 			Kind:    model.MessageKindUser,
-			Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "ping"}},
+			Content: []model.ContentPart{model.NewContentText("ping")},
 		}},
 		Config: llm.RequestConfig{EnablePromptCache: true},
 	})

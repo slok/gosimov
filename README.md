@@ -73,10 +73,9 @@ func main() {
         panic(err)
     }
 
-    result, err := session.Prompt(ctx, []model.ContentPart{{
-        Type: model.ContentPartTypeText,
-        Text: "Give me 3 practical tips to debug flaky Go tests.",
-    }}, agent.PromptOptions{})
+    result, err := session.Prompt(ctx, []model.ContentPart{
+        model.NewContentText("Give me 3 practical tips to debug flaky Go tests."),
+    }, agent.PromptOptions{})
     if err != nil {
         panic(err)
     }
@@ -131,10 +130,9 @@ session, _ := agent.NewSession(ctx, agent.SessionConfig{
     MessageRepository: repo,
 })
 
-_, _ = session.Prompt(ctx, []model.ContentPart{{
-    Type: model.ContentPartTypeText,
-    Text: "Create hello.py with a hello world and run it with python3.",
-}}, agent.PromptOptions{})
+_, _ = session.Prompt(ctx, []model.ContentPart{
+    model.NewContentText("Create hello.py with a hello world and run it with python3."),
+}, agent.PromptOptions{})
 ```
 
 See a complete runnable flow in `examples/simple/main.go` and `examples/zen/main.go`.
@@ -176,10 +174,9 @@ func (t kubectlGetPodsTool) Execute(ctx context.Context, args json.RawMessage) (
         return nil, fmt.Errorf("kubectl failed: %s", string(out))
     }
 
-    return &tool.Result{Content: []model.ContentPart{{
-        Type: model.ContentPartTypeText,
-        Text: string(out),
-    }}}, nil
+    return &tool.Result{Content: []model.ContentPart{
+        model.NewContentText(string(out)),
+    }}, nil
 }
 ```
 

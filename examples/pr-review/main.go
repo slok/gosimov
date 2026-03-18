@@ -103,7 +103,7 @@ func run(ctx context.Context) error {
 	fmt.Printf("Work dir:  %s\n", cfg.workDir)
 	fmt.Printf("Session:   %s\n\n", session.Session().ID)
 
-	result, err := session.Prompt(ctx, []model.ContentPart{{Type: model.ContentPartTypeText, Text: userPrompt}}, agent.PromptOptions{})
+	result, err := session.Prompt(ctx, []model.ContentPart{model.NewContentText(userPrompt)}, agent.PromptOptions{})
 	if err != nil {
 		return fmt.Errorf("review prompt failed: %w", err)
 	}

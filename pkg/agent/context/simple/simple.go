@@ -195,10 +195,9 @@ func (c *Compactor) summarize(ctx context.Context, messages []model.Message, pre
 		SystemPrompt: summarizationSystemPrompt,
 		Messages: []model.Message{{
 			Kind: model.MessageKindUser,
-			Content: []model.ContentPart{{
-				Type: model.ContentPartTypeText,
-				Text: prompt,
-			}},
+			Content: []model.ContentPart{model.NewContentText(
+
+				prompt)},
 		}},
 		Config: llm.RequestConfig{MaxTokens: c.maxSummaryTokens},
 	})

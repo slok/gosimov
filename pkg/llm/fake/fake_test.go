@@ -25,7 +25,7 @@ func TestProviderCall(t *testing.T) {
 				return &llm.Response{
 					Message: model.Message{
 						Kind:    model.MessageKindLLM,
-						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "custom response"}},
+						Content: []model.ContentPart{model.NewContentText("custom response")},
 					},
 				}, nil
 			},
@@ -33,7 +33,7 @@ func TestProviderCall(t *testing.T) {
 			expResp: &llm.Response{
 				Message: model.Message{
 					Kind:    model.MessageKindLLM,
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "custom response"}},
+					Content: []model.ContentPart{model.NewContentText("custom response")},
 				},
 			},
 		},
@@ -51,7 +51,7 @@ func TestProviderCall(t *testing.T) {
 				return &llm.Response{
 					Message: model.Message{
 						Kind:    model.MessageKindLLM,
-						Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: req.SystemPrompt}},
+						Content: []model.ContentPart{model.NewContentText(req.SystemPrompt)},
 					},
 				}, nil
 			},
@@ -59,7 +59,7 @@ func TestProviderCall(t *testing.T) {
 			expResp: &llm.Response{
 				Message: model.Message{
 					Kind:    model.MessageKindLLM,
-					Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "you are helpful"}},
+					Content: []model.ContentPart{model.NewContentText("you are helpful")},
 				},
 			},
 		},
@@ -98,7 +98,7 @@ func TestEchoProviderCall(t *testing.T) {
 		"Should echo the last user message text.": {
 			req: llm.Request{
 				Messages: []model.Message{
-					{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "hello"}}},
+					{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
 				},
 			},
 			expContentText: "hello",
@@ -108,9 +108,9 @@ func TestEchoProviderCall(t *testing.T) {
 		"Should echo the last user message when multiple exist.": {
 			req: llm.Request{
 				Messages: []model.Message{
-					{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "first"}}},
-					{Kind: model.MessageKindLLM, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "response"}}},
-					{Kind: model.MessageKindUser, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "second"}}},
+					{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("first")}},
+					{Kind: model.MessageKindLLM, Content: []model.ContentPart{model.NewContentText("response")}},
+					{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("second")}},
 				},
 			},
 			expContentText: "second",
@@ -120,7 +120,7 @@ func TestEchoProviderCall(t *testing.T) {
 		"Should return empty content when no user messages exist.": {
 			req: llm.Request{
 				Messages: []model.Message{
-					{Kind: model.MessageKindLLM, Content: []model.ContentPart{{Type: model.ContentPartTypeText, Text: "orphan"}}},
+					{Kind: model.MessageKindLLM, Content: []model.ContentPart{model.NewContentText("orphan")}},
 				},
 			},
 			expHasContent: false,

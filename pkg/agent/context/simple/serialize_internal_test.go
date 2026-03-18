@@ -116,23 +116,23 @@ func TestJoinTextAndFirstText(t *testing.T) {
 	}{
 		"Only text parts should be joined.": {
 			parts: []model.ContentPart{
-				{Type: model.ContentPartTypeText, Text: "a"},
-				{Type: model.ContentPartTypeImage, Image: &model.ImageData{Data: []byte("x"), MimeType: "image/png"}},
-				{Type: model.ContentPartTypeText, Text: "b"},
+				model.NewContentText("a"),
+				model.NewContentImage([]byte("x"), "image/png"),
+				model.NewContentText("b"),
 			},
 			expJoin:      "a\nb",
 			expFirstText: "a",
 		},
 		"Empty text parts should be ignored.": {
 			parts: []model.ContentPart{
-				{Type: model.ContentPartTypeText, Text: ""},
-				{Type: model.ContentPartTypeText, Text: "x"},
+				model.NewContentText(""),
+				model.NewContentText("x"),
 			},
 			expJoin:      "x",
 			expFirstText: "x",
 		},
 		"No text parts should return empty values.": {
-			parts:        []model.ContentPart{{Type: model.ContentPartTypeImage, Image: &model.ImageData{Data: []byte("x"), MimeType: "image/png"}}},
+			parts:        []model.ContentPart{model.NewContentImage([]byte("x"), "image/png")},
 			expJoin:      "",
 			expFirstText: "",
 		},
@@ -147,5 +147,5 @@ func TestJoinTextAndFirstText(t *testing.T) {
 }
 
 func testTextParts(text string) []model.ContentPart {
-	return []model.ContentPart{{Type: model.ContentPartTypeText, Text: text}}
+	return []model.ContentPart{model.NewContentText(text)}
 }
