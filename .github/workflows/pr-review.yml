@@ -1,24 +1,7 @@
 name: PR Review
 
 on:
-  workflow_dispatch:
-    inputs:
-      repo:
-        description: Repository owner/name (defaults to current repository)
-        required: false
-        type: string
-      pr_number:
-        description: Pull request number to review
-        required: true
-        type: number
-      dry_run:
-        description: Do not write comments/reviews
-        required: false
-        default: true
-        type: boolean
   pull_request_target:
-    types: [opened, edited, synchronize, ready_for_review]
-  pull_request:
     types: [opened, edited, synchronize, ready_for_review]
   issue_comment:
     types: [created]
@@ -29,15 +12,6 @@ permissions:
 jobs:
   review:
     if: |
-      github.event_name == 'workflow_dispatch' ||
-      (
-        github.event_name == 'pull_request' &&
-        (
-          contains(github.event.pull_request.title, '@gosimov-review') ||
-          contains(github.event.pull_request.body || '', '@gosimov-review')
-        ) &&
-        contains(fromJson('["OWNER","MEMBER","COLLABORATOR"]'), github.event.pull_request.author_association)
-      ) ||
       (
         github.event_name == 'pull_request_target' &&
         (
@@ -76,18 +50,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           OPENCODE_GO_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
           OPENCODE_GO_MODEL: minimax-m2.5
-          REVIEW_REPO: ${{ inputs.repo || github.repository }}
-          REVIEW_PR: ${{ inputs.pr_number }}
-          REVIEW_DRY_RUN: ${{ inputs.dry_run }}
-        run: |
-          args=(--work-dir "$GITHUB_WORKSPACE")
-          if [ -n "$REVIEW_REPO" ]; then
-            args+=(--repo "$REVIEW_REPO")
-          fi
-          if [ -n "$REVIEW_PR" ]; then
-            args+=(--pr "$REVIEW_PR")
-          fi
-          if [ "$REVIEW_DRY_RUN" = "true" ]; then
-            args+=(--dry-run)
-          fi
-          go run ./examples/pr-review "${args[@]}"
+        run: go run ./examples/pr-review --work-dir "$GITHUB_WORKSPACE"
