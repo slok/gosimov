@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	usageutil "github.com/slok/gosimov/internal/utils/usage"
+	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/model"
-	"github.com/slok/gosimov/pkg/tool"
 )
 
 type codexRequest struct {
@@ -72,7 +72,7 @@ type codexInputTokenDetail struct {
 	CachedTokens int `json:"cached_tokens"`
 }
 
-func convertCodexTools(tools []tool.Tool) []codexTool {
+func convertCodexTools(tools []llm.ToolDefinition) []codexTool {
 	if len(tools) == 0 {
 		return nil
 	}
@@ -81,9 +81,9 @@ func convertCodexTools(tools []tool.Tool) []codexTool {
 	for i, t := range tools {
 		result[i] = codexTool{
 			Type:        "function",
-			Name:        t.ID(),
-			Description: t.Description(),
-			Parameters:  t.Schema(),
+			Name:        t.ID,
+			Description: t.Description,
+			Parameters:  t.Schema,
 			Strict:      nil,
 		}
 	}

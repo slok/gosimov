@@ -28,7 +28,7 @@ func TestSessionJSONLExport(t *testing.T) {
 	repo, err := jsonl.New(jsonl.Config{Dir: storeDir})
 	require.NoError(t, err)
 
-	provider := cfg.NewProvider(t, nil)
+	provider := cfg.NewProvider(t)
 
 	// Create session.
 	session, err := agent.NewSession(ctx, agent.SessionConfig{
@@ -97,7 +97,7 @@ func TestSessionLoadFromJSONL(t *testing.T) {
 	repo, err := jsonl.New(jsonl.Config{Dir: storeDir})
 	require.NoError(t, err)
 
-	provider := cfg.NewProvider(t, nil)
+	provider := cfg.NewProvider(t)
 
 	// Create and use session.
 	session, err := agent.NewSession(ctx, agent.SessionConfig{
@@ -157,7 +157,7 @@ func TestTokenUsageAccumulation(t *testing.T) {
 	repo, err := jsonl.New(jsonl.Config{Dir: t.TempDir()})
 	require.NoError(t, err)
 
-	provider := cfg.NewProvider(t, nil)
+	provider := cfg.NewProvider(t)
 
 	session, err := agent.NewSession(ctx, agent.SessionConfig{
 		Provider:          provider,

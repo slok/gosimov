@@ -36,6 +36,7 @@ type turnConfig struct {
 	systemPrompt       string
 	disablePromptCache bool
 	messages           []model.Message
+	tools              []tool.Tool
 	toolIndex          map[string]tool.Tool
 	toolTimeout        time.Duration
 	maxIterations      int
@@ -167,6 +168,7 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 			SystemPrompt: config.systemPrompt,
 			SessionID:    config.session.ID,
 			Messages:     llmMessages,
+			Tools:        toToolDefinitions(config.tools),
 			Config:       llm.RequestConfig{EnablePromptCache: !config.disablePromptCache},
 		}
 
@@ -235,6 +237,23 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 			return nil, fmt.Errorf("llm returned unexpected stop reason %q: %w", stopReason, pkgerrors.ErrLLMError)
 		}
 	}
+}
+
+func toToolDefinitions(tools []tool.Tool) []llm.ToolDefinition {
+	if len(tools) == 0 {
+		return nil
+	}
+
+	defs := make([]llm.ToolDefinition, len(tools))
+	for i, t := range tools {
+		defs[i] = llm.ToolDefinition{
+			ID:          t.ID(),
+			Description: t.Description(),
+			Schema:      t.Schema(),
+		}
+	}
+
+	return defs
 }
 
 // executeToolCalls runs each tool call request and returns tool result messages.

@@ -23,7 +23,7 @@ func TestSimpleResponse(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create provider without tools.
-	provider := cfg.NewProvider(t, nil)
+	provider := cfg.NewProvider(t)
 
 	// Create session.
 	session, err := agent.NewSession(ctx, agent.SessionConfig{

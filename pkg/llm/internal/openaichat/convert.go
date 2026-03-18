@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	usageutil "github.com/slok/gosimov/internal/utils/usage"
+	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/model"
-	"github.com/slok/gosimov/pkg/tool"
 )
 
 type chatRequest struct {
@@ -79,13 +79,13 @@ type chatUsageDetail struct {
 	CachedTokens int `json:"cached_tokens"`
 }
 
-func convertTools(tools []tool.Tool) []chatTool {
+func convertTools(tools []llm.ToolDefinition) []chatTool {
 	if len(tools) == 0 {
 		return nil
 	}
 	result := make([]chatTool, len(tools))
 	for i, t := range tools {
-		result[i] = chatTool{Type: "function", Function: chatFunction{Name: t.ID(), Description: t.Description(), Parameters: t.Schema()}}
+		result[i] = chatTool{Type: "function", Function: chatFunction{Name: t.ID, Description: t.Description, Parameters: t.Schema}}
 	}
 	return result
 }

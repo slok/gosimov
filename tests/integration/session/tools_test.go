@@ -53,7 +53,7 @@ func TestToolUsageWriteEditRead(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create provider with tools.
-	provider := cfg.NewProvider(t, tools)
+	provider := cfg.NewProvider(t)
 
 	// Create session.
 	session, err := agent.NewSession(ctx, agent.SessionConfig{
@@ -120,7 +120,7 @@ func TestToolUsageListDirectory(t *testing.T) {
 	repo, err := jsonl.New(jsonl.Config{Dir: t.TempDir()})
 	require.NoError(t, err)
 
-	provider := cfg.NewProvider(t, tools)
+	provider := cfg.NewProvider(t)
 
 	session, err := agent.NewSession(ctx, agent.SessionConfig{
 		Provider:          provider,

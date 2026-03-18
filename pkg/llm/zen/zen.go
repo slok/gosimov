@@ -8,7 +8,6 @@ import (
 	"github.com/slok/gosimov/pkg/llm/internal/openaichat"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
-	"github.com/slok/gosimov/pkg/tool"
 )
 
 const defaultBaseURL = "https://opencode.ai/zen/v1"
@@ -17,7 +16,6 @@ const defaultBaseURL = "https://opencode.ai/zen/v1"
 type Config struct {
 	TokenSource TokenSource
 	Model       string
-	Tools       []tool.Tool
 	Client      *http.Client
 }
 
@@ -55,7 +53,6 @@ func New(cfg Config) (llm.Provider, error) {
 		BaseURL:     defaultBaseURL,
 		Model:       cfg.Model,
 		ModelInfo:   info,
-		Tools:       cfg.Tools,
 		ProviderID:  "zen",
 		Client:      cfg.Client,
 	})

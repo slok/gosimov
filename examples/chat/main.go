@@ -47,7 +47,6 @@ import (
 	"github.com/slok/gosimov/pkg/log/zero"
 	"github.com/slok/gosimov/pkg/store/jsonl"
 	"github.com/slok/gosimov/pkg/store/subscriber"
-	"github.com/slok/gosimov/pkg/tool"
 )
 
 func main() {
@@ -85,12 +84,7 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("creating subscriber repository: %w", err)
 	}
 
-	schemaTools, err := createToolsForDir(cfg.workDir)
-	if err != nil {
-		return fmt.Errorf("creating provider tool definitions: %w", err)
-	}
-
-	providerOpenAI, err := buildProvider(cfg, apiKey, tokenSrc, cfg.modelID, schemaTools)
+	providerOpenAI, err := buildProvider(cfg, apiKey, tokenSrc, cfg.modelID)
 	if err != nil {
 		return fmt.Errorf("creating provider: %w", err)
 	}
@@ -98,7 +92,7 @@ func run(ctx context.Context) error {
 	conversationLogger := &loggingProvider{name: "conversation", wrapped: providerOpenAI}
 	provider := llm.Provider(conversationLogger)
 
-	summaryProviderOpenAI, err := buildProvider(cfg, apiKey, tokenSrc, cfg.summaryModel, nil)
+	summaryProviderOpenAI, err := buildProvider(cfg, apiKey, tokenSrc, cfg.summaryModel)
 	if err != nil {
 		return fmt.Errorf("creating summary provider: %w", err)
 	}
@@ -143,7 +137,7 @@ func run(ctx context.Context) error {
 	return http.ListenAndServe(cfg.addr, mux)
 }
 
-func buildProvider(cfg config, apiKey string, tokenSrc openai.TokenSource, modelID string, tools []tool.Tool) (llm.Provider, error) {
+func buildProvider(cfg config, apiKey string, tokenSrc openai.TokenSource, modelID string) (llm.Provider, error) {
 	resolveTokenSource := func(defaultFromAPIKey func(string) openai.TokenSource) (openai.TokenSource, error) {
 		if tokenSrc != nil {
 			return tokenSrc, nil
@@ -161,42 +155,42 @@ func buildProvider(cfg config, apiKey string, tokenSrc openai.TokenSource, model
 		if err != nil {
 			return nil, err
 		}
-		return zen.New(zen.Config{TokenSource: ts, Model: modelID, Tools: tools})
+		return zen.New(zen.Config{TokenSource: ts, Model: modelID})
 
 	case providerOpenCodeGo:
 		ts, err := resolveTokenSource(opencodego.NewAPIKeyTokenSource)
 		if err != nil {
 			return nil, err
 		}
-		return opencodego.New(opencodego.Config{TokenSource: ts, Model: modelID, Tools: tools})
+		return opencodego.New(opencodego.Config{TokenSource: ts, Model: modelID})
 
 	case providerOpenAI:
 		ts, err := resolveTokenSource(openai.NewAPIKeyTokenSource)
 		if err != nil {
 			return nil, err
 		}
-		return openai.NewOpenAI(openai.OpenAIConfig{TokenSource: ts, Model: modelID, Tools: tools})
+		return openai.NewOpenAI(openai.OpenAIConfig{TokenSource: ts, Model: modelID})
 
 	case providerCodex:
 		ts, err := resolveTokenSource(openai.NewAPIKeyTokenSource)
 		if err != nil {
 			return nil, err
 		}
-		return openai.NewChatGPT(openai.ChatGPTConfig{TokenSource: ts, Model: modelID, Tools: tools})
+		return openai.NewChatGPT(openai.ChatGPTConfig{TokenSource: ts, Model: modelID})
 
 	case providerAnthropic:
 		ts, err := resolveTokenSource(anthropic.NewAPIKeyTokenSource)
 		if err != nil {
 			return nil, err
 		}
-		return anthropic.NewAnthropic(anthropic.Config{TokenSource: ts, Model: modelID, Tools: tools})
+		return anthropic.NewAnthropic(anthropic.Config{TokenSource: ts, Model: modelID})
 
 	case providerClaude:
 		ts, err := resolveTokenSource(anthropic.NewAPIKeyTokenSource)
 		if err != nil {
 			return nil, err
 		}
-		return anthropic.NewClaude(anthropic.ClaudeConfig{TokenSource: ts, Model: modelID, Tools: tools})
+		return anthropic.NewClaude(anthropic.ClaudeConfig{TokenSource: ts, Model: modelID})
 
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", cfg.provider)

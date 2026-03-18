@@ -10,7 +10,6 @@ import (
 	"github.com/slok/gosimov/pkg/llm/internal/openaichat"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
-	"github.com/slok/gosimov/pkg/tool"
 )
 
 const (
@@ -37,8 +36,6 @@ type OpenAIConfig struct {
 	BaseURL string
 	// Model is the model ID to use (required).
 	Model string
-	// Tools are the tools available for the LLM to call (optional).
-	Tools []tool.Tool
 	// Client is the HTTP client used for API calls (optional).
 	// Defaults to [http.DefaultClient].
 	Client *http.Client
@@ -82,7 +79,6 @@ func NewOpenAI(cfg OpenAIConfig) (llm.Provider, error) {
 		BaseURL:     cfg.BaseURL,
 		Model:       cfg.Model,
 		ModelInfo:   info,
-		Tools:       cfg.Tools,
 		ProviderID:  openAIProviderID,
 		Client:      cfg.Client,
 	})

@@ -9,7 +9,6 @@ import (
 	"github.com/slok/gosimov/pkg/llm/internal/anthropicmsg"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
-	"github.com/slok/gosimov/pkg/tool"
 )
 
 const (
@@ -24,7 +23,6 @@ type ClaudeConfig struct {
 	TokenSource TokenSource
 	BaseURL     string
 	Model       string
-	Tools       []tool.Tool
 	Client      *http.Client
 }
 
@@ -65,14 +63,12 @@ func NewClaude(cfg ClaudeConfig) (llm.Provider, error) {
 		BaseURL:     cfg.BaseURL,
 		Model:       cfg.Model,
 		ModelInfo:   info,
-		Tools:       cfg.Tools,
 		Client:      cfg.Client,
 		Options: anthropicmsg.Options{
 			ProviderID:         claudeProviderID,
 			AuthMode:           anthropicmsg.AuthModeOAuthBearer,
 			ClaudeCompat:       true,
 			NormalizeToolName:  toClaudeCodeName,
-			RestoreToolName:    fromClaudeCodeName(cfg.Tools),
 			DefaultMaxTokens:   info.MaxOutputTokens,
 			ClaudeIdentityText: claudeIdentitySystemPrompt,
 			ExtraHeaders: map[string]string{
@@ -119,19 +115,4 @@ func toClaudeCodeName(name string) string {
 	}
 
 	return name
-}
-
-func fromClaudeCodeName(tools []tool.Tool) func(string) string {
-	byLowerName := make(map[string]string, len(tools))
-	for _, t := range tools {
-		byLowerName[strings.ToLower(t.ID())] = t.ID()
-	}
-
-	return func(name string) string {
-		if v, ok := byLowerName[strings.ToLower(name)]; ok {
-			return v
-		}
-
-		return name
-	}
 }

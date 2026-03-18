@@ -15,7 +15,6 @@ import (
 	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
-	"github.com/slok/gosimov/pkg/tool"
 )
 
 const (
@@ -34,8 +33,6 @@ type ChatGPTConfig struct {
 	BaseURL string
 	// Model is the model ID to use (e.g. "gpt-5.3-codex") (required).
 	Model string
-	// Tools are the tools available for the LLM to call (optional).
-	Tools []tool.Tool
 	// Client is the HTTP client used for API calls (optional).
 	// Defaults to [http.DefaultClient].
 	Client *http.Client
@@ -72,7 +69,6 @@ type chatGPTProvider struct {
 	modelInfo  model.LLMModelInfo
 	providerID string
 	originator string
-	tools      []codexTool
 	client     *http.Client
 }
 
@@ -91,7 +87,6 @@ func NewChatGPT(cfg ChatGPTConfig) (llm.Provider, error) {
 		modelInfo:  info,
 		providerID: chatGPTProviderID,
 		originator: chatGPTOriginator,
-		tools:      convertCodexTools(cfg.Tools),
 		client:     cfg.Client,
 	}, nil
 }
@@ -108,7 +103,7 @@ func (p *chatGPTProvider) Call(ctx context.Context, req llm.Request) (*llm.Respo
 		Stream:            true,
 		Instructions:      req.SystemPrompt,
 		Input:             convertCodexMessages(req.Messages),
-		Tools:             p.tools,
+		Tools:             convertCodexTools(req.Tools),
 		Text:              &codexText{Verbosity: "medium"},
 		Include:           []string{"reasoning.encrypted_content"},
 		ToolChoice:        "auto",
@@ -181,17 +176,25 @@ func (p *chatGPTProvider) Call(ctx context.Context, req llm.Request) (*llm.Respo
 }
 
 func promptCacheKeyFromRequest(req llm.Request) string {
+	toolFingerprint := toolDefinitionsFingerprint(req.Tools)
+
 	sessionID := strings.TrimSpace(req.SessionID)
 	if sessionID != "" {
-		return "gosimov-sess-" + sessionID
+		if toolFingerprint == "" {
+			return "gosimov-sess-" + sessionID
+		}
+
+		return "gosimov-sess-" + sessionID + "-tools-" + toolFingerprint
 	}
 
 	payload := struct {
-		SystemPrompt string          `json:"system_prompt"`
-		Messages     []model.Message `json:"messages"`
+		SystemPrompt string               `json:"system_prompt"`
+		Messages     []model.Message      `json:"messages"`
+		Tools        []llm.ToolDefinition `json:"tools,omitempty"`
 	}{
 		SystemPrompt: req.SystemPrompt,
 		Messages:     req.Messages,
+		Tools:        req.Tools,
 	}
 
 	b, err := json.Marshal(payload)
@@ -202,6 +205,22 @@ func promptCacheKeyFromRequest(req llm.Request) string {
 
 	h := sha256.Sum256(b)
 	return "gosimov-req-" + hex.EncodeToString(h[:12])
+}
+
+func toolDefinitionsFingerprint(tools []llm.ToolDefinition) string {
+	if len(tools) == 0 {
+		return ""
+	}
+
+	b, err := json.Marshal(tools)
+	if err != nil {
+		h := sha256.Sum256([]byte(fmt.Sprintf("tool-count-%d", len(tools))))
+		return hex.EncodeToString(h[:6])
+	}
+
+	h := sha256.Sum256(b)
+
+	return hex.EncodeToString(h[:6])
 }
 
 func parseCodexSuccessResponse(body []byte) (codexResponse, error) {
