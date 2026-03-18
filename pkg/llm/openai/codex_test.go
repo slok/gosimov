@@ -282,79 +282,120 @@ func TestCodexResponsesCall(t *testing.T) {
 }
 
 func TestCodexUsesRequestToolDefinitions(t *testing.T) {
-	assert := assert.New(t)
-	require := require.New(t)
+	tests := map[string]struct {
+		requests       []gllm.Request
+		assertPayloads func(t *testing.T, bodies [][]byte)
+	}{
+		"Tool descriptions should update between calls.": {
+			requests: []gllm.Request{
+				requestWithCodexToolDescription("desc-v1"),
+				requestWithCodexToolDescription("desc-v2"),
+			},
+			assertPayloads: func(t *testing.T, bodies [][]byte) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
 
-	bodies := make([][]byte, 0, 2)
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		body, err := io.ReadAll(r.Body)
-		require.NoError(err)
-		bodies = append(bodies, body)
+				var firstPayload struct {
+					Tools []struct {
+						Description string `json:"description"`
+					} `json:"tools"`
+				}
+				var secondPayload struct {
+					Tools []struct {
+						Description string `json:"description"`
+					} `json:"tools"`
+				}
 
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"model":  "gpt-5.3-codex",
-			"status": "completed",
-			"output": []map[string]any{{
-				"type": "message",
-				"role": "assistant",
-				"content": []map[string]any{{
-					"type": "output_text",
-					"text": "ok",
+				require.NoError(json.Unmarshal(bodies[0], &firstPayload))
+				require.NoError(json.Unmarshal(bodies[1], &secondPayload))
+
+				require.Len(firstPayload.Tools, 1)
+				require.Len(secondPayload.Tools, 1)
+				assert.Equal("desc-v1", firstPayload.Tools[0].Description)
+				assert.Equal("desc-v2", secondPayload.Tools[0].Description)
+			},
+		},
+
+		"Requests without tools should omit tools payload.": {
+			requests: []gllm.Request{{
+				Messages: []model.Message{{
+					Kind:    model.MessageKindUser,
+					Content: []model.ContentPart{model.NewContentText("hello")},
 				}},
 			}},
+			assertPayloads: func(t *testing.T, bodies [][]byte) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				var payload map[string]json.RawMessage
+				require.NoError(json.Unmarshal(bodies[0], &payload))
+				assert.NotContains(payload, "tools")
+			},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			require := require.New(t)
+
+			bodies := make([][]byte, 0, len(test.requests))
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, err := io.ReadAll(r.Body)
+				require.NoError(err)
+				bodies = append(bodies, body)
+
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"model":  "gpt-5.3-codex",
+					"status": "completed",
+					"output": []map[string]any{{
+						"type": "message",
+						"role": "assistant",
+						"content": []map[string]any{{
+							"type": "output_text",
+							"text": "ok",
+						}},
+					}},
+				})
+			}))
+			defer server.Close()
+
+			provider, err := openai.NewChatGPT(openai.ChatGPTConfig{
+				TokenSource: fakeTokenSource{token: jwtWithAccount("acct-123")},
+				BaseURL:     server.URL,
+				Model:       "gpt-5.3-codex",
+				Client:      server.Client(),
+			})
+			require.NoError(err)
+
+			for _, req := range test.requests {
+				_, err = provider.Call(context.Background(), req)
+				require.NoError(err)
+			}
+
+			require.Len(bodies, len(test.requests))
+			if test.assertPayloads != nil {
+				test.assertPayloads(t, bodies)
+			}
 		})
-	}))
-	defer server.Close()
-
-	provider, err := openai.NewChatGPT(openai.ChatGPTConfig{
-		TokenSource: fakeTokenSource{token: jwtWithAccount("acct-123")},
-		BaseURL:     server.URL,
-		Model:       "gpt-5.3-codex",
-		Client:      server.Client(),
-	})
-	require.NoError(err)
-
-	requestWithDescription := func(description string) gllm.Request {
-		return gllm.Request{
-			Messages: []model.Message{{
-				Kind:    model.MessageKindUser,
-				Content: []model.ContentPart{model.NewContentText("hello")},
-			}},
-			Tools: []gllm.ToolDefinition{{
-				ID:          "skill",
-				Description: description,
-				Schema:      json.RawMessage(`{"type":"object","properties":{}}`),
-			}},
-		}
 	}
+}
 
-	_, err = provider.Call(context.Background(), requestWithDescription("desc-v1"))
-	require.NoError(err)
-	_, err = provider.Call(context.Background(), requestWithDescription("desc-v2"))
-	require.NoError(err)
-
-	require.Len(bodies, 2)
-
-	var firstPayload struct {
-		Tools []struct {
-			Description string `json:"description"`
-		} `json:"tools"`
+func requestWithCodexToolDescription(description string) gllm.Request {
+	return gllm.Request{
+		Messages: []model.Message{{
+			Kind:    model.MessageKindUser,
+			Content: []model.ContentPart{model.NewContentText("hello")},
+		}},
+		Tools: []gllm.ToolDefinition{{
+			ID:          "skill",
+			Description: description,
+			Schema:      json.RawMessage(`{"type":"object","properties":{}}`),
+		}},
 	}
-	var secondPayload struct {
-		Tools []struct {
-			Description string `json:"description"`
-		} `json:"tools"`
-	}
-
-	require.NoError(json.Unmarshal(bodies[0], &firstPayload))
-	require.NoError(json.Unmarshal(bodies[1], &secondPayload))
-
-	require.Len(firstPayload.Tools, 1)
-	require.Len(secondPayload.Tools, 1)
-	assert.Equal("desc-v1", firstPayload.Tools[0].Description)
-	assert.Equal("desc-v2", secondPayload.Tools[0].Description)
 }
 
 func TestChatGPTProviderModelInfo(t *testing.T) {
