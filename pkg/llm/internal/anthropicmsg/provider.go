@@ -13,7 +13,6 @@ import (
 	llmauth "github.com/slok/gosimov/pkg/llm/internal/auth"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
-	"github.com/slok/gosimov/pkg/tool"
 )
 
 const defaultVersionHeader = "2023-06-01"
@@ -30,7 +29,6 @@ type Options struct {
 	AuthMode           AuthMode
 	ClaudeCompat       bool
 	NormalizeToolName  func(string) string
-	RestoreToolName    func(string) string
 	ExtraHeaders       map[string]string
 	DefaultMaxTokens   int
 	ClaudeIdentityText string
@@ -41,7 +39,6 @@ type Config struct {
 	BaseURL     string
 	Model       string
 	ModelInfo   model.LLMModelInfo
-	Tools       []tool.Tool
 	Client      *http.Client
 	Options     Options
 }
@@ -79,7 +76,6 @@ type Provider struct {
 	baseURL   string
 	model     string
 	modelInfo model.LLMModelInfo
-	tools     []anthropicTool
 	client    *http.Client
 
 	opts Options
@@ -95,7 +91,6 @@ func New(cfg Config) (llm.Provider, error) {
 		baseURL:   strings.TrimRight(cfg.BaseURL, "/"),
 		model:     cfg.Model,
 		modelInfo: cfg.ModelInfo,
-		tools:     convertTools(cfg.Tools, cfg.Options.NormalizeToolName),
 		client:    cfg.Client,
 		opts:      cfg.Options,
 	}, nil
@@ -109,7 +104,7 @@ func (p *Provider) Call(ctx context.Context, req llm.Request) (*llm.Response, er
 	body := anthropicRequest{
 		Model:     p.model,
 		Messages:  convertMessages(req.Messages, p.opts.NormalizeToolName),
-		Tools:     p.tools,
+		Tools:     convertTools(req.Tools, p.opts.NormalizeToolName),
 		MaxTokens: p.opts.DefaultMaxTokens,
 	}
 
@@ -187,13 +182,46 @@ func (p *Provider) Call(ctx context.Context, req llm.Request) (*llm.Response, er
 		return nil, fmt.Errorf("unmarshaling response: %w", err)
 	}
 
-	msg := convertResponse(apiResp, p.opts.RestoreToolName)
+	msg := convertResponse(apiResp, restoreToolNameFromDefinitions(req.Tools, p.opts.NormalizeToolName))
 	if msg.Metadata == nil {
 		msg.Metadata = &model.MessageMetadata{}
 	}
 	msg.Metadata.Provider = p.opts.ProviderID
 
 	return &llm.Response{Message: msg}, nil
+}
+
+func restoreToolNameFromDefinitions(tools []llm.ToolDefinition, normalizeName func(string) string) func(string) string {
+	if len(tools) == 0 {
+		return nil
+	}
+
+	byNormalizedName := make(map[string]string, len(tools))
+	for _, t := range tools {
+		name := strings.TrimSpace(t.ID)
+		if name == "" {
+			continue
+		}
+
+		normalized := name
+		if normalizeName != nil {
+			normalized = normalizeName(name)
+		}
+
+		byNormalizedName[strings.ToLower(normalized)] = name
+	}
+
+	if len(byNormalizedName) == 0 {
+		return nil
+	}
+
+	return func(name string) string {
+		if originalName, ok := byNormalizedName[strings.ToLower(name)]; ok {
+			return originalName
+		}
+
+		return name
+	}
 }
 
 func applyPromptCacheControl(body *anthropicRequest, baseURL string) {

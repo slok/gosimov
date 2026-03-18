@@ -9,7 +9,6 @@ import (
 	"github.com/slok/gosimov/pkg/llm/internal/anthropicmsg"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
-	"github.com/slok/gosimov/pkg/tool"
 )
 
 const (
@@ -22,7 +21,6 @@ type Config struct {
 	TokenSource TokenSource
 	BaseURL     string
 	Model       string
-	Tools       []tool.Tool
 	Client      *http.Client
 }
 
@@ -63,7 +61,6 @@ func NewAnthropic(cfg Config) (llm.Provider, error) {
 		BaseURL:     cfg.BaseURL,
 		Model:       cfg.Model,
 		ModelInfo:   info,
-		Tools:       cfg.Tools,
 		Client:      cfg.Client,
 		Options: anthropicmsg.Options{
 			ProviderID:       anthropicProviderID,

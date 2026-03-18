@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	usageutil "github.com/slok/gosimov/internal/utils/usage"
+	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/model"
-	"github.com/slok/gosimov/pkg/tool"
 )
 
 type anthropicRequest struct {
@@ -89,22 +89,22 @@ type anthropicUsage struct {
 	CacheCreateTokens int `json:"cache_creation_input_tokens,omitempty"`
 }
 
-func convertTools(tools []tool.Tool, normalizeName func(string) string) []anthropicTool {
+func convertTools(tools []llm.ToolDefinition, normalizeName func(string) string) []anthropicTool {
 	if len(tools) == 0 {
 		return nil
 	}
 
 	result := make([]anthropicTool, len(tools))
 	for i, t := range tools {
-		name := t.ID()
+		name := t.ID
 		if normalizeName != nil {
 			name = normalizeName(name)
 		}
 
 		result[i] = anthropicTool{
 			Name:        name,
-			Description: t.Description(),
-			InputSchema: t.Schema(),
+			Description: t.Description,
+			InputSchema: t.Schema,
 		}
 	}
 

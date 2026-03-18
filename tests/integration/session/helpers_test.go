@@ -12,7 +12,6 @@ import (
 	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/llm/opencodego"
 	"github.com/slok/gosimov/pkg/model"
-	"github.com/slok/gosimov/pkg/tool"
 )
 
 // Config holds integration test configuration loaded from environment variables.
@@ -98,13 +97,12 @@ func NewConfig(t *testing.T) Config {
 }
 
 // NewProvider creates an OpenCode Go LLM provider using the config's API key and model.
-func (c Config) NewProvider(t *testing.T, tools []tool.Tool) llm.Provider {
+func (c Config) NewProvider(t *testing.T) llm.Provider {
 	t.Helper()
 
 	p, err := opencodego.New(opencodego.Config{
 		TokenSource: opencodego.NewAPIKeyTokenSource(c.APIKey),
 		Model:       c.Model,
-		Tools:       tools,
 	})
 	if err != nil {
 		t.Fatalf("creating opencode-go provider: %v", err)

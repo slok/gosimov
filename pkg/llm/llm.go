@@ -2,9 +2,20 @@ package llm
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/slok/gosimov/pkg/model"
 )
+
+// ToolDefinition is the tool metadata sent to the LLM provider on each call.
+//
+// This is a provider-facing DTO; actual tool execution remains in the agent
+// loop via [tool.Tool].
+type ToolDefinition struct {
+	ID          string
+	Description string
+	Schema      json.RawMessage
+}
 
 // Provider sends messages to an LLM and returns responses.
 type Provider interface {
@@ -25,7 +36,11 @@ type Request struct {
 	// Providers can use this for stable per-session behaviors (e.g. prompt cache keys).
 	SessionID string
 	Messages  []model.Message
-	Config    RequestConfig
+	// Tools are the tool definitions available for this specific LLM call.
+	//
+	// This enables per-turn/per-iteration dynamic tool descriptions and schemas.
+	Tools  []ToolDefinition
+	Config RequestConfig
 }
 
 // RequestConfig holds LLM call configuration.

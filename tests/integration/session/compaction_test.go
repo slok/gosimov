@@ -26,7 +26,7 @@ func TestCompaction(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create two providers: conversation and summarization.
-	provider := cfg.NewProvider(t, nil)
+	provider := cfg.NewProvider(t)
 	summaryProvider := cfg.NewSummaryProvider(t)
 
 	// Create compactor with small KeepRecentTokens to make compaction meaningful.
@@ -124,7 +124,7 @@ func TestCompactionResultFields(t *testing.T) {
 	repo, err := jsonl.New(jsonl.Config{Dir: t.TempDir()})
 	require.NoError(t, err)
 
-	provider := cfg.NewProvider(t, nil)
+	provider := cfg.NewProvider(t)
 	summaryProvider := cfg.NewSummaryProvider(t)
 
 	compactor, err := simple.New(simple.Config{
@@ -197,7 +197,7 @@ func TestCompactionNoopWhenNotForced(t *testing.T) {
 	repo, err := jsonl.New(jsonl.Config{Dir: t.TempDir()})
 	require.NoError(t, err)
 
-	provider := cfg.NewProvider(t, nil)
+	provider := cfg.NewProvider(t)
 	summaryProvider := cfg.NewSummaryProvider(t)
 
 	// Large keep-recent window = auto-compaction won't trigger.

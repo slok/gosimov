@@ -75,7 +75,6 @@ func run(ctx context.Context) error {
 	provider, err := opencodego.New(opencodego.Config{
 		TokenSource: opencodego.NewAPIKeyTokenSource(cfg.apiKey),
 		Model:       cfg.modelID,
-		Tools:       toolset,
 	})
 	if err != nil {
 		return fmt.Errorf("creating provider: %w", err)

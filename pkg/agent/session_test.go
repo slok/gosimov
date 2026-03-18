@@ -682,6 +682,8 @@ func TestSessionPrompt(t *testing.T) {
 				})
 
 				tools[0].On("ID").Return("calc")
+				tools[0].On("Description").Return("calculator")
+				tools[0].On("Schema").Return(json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`))
 				tools[0].On("Execute", mock.Anything, mock.Anything).Return(&tool.Result{
 					Content: []model.ContentPart{model.NewContentText("42")},
 				}, nil)
@@ -1504,6 +1506,8 @@ func TestSessionPersistence(t *testing.T) {
 
 				mockTool := toolmock.NewMockTool(t)
 				mockTool.On("ID").Return("calc")
+				mockTool.On("Description").Return("calculator")
+				mockTool.On("Schema").Return(json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`))
 				mockTool.On("Execute", mock.Anything, mock.Anything).Return(&tool.Result{
 					Content: []model.ContentPart{model.NewContentText("42")},
 				}, nil)

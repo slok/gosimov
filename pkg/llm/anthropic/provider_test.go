@@ -15,7 +15,6 @@ import (
 	"github.com/slok/gosimov/pkg/llm/anthropic"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
-	"github.com/slok/gosimov/pkg/tool"
 )
 
 func TestNewAnthropic(t *testing.T) {
@@ -259,6 +258,119 @@ func TestAnthropicProviderCall(t *testing.T) {
 	}
 }
 
+func TestAnthropicProviderUsesRequestToolDefinitions(t *testing.T) {
+	tests := map[string]struct {
+		requests       []llm.Request
+		assertPayloads func(t *testing.T, bodies [][]byte)
+	}{
+		"Tool descriptions should update between calls.": {
+			requests: []llm.Request{
+				requestWithAnthropicToolDescription("desc-v1"),
+				requestWithAnthropicToolDescription("desc-v2"),
+			},
+			assertPayloads: func(t *testing.T, bodies [][]byte) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				var firstPayload struct {
+					Tools []struct {
+						Description string `json:"description"`
+					} `json:"tools"`
+				}
+				var secondPayload struct {
+					Tools []struct {
+						Description string `json:"description"`
+					} `json:"tools"`
+				}
+
+				require.NoError(json.Unmarshal(bodies[0], &firstPayload))
+				require.NoError(json.Unmarshal(bodies[1], &secondPayload))
+
+				require.Len(firstPayload.Tools, 1)
+				require.Len(secondPayload.Tools, 1)
+				assert.Equal("desc-v1", firstPayload.Tools[0].Description)
+				assert.Equal("desc-v2", secondPayload.Tools[0].Description)
+			},
+		},
+
+		"Requests without tools should omit tools payload.": {
+			requests: []llm.Request{{
+				Messages: []model.Message{{
+					Kind:    model.MessageKindUser,
+					Content: []model.ContentPart{model.NewContentText("hello")},
+				}},
+			}},
+			assertPayloads: func(t *testing.T, bodies [][]byte) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				var payload map[string]json.RawMessage
+				require.NoError(json.Unmarshal(bodies[0], &payload))
+				assert.NotContains(payload, "tools")
+			},
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			require := require.New(t)
+
+			bodies := make([][]byte, 0, len(test.requests))
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				body, err := io.ReadAll(r.Body)
+				require.NoError(err)
+				bodies = append(bodies, body)
+
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusOK)
+				_ = json.NewEncoder(w).Encode(map[string]any{
+					"model":       anthropic.ModelClaudeSonnet46,
+					"stop_reason": "end_turn",
+					"content": []map[string]any{{
+						"type": "text",
+						"text": "ok",
+					}},
+				})
+			}))
+			defer server.Close()
+
+			provider, err := anthropic.NewAnthropic(anthropic.Config{
+				TokenSource: anthropic.NewAPIKeyTokenSource("sk-ant-test"),
+				BaseURL:     server.URL,
+				Model:       anthropic.ModelClaudeSonnet46,
+				Client:      server.Client(),
+			})
+			require.NoError(err)
+
+			for _, req := range test.requests {
+				_, err = provider.Call(context.Background(), req)
+				require.NoError(err)
+			}
+
+			require.Len(bodies, len(test.requests))
+			if test.assertPayloads != nil {
+				test.assertPayloads(t, bodies)
+			}
+		})
+	}
+}
+
+func requestWithAnthropicToolDescription(description string) llm.Request {
+	return llm.Request{
+		Messages: []model.Message{{
+			Kind:    model.MessageKindUser,
+			Content: []model.ContentPart{model.NewContentText("hello")},
+		}},
+		Tools: []llm.ToolDefinition{{
+			ID:          "read",
+			Description: description,
+			Schema:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`),
+		}},
+	}
+}
+
 func TestNewClaude(t *testing.T) {
 	tests := map[string]struct {
 		cfg    anthropic.ClaudeConfig
@@ -302,12 +414,6 @@ func TestClaudeProviderCall(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				readTool := staticTool{
-					id:          "read",
-					description: "Read a file",
-					schema:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`),
-				}
-
 				var capturedReq *http.Request
 				var capturedBody []byte
 
@@ -332,13 +438,17 @@ func TestClaudeProviderCall(t *testing.T) {
 					TokenSource: fakeTokenSource{token: "oauth-token"},
 					BaseURL:     server.URL,
 					Model:       anthropic.ModelClaudeSonnet46,
-					Tools:       []tool.Tool{readTool},
 					Client:      server.Client(),
 				})
 				require.NoError(err)
 
 				resp, err := provider.Call(context.Background(), llm.Request{
 					SystemPrompt: "Keep it short",
+					Tools: []llm.ToolDefinition{{
+						ID:          "read",
+						Description: "Read a file",
+						Schema:      json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`),
+					}},
 					Messages: []model.Message{{
 						Kind:    model.MessageKindUser,
 						Content: []model.ContentPart{model.NewContentText("read main.go")},
@@ -434,17 +544,4 @@ func jsonHandler(status int, body any) http.HandlerFunc {
 		w.WriteHeader(status)
 		_ = json.NewEncoder(w).Encode(body)
 	}
-}
-
-type staticTool struct {
-	id          string
-	description string
-	schema      json.RawMessage
-}
-
-func (t staticTool) ID() string              { return t.id }
-func (t staticTool) Description() string     { return t.description }
-func (t staticTool) Schema() json.RawMessage { return t.schema }
-func (t staticTool) Execute(context.Context, json.RawMessage) (*tool.Result, error) {
-	return nil, nil
 }

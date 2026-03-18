@@ -479,6 +479,7 @@ func (s *Session) runTurn(ctx context.Context, messages []model.Message, opts Pr
 		systemPrompt:       systemPrompt,
 		disablePromptCache: s.disablePromptCache,
 		messages:           messages,
+		tools:              s.tools,
 		toolIndex:          s.toolIndex,
 		toolTimeout:        s.toolTimeout,
 		maxIterations:      maxIterations,

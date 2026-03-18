@@ -15,7 +15,6 @@ import (
 	llmauth "github.com/slok/gosimov/pkg/llm/internal/auth"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
-	"github.com/slok/gosimov/pkg/tool"
 )
 
 type Config struct {
@@ -23,7 +22,6 @@ type Config struct {
 	BaseURL     string
 	Model       string
 	ModelInfo   model.LLMModelInfo
-	Tools       []tool.Tool
 	ProviderID  string
 	Client      *http.Client
 }
@@ -53,7 +51,6 @@ type Provider struct {
 	model      string
 	modelInfo  model.LLMModelInfo
 	providerID string
-	tools      []chatTool
 	client     *http.Client
 }
 
@@ -68,7 +65,6 @@ func New(cfg Config) (llm.Provider, error) {
 		model:      cfg.Model,
 		modelInfo:  cfg.ModelInfo,
 		providerID: cfg.ProviderID,
-		tools:      convertTools(cfg.Tools),
 		client:     cfg.Client,
 	}, nil
 }
@@ -78,7 +74,7 @@ func (p *Provider) ModelInfo() model.LLMModelInfo {
 }
 
 func (p *Provider) Call(ctx context.Context, req llm.Request) (*llm.Response, error) {
-	body := chatRequest{Model: p.model, Messages: convertMessages(req.SystemPrompt, req.Messages), Tools: p.tools}
+	body := chatRequest{Model: p.model, Messages: convertMessages(req.SystemPrompt, req.Messages), Tools: convertTools(req.Tools)}
 	if req.Config.MaxTokens > 0 {
 		body.MaxTokens = req.Config.MaxTokens
 	}
@@ -132,17 +128,25 @@ func (p *Provider) Call(ctx context.Context, req llm.Request) (*llm.Response, er
 }
 
 func promptCacheKeyFromRequest(req llm.Request) string {
+	toolFingerprint := toolDefinitionsFingerprint(req.Tools)
+
 	sessionID := strings.TrimSpace(req.SessionID)
 	if sessionID != "" {
-		return "gosimov-sess-" + sessionID
+		if toolFingerprint == "" {
+			return "gosimov-sess-" + sessionID
+		}
+
+		return "gosimov-sess-" + sessionID + "-tools-" + toolFingerprint
 	}
 
 	payload := struct {
-		SystemPrompt string          `json:"system_prompt"`
-		Messages     []model.Message `json:"messages"`
+		SystemPrompt string               `json:"system_prompt"`
+		Messages     []model.Message      `json:"messages"`
+		Tools        []llm.ToolDefinition `json:"tools,omitempty"`
 	}{
 		SystemPrompt: req.SystemPrompt,
 		Messages:     req.Messages,
+		Tools:        req.Tools,
 	}
 
 	b, err := json.Marshal(payload)
@@ -153,6 +157,22 @@ func promptCacheKeyFromRequest(req llm.Request) string {
 
 	h := sha256.Sum256(b)
 	return "gosimov-req-" + hex.EncodeToString(h[:12])
+}
+
+func toolDefinitionsFingerprint(tools []llm.ToolDefinition) string {
+	if len(tools) == 0 {
+		return ""
+	}
+
+	b, err := json.Marshal(tools)
+	if err != nil {
+		h := sha256.Sum256([]byte(fmt.Sprintf("tool-count-%d", len(tools))))
+		return hex.EncodeToString(h[:6])
+	}
+
+	h := sha256.Sum256(b)
+
+	return hex.EncodeToString(h[:6])
 }
 
 type chatErrorResponse struct {
