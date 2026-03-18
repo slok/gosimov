@@ -96,6 +96,9 @@ go run ./examples/zen --api-key "$ZEN_API_KEY"
 # OpenCode Go provider + tools
 go run ./examples/opencode-go --api-key "$OPENCODE_GO_API_KEY"
 
+# OpenCode Go provider + custom skill tool
+go run ./examples/skills --api-key "$OPENCODE_GO_API_KEY"
+
 # Fake provider scripted flow (offline)
 go run ./examples/simple
 
@@ -301,6 +304,8 @@ Useful for context-window math and UX telemetry.
 - `examples/simple/main.go`
 - `examples/zen/main.go`
 - `examples/compaction/main.go`
+- `examples/skills/main.go`
+- `examples/skills/README.md`
 - `examples/chat/main.go`
 - `examples/chat/README.md`
 - `examples/pr-review/main.go`
