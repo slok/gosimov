@@ -45,7 +45,7 @@ func loadConfig() (config, error) {
 	flag.StringVar(&cfg.modelID, "model", defaultString(os.Getenv("OPENCODE_GO_MODEL"), opencodego.ModelKimiK25), "OpenCode Go model ID")
 	flag.StringVar(&cfg.prompt, "prompt", "Prepare release notes for this repository. Use available skills when relevant.", "Prompt to execute")
 	flag.StringVar(&cfg.systemPrompt, "system-prompt", "You are a helpful coding assistant. Prefer loading a relevant skill before running task-specific workflows.", "System prompt")
-	flag.BoolVar(&cfg.debug, "debug", false, "Enable debug logs for skill loading and tool execution")
+	flag.BoolVar(&cfg.debug, "debug", false, "Enable debug logs for tool execution")
 	flag.IntVar(&cfg.maxIterations, "max-iterations", 10, "Maximum LLM iterations per turn")
 	flag.StringVar(&cfg.workDir, "work-dir", "", "Working directory for tools (defaults to temporary directory)")
 	flag.StringVar(&cfg.storeDir, "store-dir", os.TempDir(), "Directory for JSONL storage")
@@ -173,7 +173,7 @@ func run(ctx context.Context) error {
 	if finalMessage == "" {
 		finalMessage = "(no text content in final LLM message)"
 	}
-	fmt.Printf("\nFinal LLM message: %s\n", truncate(finalMessage, 320))
+	fmt.Printf("\nFinal LLM message:\n%s\n", finalMessage)
 
 	fmt.Println("\n--- Summary ---")
 	fmt.Printf("Messages in turn: %d\n", len(result.Messages))
@@ -194,7 +194,7 @@ func run(ctx context.Context) error {
 func createTools(workDir string, skillsDir string, debug bool) ([]tool.Tool, error) {
 	wrap := func(t tool.Tool) tool.Tool { return skilltools.WrapWithLogging(t, debug) }
 
-	skillTool, err := skilltools.NewSkillTool(skilltools.SkillToolConfig{SkillsDir: skillsDir, Debug: debug})
+	skillTool, err := skilltools.NewSkillTool(skilltools.SkillToolConfig{SkillsDir: skillsDir})
 	if err != nil {
 		return nil, fmt.Errorf("creating skill tool: %w", err)
 	}

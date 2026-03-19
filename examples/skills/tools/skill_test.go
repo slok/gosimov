@@ -1,80 +1,83 @@
-package tools
+package tools_test
 
 import (
 	"context"
 	"encoding/json"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 
+	skilltools "github.com/slok/gosimov/examples/skills/tools"
+	"github.com/slok/gosimov/pkg/tool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewSkillTool(t *testing.T) {
 	tests := map[string]struct {
-		prepare func(t *testing.T) SkillToolConfig
+		prepare func(t *testing.T) skilltools.SkillToolConfig
 		expErr  bool
 	}{
-		"Missing skills dir should fail.": {
-			prepare: func(t *testing.T) SkillToolConfig {
+		"Missing source should fail.": {
+			prepare: func(t *testing.T) skilltools.SkillToolConfig {
 				t.Helper()
-				return SkillToolConfig{}
+				return skilltools.SkillToolConfig{}
 			},
 			expErr: true,
 		},
 
 		"Skills dir is a file should fail.": {
-			prepare: func(t *testing.T) SkillToolConfig {
+			prepare: func(t *testing.T) skilltools.SkillToolConfig {
 				t.Helper()
 
 				p := filepath.Join(t.TempDir(), "not-a-dir")
 				require.NoError(t, os.WriteFile(p, []byte("x"), 0o600))
 
-				return SkillToolConfig{SkillsDir: p}
+				return skilltools.SkillToolConfig{SkillsDir: p}
 			},
 			expErr: true,
 		},
 
 		"Invalid skill frontmatter should fail.": {
-			prepare: func(t *testing.T) SkillToolConfig {
+			prepare: func(t *testing.T) skilltools.SkillToolConfig {
 				t.Helper()
 
-				root := t.TempDir()
-				require.NoError(t, os.MkdirAll(filepath.Join(root, "broken"), 0o755))
-				require.NoError(t, os.WriteFile(
-					filepath.Join(root, "broken", "SKILL.md"),
-					[]byte("---\nname: broken\n---\nbody"),
-					0o600,
-				))
-
-				return SkillToolConfig{SkillsDir: root}
+				return skilltools.SkillToolConfig{
+					FS: skillMapFS(map[string]string{
+						"broken": "---\nname: broken\n---\nbody",
+					}),
+				}
 			},
 			expErr: true,
 		},
 
 		"Duplicate names should fail.": {
-			prepare: func(t *testing.T) SkillToolConfig {
+			prepare: func(t *testing.T) skilltools.SkillToolConfig {
 				t.Helper()
 
-				root := t.TempDir()
-				writeSkillFile(t, root, "a", "same", "desc a", "body")
-				writeSkillFile(t, root, "b", "same", "desc b", "body")
-
-				return SkillToolConfig{SkillsDir: root}
+				return skilltools.SkillToolConfig{
+					FS: skillMapFS(map[string]string{
+						"a": skillDoc("same", "desc a", "body"),
+						"b": skillDoc("same", "desc b", "body"),
+					}),
+				}
 			},
 			expErr: true,
 		},
 
-		"Valid skills should load.": {
-			prepare: func(t *testing.T) SkillToolConfig {
+		"Valid skills should load from fs.FS.": {
+			prepare: func(t *testing.T) skilltools.SkillToolConfig {
 				t.Helper()
 
-				root := t.TempDir()
-				writeSkillFile(t, root, "one", "alpha", "alpha skill", "alpha body")
-
-				return SkillToolConfig{SkillsDir: root}
+				return skilltools.SkillToolConfig{
+					SkillsDir: "mem-skills",
+					FS: skillMapFS(map[string]string{
+						"one": skillDoc("alpha", "alpha skill", "alpha body"),
+					}),
+				}
 			},
 			expErr: false,
 		},
@@ -84,7 +87,7 @@ func TestNewSkillTool(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			assert := assert.New(t)
 
-			_, err := NewSkillTool(test.prepare(t))
+			loadedTool, err := skilltools.NewSkillTool(test.prepare(t))
 
 			if test.expErr {
 				assert.Error(err)
@@ -92,25 +95,19 @@ func TestNewSkillTool(t *testing.T) {
 			}
 
 			assert.NoError(err)
+			require.NotNil(t, loadedTool)
+			assert.Equal("skill", loadedTool.ID())
 		})
 	}
 }
 
 func TestSkillDescription(t *testing.T) {
 	tests := map[string]struct {
-		prepare func(t *testing.T) *skillTool
-		assert  func(t *testing.T, description string)
+		cfg    skilltools.SkillToolConfig
+		assert func(t *testing.T, description string)
 	}{
 		"No skills should report empty catalog.": {
-			prepare: func(t *testing.T) *skillTool {
-				t.Helper()
-
-				root := t.TempDir()
-				tool, err := NewSkillTool(SkillToolConfig{SkillsDir: root})
-				require.NoError(t, err)
-
-				return tool.(*skillTool)
-			},
+			cfg: skilltools.SkillToolConfig{FS: fstest.MapFS{}},
 			assert: func(t *testing.T, description string) {
 				t.Helper()
 				assert := assert.New(t)
@@ -120,17 +117,12 @@ func TestSkillDescription(t *testing.T) {
 		},
 
 		"Skills should be listed in sorted order.": {
-			prepare: func(t *testing.T) *skillTool {
-				t.Helper()
-
-				root := t.TempDir()
-				writeSkillFile(t, root, "z", "zeta", "z desc", "z body")
-				writeSkillFile(t, root, "a", "alpha", "a desc", "a body")
-
-				tool, err := NewSkillTool(SkillToolConfig{SkillsDir: root})
-				require.NoError(t, err)
-
-				return tool.(*skillTool)
+			cfg: skilltools.SkillToolConfig{
+				SkillsDir: "mem-skills",
+				FS: skillMapFS(map[string]string{
+					"z": skillDoc("zeta", "z desc", "z body"),
+					"a": skillDoc("alpha", "a desc", "a body"),
+				}),
 			},
 			assert: func(t *testing.T, description string) {
 				t.Helper()
@@ -149,20 +141,24 @@ func TestSkillDescription(t *testing.T) {
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			tool := test.prepare(t)
-			description := tool.Description()
+			loadedTool := mustNewSkillTool(t, test.cfg)
+
+			description := loadedTool.Description()
 			test.assert(t, description)
+
+			secondDescription := loadedTool.Description()
+			assert.Equal(t, description, secondDescription)
 		})
 	}
 }
 
 func TestSkillExecute(t *testing.T) {
-	root := t.TempDir()
-	writeSkillFile(t, root, "release", "git-release", "prepare release notes", "## Steps\n- inspect commits")
-
-	toolAny, err := NewSkillTool(SkillToolConfig{SkillsDir: root})
-	require.NoError(t, err)
-	tool := toolAny.(*skillTool)
+	loadedTool := mustNewSkillTool(t, skilltools.SkillToolConfig{
+		SkillsDir: "mem-skills",
+		FS: skillMapFS(map[string]string{
+			"release": skillDoc("git-release", "prepare release notes", "## Steps\n- inspect commits"),
+		}),
+	})
 
 	tests := map[string]struct {
 		args   json.RawMessage
@@ -194,7 +190,7 @@ func TestSkillExecute(t *testing.T) {
 				assert.Contains(output, `<skill_content name="git-release">`)
 				assert.Contains(output, "# Skill: git-release")
 				assert.Contains(output, "## Steps")
-				assert.Contains(output, "Base directory for this skill:")
+				assert.Contains(output, "Base directory for this skill: mem-skills/release")
 				assert.Contains(output, "</skill_content>")
 			},
 		},
@@ -205,7 +201,7 @@ func TestSkillExecute(t *testing.T) {
 			assert := assert.New(t)
 			require := require.New(t)
 
-			result, err := tool.Execute(context.Background(), test.args)
+			result, err := loadedTool.Execute(context.Background(), test.args)
 
 			if test.expErr {
 				assert.Error(err)
@@ -223,13 +219,27 @@ func TestSkillExecute(t *testing.T) {
 	}
 }
 
-func writeSkillFile(t *testing.T, rootDir string, skillDir string, name string, description string, body string) string {
+func mustNewSkillTool(t *testing.T, cfg skilltools.SkillToolConfig) tool.Tool {
 	t.Helper()
 
-	path := filepath.Join(rootDir, skillDir, "SKILL.md")
-	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+	loadedTool, err := skilltools.NewSkillTool(cfg)
+	require.NoError(t, err)
 
-	content := strings.Join([]string{
+	return loadedTool
+}
+
+func skillMapFS(skills map[string]string) fstest.MapFS {
+	files := fstest.MapFS{}
+	for dir, content := range skills {
+		skillPath := path.Join(dir, "SKILL.md")
+		files[skillPath] = &fstest.MapFile{Data: []byte(content)}
+	}
+
+	return files
+}
+
+func skillDoc(name string, description string, body string) string {
+	return strings.Join([]string{
 		"---",
 		"name: " + name,
 		"description: " + description,
@@ -238,8 +248,4 @@ func writeSkillFile(t *testing.T, rootDir string, skillDir string, name string, 
 		body,
 		"",
 	}, "\n")
-
-	require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
-
-	return path
 }

@@ -1,29 +1,38 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
+	"text/template"
 
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/tool"
 	toolschema "github.com/slok/gosimov/pkg/tool/schema"
 )
 
+const noSkillsDescription = "Load a specialized skill that provides domain-specific instructions and workflows. No skills are currently available."
+
 type SkillToolConfig struct {
+	// SkillsDir is the local skills directory when FS is not set.
+	//
+	// When FS is set, SkillsDir is used only as a display prefix in locations.
 	SkillsDir string
-	Debug     bool
+	// FS is an optional skill filesystem. If set, skills are loaded from this FS.
+	FS fs.FS
 }
 
 type skillTool struct {
-	skills []skillDefinition
-	byName map[string]skillDefinition
-	debug  bool
+	description string
+	skills      []skillDefinition
+	byName      map[string]skillDefinition
 }
 
 type skillDefinition struct {
@@ -52,26 +61,39 @@ var (
 		`"`, "&quot;",
 		"'", "&apos;",
 	)
+	funcMap = template.FuncMap{"xml": escapeXML}
+
+	catalogTemplate = template.Must(template.New("skill-catalog").Funcs(funcMap).Parse(`Load a specialized skill that provides domain-specific instructions and workflows.
+
+When you recognize that a task matches one of the skills listed below, call this tool with that skill name.
+
+<available_skills>
+{{- range .Skills }}
+  <skill>
+    <name>{{xml .Name}}</name>
+    <description>{{xml .Description}}</description>
+    <location>{{xml .Location}}</location>
+  </skill>
+{{- end }}
+</available_skills>`))
+
+	skillContentTemplate = template.Must(template.New("skill-content").Funcs(funcMap).Parse(`<skill_content name="{{xml .Name}}">
+# Skill: {{xml .Name}}
+
+{{.Body}}
+
+Base directory for this skill: {{.BaseDir}}
+Relative paths in this skill are relative to this base directory.
+</skill_content>`))
 )
 
 func NewSkillTool(cfg SkillToolConfig) (tool.Tool, error) {
-	root := strings.TrimSpace(cfg.SkillsDir)
-	if root == "" {
-		return nil, fmt.Errorf("skills dir is required")
-	}
-
-	debugf(cfg.Debug, "initializing skill tool (skills_dir=%s)", root)
-
-	info, err := os.Stat(root)
+	skillFS, displayRoot, localRoot, err := resolveSkillSource(cfg)
 	if err != nil {
-		return nil, fmt.Errorf("stat skills dir: %w", err)
+		return nil, err
 	}
 
-	if !info.IsDir() {
-		return nil, fmt.Errorf("skills dir %q is not a directory", root)
-	}
-
-	skills, err := loadSkills(root)
+	skills, err := loadSkills(skillFS, displayRoot, localRoot)
 	if err != nil {
 		return nil, err
 	}
@@ -83,12 +105,14 @@ func NewSkillTool(cfg SkillToolConfig) (tool.Tool, error) {
 		}
 
 		byName[skill.Name] = skill
-		debugf(cfg.Debug, "registered skill (name=%s location=%s)", skill.Name, skill.Location)
 	}
 
-	debugf(cfg.Debug, "skill tool initialized (skills=%d)", len(skills))
+	description, err := renderCatalogDescription(skills)
+	if err != nil {
+		return nil, fmt.Errorf("render skill catalog description: %w", err)
+	}
 
-	return &skillTool{skills: skills, byName: byName, debug: cfg.Debug}, nil
+	return &skillTool{description: description, skills: skills, byName: byName}, nil
 }
 
 func (t *skillTool) ID() string {
@@ -96,33 +120,7 @@ func (t *skillTool) ID() string {
 }
 
 func (t *skillTool) Description() string {
-	debugf(t.debug, "building skill catalog for description (skills=%d)", len(t.skills))
-
-	if len(t.skills) == 0 {
-		return "Load a specialized skill that provides domain-specific instructions and workflows. No skills are currently available."
-	}
-
-	lines := []string{
-		"Load a specialized skill that provides domain-specific instructions and workflows.",
-		"",
-		"When you recognize that a task matches one of the skills listed below, call this tool with that skill name.",
-		"",
-		"<available_skills>",
-	}
-
-	for _, skill := range t.skills {
-		lines = append(lines,
-			"  <skill>",
-			fmt.Sprintf("    <name>%s</name>", escapeXML(skill.Name)),
-			fmt.Sprintf("    <description>%s</description>", escapeXML(skill.Description)),
-			fmt.Sprintf("    <location>%s</location>", escapeXML(skill.Location)),
-			"  </skill>",
-		)
-	}
-
-	lines = append(lines, "</available_skills>")
-
-	return strings.Join(lines, "\n")
+	return t.description
 }
 
 func (t *skillTool) Schema() json.RawMessage {
@@ -132,14 +130,11 @@ func (t *skillTool) Schema() json.RawMessage {
 func (t *skillTool) Execute(_ context.Context, args json.RawMessage) (*tool.Result, error) {
 	var in skillInput
 	if err := toolschema.DecodeStrict(args, &in); err != nil {
-		debugf(t.debug, "skill execute failed decoding args: %v", err)
 		return nil, fmt.Errorf("invalid arguments: %w", err)
 	}
 
 	name := strings.TrimSpace(in.Name)
-	debugf(t.debug, "skill execute requested (name=%s)", name)
 	if name == "" {
-		debugf(t.debug, "skill execute rejected: empty name")
 		return nil, fmt.Errorf("name is required")
 	}
 
@@ -149,31 +144,54 @@ func (t *skillTool) Execute(_ context.Context, args json.RawMessage) (*tool.Resu
 		for _, s := range t.skills {
 			available = append(available, s.Name)
 		}
-		debugf(t.debug, "skill execute failed: skill not found (name=%s available=%s)", name, strings.Join(available, ","))
 
 		return nil, fmt.Errorf("skill %q not found. Available skills: %s", name, strings.Join(available, ", "))
 	}
 
-	output := strings.Join([]string{
-		fmt.Sprintf(`<skill_content name="%s">`, escapeXML(skill.Name)),
-		fmt.Sprintf("# Skill: %s", skill.Name),
-		"",
-		strings.TrimSpace(skill.Body),
-		"",
-		fmt.Sprintf("Base directory for this skill: %s", skill.BaseDir),
-		"Relative paths in this skill are relative to this base directory.",
-		"</skill_content>",
-	}, "\n")
-
-	debugf(t.debug, "skill execute loaded (name=%s location=%s)", skill.Name, skill.Location)
+	output, err := renderSkillContent(skill)
+	if err != nil {
+		return nil, fmt.Errorf("render skill content: %w", err)
+	}
 
 	return &tool.Result{Content: []model.ContentPart{model.NewContentText(output)}}, nil
 }
 
-func loadSkills(root string) ([]skillDefinition, error) {
+func resolveSkillSource(cfg SkillToolConfig) (skillFS fs.FS, displayRoot string, localRoot string, err error) {
+	if cfg.FS != nil {
+		root := strings.TrimSpace(cfg.SkillsDir)
+		if root == "" {
+			root = "."
+		}
+
+		return cfg.FS, root, "", nil
+	}
+
+	root := strings.TrimSpace(cfg.SkillsDir)
+	if root == "" {
+		return nil, "", "", fmt.Errorf("skills dir is required when fs is not provided")
+	}
+
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("resolve skills dir absolute path: %w", err)
+	}
+
+	info, err := os.Stat(absRoot)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("stat skills dir: %w", err)
+	}
+
+	if !info.IsDir() {
+		return nil, "", "", fmt.Errorf("skills dir %q is not a directory", root)
+	}
+
+	return os.DirFS(absRoot), filepath.ToSlash(absRoot), absRoot, nil
+}
+
+func loadSkills(skillFS fs.FS, displayRoot string, localRoot string) ([]skillDefinition, error) {
 	skills := make([]skillDefinition, 0)
 
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+	err := fs.WalkDir(skillFS, ".", func(skillPath string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -182,9 +200,9 @@ func loadSkills(root string) ([]skillDefinition, error) {
 			return nil
 		}
 
-		skill, err := parseSkillFile(path)
+		skill, err := parseSkillFile(skillFS, skillPath, displayRoot, localRoot)
 		if err != nil {
-			return fmt.Errorf("loading %q: %w", path, err)
+			return fmt.Errorf("loading %q: %w", skillPath, err)
 		}
 
 		skills = append(skills, skill)
@@ -200,8 +218,8 @@ func loadSkills(root string) ([]skillDefinition, error) {
 	return skills, nil
 }
 
-func parseSkillFile(path string) (skillDefinition, error) {
-	b, err := os.ReadFile(path)
+func parseSkillFile(skillFS fs.FS, skillPath string, displayRoot string, localRoot string) (skillDefinition, error) {
+	b, err := fs.ReadFile(skillFS, skillPath)
 	if err != nil {
 		return skillDefinition{}, fmt.Errorf("read file: %w", err)
 	}
@@ -226,18 +244,37 @@ func parseSkillFile(path string) (skillDefinition, error) {
 		return skillDefinition{}, fmt.Errorf("frontmatter field \"description\" is required")
 	}
 
-	absPath, err := filepath.Abs(path)
+	location, baseDir, err := skillLocation(skillPath, displayRoot, localRoot)
 	if err != nil {
-		return skillDefinition{}, fmt.Errorf("resolve absolute path: %w", err)
+		return skillDefinition{}, err
 	}
 
 	return skillDefinition{
 		Name:        name,
 		Description: description,
-		Body:        body,
-		Location:    absPath,
-		BaseDir:     filepath.Dir(absPath),
+		Body:        strings.TrimSpace(body),
+		Location:    location,
+		BaseDir:     baseDir,
 	}, nil
+}
+
+func skillLocation(skillPath string, displayRoot string, localRoot string) (location string, baseDir string, err error) {
+	if localRoot != "" {
+		fullPath := filepath.Join(localRoot, filepath.FromSlash(skillPath))
+		absPath, err := filepath.Abs(fullPath)
+		if err != nil {
+			return "", "", fmt.Errorf("resolve absolute path: %w", err)
+		}
+
+		return absPath, filepath.Dir(absPath), nil
+	}
+
+	cleanPath := path.Clean(skillPath)
+	if displayRoot != "" && displayRoot != "." {
+		cleanPath = path.Join(path.Clean(displayRoot), cleanPath)
+	}
+
+	return cleanPath, path.Dir(cleanPath), nil
 }
 
 func splitFrontmatter(raw string) (string, string, error) {
@@ -269,55 +306,77 @@ func splitFrontmatter(raw string) (string, string, error) {
 func parseFrontmatter(raw string) (skillFrontmatter, error) {
 	result := skillFrontmatter{}
 
-	lines := strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n")
-	for i, line := range lines {
+	for i, line := range strings.Split(strings.ReplaceAll(raw, "\r\n", "\n"), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 
-		parts := strings.SplitN(line, ":", 2)
-		if len(parts) != 2 {
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
 			return skillFrontmatter{}, fmt.Errorf("invalid line %d: %q", i+1, line)
 		}
 
-		key := strings.TrimSpace(parts[0])
+		key = strings.TrimSpace(key)
 		if key == "" {
 			return skillFrontmatter{}, fmt.Errorf("invalid line %d: missing key", i+1)
 		}
 
-		value := normalizeFrontmatterValue(parts[1])
+		normalizedValue := normalizeFrontmatterValue(value)
 
 		switch key {
 		case "name":
-			result.Name = value
+			result.Name = normalizedValue
 		case "description":
-			result.Description = value
+			result.Description = normalizedValue
 		}
 	}
 
 	return result, nil
 }
 
-func normalizeFrontmatterValue(v string) string {
-	v = strings.TrimSpace(v)
-	if len(v) >= 2 {
-		if (v[0] == '"' && v[len(v)-1] == '"') || (v[0] == '\'' && v[len(v)-1] == '\'') {
-			v = v[1 : len(v)-1]
+func normalizeFrontmatterValue(value string) string {
+	value = strings.TrimSpace(value)
+
+	if len(value) >= 2 {
+		if strings.HasPrefix(value, `"`) && strings.HasSuffix(value, `"`) {
+			return strings.TrimSpace(value[1 : len(value)-1])
+		}
+
+		if strings.HasPrefix(value, `'`) && strings.HasSuffix(value, `'`) {
+			return strings.TrimSpace(value[1 : len(value)-1])
 		}
 	}
 
-	return strings.TrimSpace(v)
+	return value
+}
+
+func renderCatalogDescription(skills []skillDefinition) (string, error) {
+	if len(skills) == 0 {
+		return noSkillsDescription, nil
+	}
+
+	var b bytes.Buffer
+	err := catalogTemplate.Execute(&b, struct {
+		Skills []skillDefinition
+	}{Skills: skills})
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(b.String()), nil
+}
+
+func renderSkillContent(skill skillDefinition) (string, error) {
+	var b bytes.Buffer
+	err := skillContentTemplate.Execute(&b, skill)
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(b.String()), nil
 }
 
 func escapeXML(v string) string {
 	return xmlEscaper.Replace(v)
-}
-
-func debugf(enabled bool, format string, args ...any) {
-	if !enabled {
-		return
-	}
-
-	log.Printf("[skills-tool] "+format, args...)
 }

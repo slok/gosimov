@@ -62,11 +62,16 @@ func summarizeToolArgs(toolID string, args json.RawMessage) string {
 		var in struct {
 			Command string `json:"command"`
 		}
-		if err := json.Unmarshal(args, &in); err != nil || strings.TrimSpace(in.Command) == "" {
+		if err := json.Unmarshal(args, &in); err != nil {
 			return ""
 		}
 
-		return fmt.Sprintf(" command=%q", truncateArg(strings.TrimSpace(in.Command), 140))
+		command := strings.TrimSpace(in.Command)
+		if command == "" {
+			return ""
+		}
+
+		return fmt.Sprintf(" command=%q", truncateArg(command, 140))
 
 	case "read":
 		var in struct {
@@ -74,11 +79,16 @@ func summarizeToolArgs(toolID string, args json.RawMessage) string {
 			Offset int    `json:"offset"`
 			Limit  int    `json:"limit"`
 		}
-		if err := json.Unmarshal(args, &in); err != nil || strings.TrimSpace(in.Path) == "" {
+		if err := json.Unmarshal(args, &in); err != nil {
 			return ""
 		}
 
-		detail := fmt.Sprintf(" path=%q", strings.TrimSpace(in.Path))
+		path := strings.TrimSpace(in.Path)
+		if path == "" {
+			return ""
+		}
+
+		detail := fmt.Sprintf(" path=%q", path)
 		if in.Offset > 0 {
 			detail += fmt.Sprintf(" offset=%d", in.Offset)
 		}

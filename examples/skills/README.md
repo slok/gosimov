@@ -34,6 +34,5 @@ go run ./examples/skills --api-key "$OPENCODE_GO_API_KEY" --skills-dir /path/to/
 
 Use `--debug` to print:
 
-- skill-tool internals (discovery, catalog generation, and skill loads) with a `[skills-tool]` prefix.
 - tool execution logs from an example-only wrapper with a `[skills-example]` prefix.
 - shell logs include the command, and read logs include the file path (plus offset/limit when set).
