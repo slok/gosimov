@@ -6,13 +6,15 @@
 //
 // Usage:
 //
-//	VIEWER_DIR=/tmp go run ./examples/viewer
+//	go run ./examples/viewer --dir /tmp
+//	go run ./examples/viewer --dir /tmp --addr :9090
 //	VIEWER_DIR=/tmp VIEWER_ADDR=:9090 go run ./examples/viewer
 package main
 
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"html/template"
 	"net/http"
@@ -34,18 +36,44 @@ func main() {
 	}
 }
 
+type config struct {
+	dir  string
+	addr string
+}
+
+func loadConfig() (config, error) {
+	var cfg config
+
+	defaultAddr := os.Getenv("VIEWER_ADDR")
+	if strings.TrimSpace(defaultAddr) == "" {
+		defaultAddr = ":8080"
+	}
+
+	flag.StringVar(&cfg.dir, "dir", os.Getenv("VIEWER_DIR"), "Directory containing .jsonl files (or set VIEWER_DIR)")
+	flag.StringVar(&cfg.addr, "addr", defaultAddr, "HTTP listen address (or set VIEWER_ADDR)")
+	flag.Parse()
+
+	cfg.dir = strings.TrimSpace(cfg.dir)
+	cfg.addr = strings.TrimSpace(cfg.addr)
+
+	if cfg.dir == "" {
+		return config{}, fmt.Errorf("--dir is required (or set VIEWER_DIR)")
+	}
+
+	if cfg.addr == "" {
+		return config{}, fmt.Errorf("--addr is required (or set VIEWER_ADDR)")
+	}
+
+	return cfg, nil
+}
+
 func run() error {
-	dir := os.Getenv("VIEWER_DIR")
-	if dir == "" {
-		return fmt.Errorf("VIEWER_DIR environment variable is required (directory containing .jsonl files)")
+	cfg, err := loadConfig()
+	if err != nil {
+		return err
 	}
 
-	addr := os.Getenv("VIEWER_ADDR")
-	if addr == "" {
-		addr = ":8080"
-	}
-
-	repo, err := jsonl.New(jsonl.Config{Dir: dir})
+	repo, err := jsonl.New(jsonl.Config{Dir: cfg.dir})
 	if err != nil {
 		return fmt.Errorf("creating repository: %w", err)
 	}
@@ -53,11 +81,12 @@ func run() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", handleSessionList(repo))
 	mux.HandleFunc("GET /sessions/{id}", handleSessionDetail(repo))
+	mux.HandleFunc("GET /sessions/{id}/export", handleSessionExport(repo))
 
-	fmt.Printf("Viewer: http://localhost%s\n", addr)
-	fmt.Printf("Dir:    %s\n", dir)
+	fmt.Printf("Viewer: http://localhost%s\n", cfg.addr)
+	fmt.Printf("Dir:    %s\n", cfg.dir)
 
-	return http.ListenAndServe(addr, mux)
+	return http.ListenAndServe(cfg.addr, mux)
 }
 
 // --- Handlers ---
@@ -100,9 +129,11 @@ func handleSessionDetail(repo interface {
 		}
 
 		data := sessionDetailData{
-			Session:  *session,
-			Messages: prepareMessages(msgs),
-			Usage:    summarizeSessionUsage(msgs),
+			Session:    *session,
+			Messages:   prepareMessages(msgs),
+			Usage:      summarizeSessionUsage(msgs),
+			IsExport:   false,
+			ExportedAt: time.Now(),
 		}
 
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -112,12 +143,51 @@ func handleSessionDetail(repo interface {
 	}
 }
 
+func handleSessionExport(repo interface {
+	store.SessionRepository
+	store.MessageRepository
+}) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id := r.PathValue("id")
+		ctx := r.Context()
+
+		session, err := repo.GetSession(ctx, id)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("session not found: %s", err), http.StatusNotFound)
+			return
+		}
+
+		msgs, err := loadAllMessages(ctx, repo, id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		data := sessionDetailData{
+			Session:    *session,
+			Messages:   prepareMessages(msgs),
+			Usage:      summarizeSessionUsage(msgs),
+			IsExport:   true,
+			ExportedAt: time.Now(),
+		}
+
+		filename := fmt.Sprintf("gosimov-session-%s.html", id)
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+		if err := sessionDetailTmpl.Execute(w, data); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+		}
+	}
+}
+
 // --- Data types for templates ---
 
 type sessionDetailData struct {
-	Session  model.Session
-	Messages []messageView
-	Usage    sessionUsageSummary
+	Session    model.Session
+	Messages   []messageView
+	Usage      sessionUsageSummary
+	IsExport   bool
+	ExportedAt time.Time
 }
 
 type sessionUsageSummary struct {
@@ -369,9 +439,14 @@ var sessionDetailTmpl = template.Must(template.New("detail").Funcs(funcs).Parse(
 <body>
 <div class="container">
 <div class="header">
+  {{if not .IsExport}}
+  <div class="header-actions">
   <a href="/" class="back">&larr; Sessions</a>
+  <a href="/sessions/{{.Session.ID}}/export" class="export">Export HTML</a>
+  </div>
+  {{end}}
   <h1>Session <code>{{.Session.ID}}</code></h1>
-  <p class="meta">Created: {{formatTime .Session.CreatedAt}} &middot; {{len .Messages}} messages</p>
+  <p class="meta">Created: {{formatTime .Session.CreatedAt}} &middot; {{len .Messages}} messages{{if .IsExport}} &middot; Exported: {{formatTime .ExportedAt}}{{end}}</p>
   <p class="meta">Usage: {{.Usage.Total}} total &middot; {{.Usage.Input}} in &middot; {{.Usage.Output}} out &middot; cache r/w {{.Usage.CacheRead}}/{{.Usage.CacheWrite}}</p>
 </div>
 
@@ -428,7 +503,31 @@ h1 { font-size: 1.5rem; margin-bottom: 16px; color: #111827; }
 h1 code { font-size: 0.85em; background: #eef2ff; color: #3730a3; padding: 2px 8px; border-radius: 4px; }
 a { color: #2563eb; text-decoration: none; }
 a:hover { text-decoration: underline; }
-.back { display: inline-block; margin-bottom: 12px; font-size: 0.9rem; }
+.header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.back { display: inline-block; font-size: 0.9rem; }
+.export {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #1d4ed8;
+  color: #fff;
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: 1px solid #1d4ed8;
+}
+.export:hover {
+  text-decoration: none;
+  background: #1e40af;
+  border-color: #1e40af;
+}
 .meta { font-size: 0.85rem; color: #6b7280; margin-bottom: 24px; }
 .empty { color: #6b7280; font-style: italic; }
 
