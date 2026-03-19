@@ -96,6 +96,9 @@ go run ./examples/zen --api-key "$ZEN_API_KEY"
 # OpenCode Go provider + tools
 go run ./examples/opencode-go --api-key "$OPENCODE_GO_API_KEY"
 
+# OpenCode Go provider + custom skill tool
+go run ./examples/skills --api-key "$OPENCODE_GO_API_KEY"
+
 # Fake provider scripted flow (offline)
 go run ./examples/simple
 
@@ -279,6 +282,12 @@ fmt.Println(info.ID, info.ContextWindow, info.MaxOutputTokens)
 
 Useful for context-window math and UX telemetry.
 
+### 6) Skills as a tool
+
+In `gosimov`, skills can be implemented as a regular tool. A common pattern is a `skill` tool where `Description()` exposes a lightweight catalog (for example, skill `name` and `description`), and `Execute({"name":"..."})` returns the full skill body only when needed. This keeps prompts small and lets the model load specialized instructions on demand.
+
+Because tool definitions are sent on each LLM call, the catalog in `Description()` can be dynamic if your loader refreshes skills between turns. For a concrete implementation, see `examples/skills/main.go` and `examples/skills/README.md`.
+
 ## Notes
 
 - `TurnMaxIterations` protects from infinite tool-call loops.
@@ -301,6 +310,8 @@ Useful for context-window math and UX telemetry.
 - `examples/simple/main.go`
 - `examples/zen/main.go`
 - `examples/compaction/main.go`
+- `examples/skills/main.go`
+- `examples/skills/README.md`
 - `examples/chat/main.go`
 - `examples/chat/README.md`
 - `examples/pr-review/main.go`
