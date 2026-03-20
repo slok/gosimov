@@ -47,6 +47,7 @@ github.com/slok/gosimov/
   examples/
     chat/         # Browser chat server (HTTP + SSE) using subscriber-backed message persistence
     compaction/   # Multi-turn example with Zen provider + simple compactor + forced Session.Compact
+    pprof/        # Deterministic fake-provider workload runner for pprof and benchmark profiling
     openai-oauth/ # OAuth auth-code+PKCE example with file-backed credentials and auto refresh
     pr-review/    # CI-ready PR reviewer using dedicated GitHub tools (no generic shell)
     simple/       # Minimal usage example (fake provider, all 5 tools)
