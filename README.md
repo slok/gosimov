@@ -102,6 +102,9 @@ go run ./examples/skills --api-key "$OPENCODE_GO_API_KEY"
 # Fake provider scripted flow (offline)
 go run ./examples/simple
 
+# Fake provider deterministic workload for pprof/benchmarking
+go run ./examples/pprof --mode mixed --turns 5000 --cpu-profile cpu.pprof --heap-profile heap.pprof
+
 # Multi-turn + forced compaction
 ZEN_API_KEY="$ZEN_API_KEY" go run ./examples/compaction
 
@@ -139,6 +142,24 @@ _, _ = session.Prompt(ctx, []model.ContentPart{
 ```
 
 See a complete runnable flow in `examples/simple/main.go` and `examples/zen/main.go`.
+
+## Profiling and Benchmarking
+
+Use the fake-provider harness when you want repeatable SDK profiling without external API/network variance.
+
+```bash
+# Compare benchmark modes and allocations.
+go test ./tests/benchmark -run '^$' -bench BenchmarkSessionHarness -benchmem -benchtime=2s
+
+# Capture CPU/memory profiles from a benchmark case.
+go test ./tests/benchmark -run '^$' -bench 'BenchmarkSessionHarness/tools_memory' -benchtime=5s -cpuprofile cpu.pprof -memprofile mem.pprof
+
+# Inspect profiles.
+go tool pprof -top cpu.pprof
+go tool pprof -top -sample_index=alloc_space mem.pprof
+```
+
+For ad-hoc interactive profiling, use `examples/pprof` (see `examples/pprof/README.md`).
 
 ## Custom Kubernetes Tool (Guardrailed)
 
@@ -308,6 +329,7 @@ Because tool definitions are sent on each LLM call, the catalog in `Description(
 ## More
 
 - `examples/simple/main.go`
+- `examples/pprof/main.go`
 - `examples/zen/main.go`
 - `examples/compaction/main.go`
 - `examples/skills/main.go`
