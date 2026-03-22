@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/slok/gosimov/internal/utils/id"
+	messageutil "github.com/slok/gosimov/internal/utils/message"
 	usageutil "github.com/slok/gosimov/internal/utils/usage"
 	agentcontext "github.com/slok/gosimov/pkg/agent/context"
 	"github.com/slok/gosimov/pkg/conventions"
@@ -169,7 +170,7 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 
 		// Context processor: pure transform on the (already compacted) messages.
 		if config.contextProcessor != nil {
-			llmMessages, err = config.contextProcessor.ProcessContext(ctx, model.CloneMessages(llmMessages))
+			llmMessages, err = config.contextProcessor.ProcessContext(ctx, messageutil.CloneMessages(llmMessages))
 			if err != nil {
 				return nil, fmt.Errorf("context processing failed: %w", err)
 			}

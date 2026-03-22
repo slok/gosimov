@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	messageutil "github.com/slok/gosimov/internal/utils/message"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -1264,7 +1265,7 @@ func TestRunTurn(t *testing.T) {
 
 			config := test.mock(mockTools)
 
-			originalMessages := model.CloneMessages(config.messages)
+			originalMessages := messageutil.CloneMessages(config.messages)
 
 			result, err := runTurn(context.Background(), config)
 

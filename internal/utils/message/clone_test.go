@@ -1,4 +1,4 @@
-package model_test
+package message_test
 
 import (
 	"encoding/json"
@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	messageutil "github.com/slok/gosimov/internal/utils/message"
 	"github.com/slok/gosimov/pkg/model"
 )
 
@@ -44,7 +45,7 @@ func TestCloneMessage(t *testing.T) {
 			require := require.New(t)
 
 			message := test.messageFn()
-			cloned := model.CloneMessage(message)
+			cloned := messageutil.CloneMessage(message)
 
 			assert.Equal(test.expMessage, cloned)
 
@@ -116,7 +117,7 @@ func TestCloneMessages(t *testing.T) {
 			require := require.New(t)
 
 			messages := test.messagesFn()
-			cloned := model.CloneMessages(messages)
+			cloned := messageutil.CloneMessages(messages)
 
 			if test.expNilMessages {
 				assert.Nil(cloned)

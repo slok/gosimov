@@ -1,12 +1,14 @@
-package model
+package message
+
+import "github.com/slok/gosimov/pkg/model"
 
 // CloneMessages returns a deep copy of messages.
-func CloneMessages(messages []Message) []Message {
+func CloneMessages(messages []model.Message) []model.Message {
 	if len(messages) == 0 {
 		return nil
 	}
 
-	cloned := make([]Message, len(messages))
+	cloned := make([]model.Message, len(messages))
 	for i := range messages {
 		cloned[i] = CloneMessage(messages[i])
 	}
@@ -15,11 +17,11 @@ func CloneMessages(messages []Message) []Message {
 }
 
 // CloneMessage returns a deep copy of a message.
-func CloneMessage(message Message) Message {
+func CloneMessage(message model.Message) model.Message {
 	cloned := message
 
 	if len(message.Content) > 0 {
-		cloned.Content = make([]ContentPart, len(message.Content))
+		cloned.Content = make([]model.ContentPart, len(message.Content))
 		copy(cloned.Content, message.Content)
 
 		for i := range cloned.Content {
@@ -37,7 +39,7 @@ func CloneMessage(message Message) Message {
 	}
 
 	if len(message.ToolCallRequests) > 0 {
-		cloned.ToolCallRequests = make([]ToolCallRequest, len(message.ToolCallRequests))
+		cloned.ToolCallRequests = make([]model.ToolCallRequest, len(message.ToolCallRequests))
 		copy(cloned.ToolCallRequests, message.ToolCallRequests)
 
 		for i := range cloned.ToolCallRequests {
