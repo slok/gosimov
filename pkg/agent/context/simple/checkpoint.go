@@ -18,12 +18,20 @@ import (
 func applyLatestCheckpoint(messages []model.Message) []model.Message {
 	checkpointIdx, checkpoint := latestCheckpoint(messages)
 	if checkpoint == nil || checkpoint.Compaction == nil || checkpoint.Compaction.FirstKeptID == "" {
-		return copyMessages(messages)
+		return messages
 	}
 
 	firstKeptIdx := messageIndexByID(messages, checkpoint.Compaction.FirstKeptID)
 	if firstKeptIdx == -1 {
-		return copyMessages(messages)
+		return messages
+	}
+
+	if checkpointIdx+1 == firstKeptIdx {
+		return messages[checkpointIdx:]
+	}
+
+	if checkpointIdx == firstKeptIdx {
+		return messages[firstKeptIdx:]
 	}
 
 	return checkpointAndFollowing(messages, checkpointIdx, firstKeptIdx)
@@ -105,18 +113,6 @@ func prependCheckpoint(messages []model.Message, checkpoint model.Message) []mod
 	result = append(result, checkpoint)
 
 	return append(result, messages...)
-}
-
-// copyMessages returns a shallow copy of the message slice.
-func copyMessages(messages []model.Message) []model.Message {
-	if len(messages) == 0 {
-		return nil
-	}
-
-	result := make([]model.Message, len(messages))
-	copy(result, messages)
-
-	return result
 }
 
 // firstMessageID returns the first non-empty message ID from a slice.

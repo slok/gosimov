@@ -171,40 +171,6 @@ func TestPrependCheckpoint(t *testing.T) {
 	assert.Equal(t, "m2", got[2].ID)
 }
 
-func TestCopyMessages(t *testing.T) {
-	tests := map[string]struct {
-		msgs   []model.Message
-		assert func(t *testing.T, got []model.Message)
-	}{
-		"Empty slice should return nil.": {
-			msgs: nil,
-			assert: func(t *testing.T, got []model.Message) {
-				assert.Nil(t, got)
-			},
-		},
-		"Should return shallow copy.": {
-			msgs: []model.Message{{ID: "m1"}, {ID: "m2"}},
-			assert: func(t *testing.T, got []model.Message) {
-				require.Len(t, got, 2)
-				assert.Equal(t, "m1", got[0].ID)
-				assert.Equal(t, "m2", got[1].ID)
-			},
-		},
-	}
-
-	for name, test := range tests {
-		t.Run(name, func(t *testing.T) {
-			got := copyMessages(test.msgs)
-			test.assert(t, got)
-		})
-	}
-
-	original := []model.Message{{ID: "m1"}}
-	copied := copyMessages(original)
-	copied[0].ID = "changed"
-	assert.Equal(t, "m1", original[0].ID)
-}
-
 func TestFirstMessageID(t *testing.T) {
 	tests := map[string]struct {
 		msgs []model.Message

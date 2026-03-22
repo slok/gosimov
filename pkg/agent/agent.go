@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/slok/gosimov/internal/utils/id"
+	messageutil "github.com/slok/gosimov/internal/utils/message"
 	usageutil "github.com/slok/gosimov/internal/utils/usage"
 	agentcontext "github.com/slok/gosimov/pkg/agent/context"
 	"github.com/slok/gosimov/pkg/conventions"
@@ -92,15 +93,13 @@ type TurnResult struct {
 // Tool execution errors (Go errors from Execute) are wrapped as [model.MessageKindToolResult]
 // with IsError=true and fed back to the LLM, letting it decide how to proceed.
 //
-// The input messages slice is never mutated.
+// The input message elements are treated as immutable.
 func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 	if err := config.defaults(); err != nil {
 		return nil, fmt.Errorf("invalid agent turn config: %w", err)
 	}
 
-	// Copy input messages so we never mutate the caller's slice.
-	allMessages := make([]model.Message, len(config.messages))
-	copy(allMessages, config.messages)
+	allMessages := config.messages
 
 	var (
 		newMessages []model.Message
@@ -142,18 +141,36 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 			return nil, err
 		}
 
+		allMessages = compactResult.Messages
+
 		// If compaction created a checkpoint, append it to turn state.
 		if compactResult.Message != nil {
-			allMessages = append(allMessages, *compactResult.Message)
 			newMessages = append(newMessages, *compactResult.Message)
 			totalUsage = addUsage(totalUsage, &model.MessageMetadata{Usage: &compactResult.Usage})
+
+			// Compactors can return the checkpoint in two valid shapes:
+			//   1. Message != nil and Messages already includes that checkpoint.
+			//   2. Message != nil and Messages excludes it (caller must add it).
+			// For the current turn state we need the checkpoint exactly once, so
+			// detect by ID and append only when it is missing.
+			checkpointInMessages := false
+			for i := range allMessages {
+				if allMessages[i].ID == compactResult.Message.ID {
+					checkpointInMessages = true
+					break
+				}
+			}
+
+			if !checkpointInMessages {
+				allMessages = append(allMessages, *compactResult.Message)
+			}
 		}
 
 		llmMessages := compactResult.Messages
 
 		// Context processor: pure transform on the (already compacted) messages.
 		if config.contextProcessor != nil {
-			llmMessages, err = config.contextProcessor.ProcessContext(ctx, llmMessages)
+			llmMessages, err = config.contextProcessor.ProcessContext(ctx, messageutil.CloneMessages(llmMessages))
 			if err != nil {
 				return nil, fmt.Errorf("context processing failed: %w", err)
 			}

@@ -163,8 +163,8 @@ func (c *Compactor) splitForCompaction(messages []model.Message) (compactionSpli
 	}
 
 	return compactionSplit{
-		toSummarize: copyMessages(messages[:cut]),
-		toKeep:      copyMessages(messages[cut:]),
+		toSummarize: messages[:cut],
+		toKeep:      messages[cut:],
 	}, true
 }
 
