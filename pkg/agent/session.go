@@ -52,11 +52,12 @@ type SessionConfig struct {
 	// Compactor manages context compaction within the agent loop (optional).
 	// If set, it runs on every LLM call within a turn before the context processor.
 	// It may create compaction checkpoints and filters messages based on those checkpoints.
+	// Implementations must treat messages as immutable.
 	Compactor agentcontext.Compactor
 	// ContextProcessor transforms messages before each LLM call (optional).
 	// If set, it is called on every LLM call within a turn (including iterations
-	// after tool results), after the compactor. The full conversation history is
-	// never mutated — only the messages sent to the LLM go through the processor.
+	// after tool results), after the compactor. Implementations must treat
+	// messages as immutable and return a new slice when transforming.
 	ContextProcessor agentcontext.Processor
 	// Logger records session and turn lifecycle events (optional).
 	// If nil, [log.Noop] is used.
@@ -408,8 +409,7 @@ func (s *Session) Prompt(ctx context.Context, content []model.ContentPart, opts 
 
 	s.mu.Lock()
 	s.messages = append(s.messages, userMsg)
-	messages := make([]model.Message, len(s.messages))
-	copy(messages, s.messages)
+	messages := s.messages
 	s.mu.Unlock()
 
 	result, err := s.runTurn(ctx, messages, opts)
@@ -441,8 +441,7 @@ func (s *Session) Continue(ctx context.Context, opts PromptOptions) (*TurnResult
 		return nil, fmt.Errorf("cannot continue: no messages in session: %w", pkgerrors.ErrNotValid)
 	}
 
-	messages := make([]model.Message, len(s.messages))
-	copy(messages, s.messages)
+	messages := s.messages
 	s.mu.Unlock()
 
 	result, err := s.runTurn(ctx, messages, opts)
@@ -581,8 +580,7 @@ func (s *Session) Compact(ctx context.Context) (*agentcontext.CompactResult, err
 	ctx = s.ctxWithRuntimeInfo(ctx)
 
 	s.mu.Lock()
-	messages := make([]model.Message, len(s.messages))
-	copy(messages, s.messages)
+	messages := s.messages
 	s.mu.Unlock()
 
 	result, err := runCompaction(ctx, compactionConfig{

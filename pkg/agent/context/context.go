@@ -56,6 +56,9 @@ type CompactResult struct {
 //  2. Create a [model.MessageKindCompaction] message with a summary (via a dedicated LLM call).
 //  3. Return filtered messages that exclude content covered by the summary.
 //
+// Implementations must treat input messages as immutable and return a new slice
+// when they need to transform ordering or values.
+//
 // If no compaction is needed, it returns filtered messages based on any
 // existing compaction checkpoints in the history.
 //

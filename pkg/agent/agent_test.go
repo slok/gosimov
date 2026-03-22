@@ -948,6 +948,36 @@ func TestRunTurn(t *testing.T) {
 			},
 		},
 
+		"Context processor in-place mutations should be ephemeral.": {
+			mock: func(_ []*toolmock.MockTool) turnConfig {
+				return turnConfig{
+					provider: fake.NewProvider(func(_ context.Context, req llm.Request) (*llm.Response, error) {
+						return &llm.Response{
+							Message: model.Message{
+								Kind:    model.MessageKindLLM,
+								Content: []model.ContentPart{model.NewContentText(req.Messages[0].Content[0].Text)},
+								Metadata: &model.MessageMetadata{
+									StopReason: model.StopReasonComplete,
+								},
+							},
+						}, nil
+					}),
+					messages: []model.Message{
+						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("first")}},
+					},
+					contextProcessor: processorFunc(func(_ context.Context, msgs []model.Message) ([]model.Message, error) {
+						msgs[0].Content[0].Text = "mutated by processor"
+						return msgs, nil
+					}),
+				}
+			},
+			expResp: func(t *testing.T, result *TurnResult) {
+				t.Helper()
+				assert := assert.New(t)
+				assert.Equal("mutated by processor", result.Message.Content[0].Text)
+			},
+		},
+
 		"Context processor should not mutate the full conversation history.": {
 			mock: func(_ []*toolmock.MockTool) turnConfig {
 				return turnConfig{
@@ -1234,8 +1264,7 @@ func TestRunTurn(t *testing.T) {
 
 			config := test.mock(mockTools)
 
-			// Track original message count for mutation check.
-			originalMsgCount := len(config.messages)
+			originalMessages := model.CloneMessages(config.messages)
 
 			result, err := runTurn(context.Background(), config)
 
@@ -1250,8 +1279,7 @@ func TestRunTurn(t *testing.T) {
 			require.NoError(err)
 			require.NotNil(result)
 
-			// Input messages should never be mutated.
-			assert.Len(config.messages, originalMsgCount)
+			assert.Equal(originalMessages, config.messages)
 
 			if test.expResp != nil {
 				test.expResp(t, result)
