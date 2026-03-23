@@ -67,8 +67,8 @@ func (c *turnConfig) defaults() error {
 	return nil
 }
 
-// TurnResult is what [runTurn] returns after the turn completes.
-type TurnResult struct {
+// turnResult is what [runTurn] returns after the turn completes.
+type turnResult struct {
 	// Message is the final LLM response that ended the turn.
 	Message model.Message
 	// Messages is all new messages generated during the turn (LLM responses + tool results).
@@ -94,7 +94,7 @@ type TurnResult struct {
 // with IsError=true and fed back to the LLM, letting it decide how to proceed.
 //
 // The input message elements are treated as immutable.
-func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
+func runTurn(ctx context.Context, config turnConfig) (*turnResult, error) {
 	if err := config.defaults(); err != nil {
 		return nil, fmt.Errorf("invalid agent turn config: %w", err)
 	}
@@ -230,7 +230,7 @@ func runTurn(ctx context.Context, config turnConfig) (*TurnResult, error) {
 
 		switch stopReason {
 		case model.StopReasonComplete, model.StopReasonMaxTokens, model.StopReasonNone:
-			return &TurnResult{
+			return &turnResult{
 				Message:  resp.Message,
 				Messages: newMessages,
 				Usage:    totalUsage,

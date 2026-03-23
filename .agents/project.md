@@ -589,11 +589,11 @@ The agent loop lives in `pkg/agent/`.
 
 ### runTurn (private)
 
-`runTurn(ctx, turnConfig) (*TurnResult, error)` is the internal engine that executes one turn. It's private — users interact with the `Session` type, which calls `runTurn` internally.
+`runTurn(ctx, turnConfig) (*turnResult, error)` is the internal engine that executes one turn. It's private — users interact with the `Session` type, which calls `runTurn` internally.
 
 `turnConfig` carries the `model.Session` identity alongside provider, messages, tools, and max iterations. This means everything inside the loop has access to session context for storage, logging, or events.
 
-`TurnResult` is the only public type from the turn layer (it's the return type of `Session.Prompt()` and `Session.Continue()`).
+`turnResult` is internal to the turn runner layer. Public session APIs return `SessionTurnResult`.
 
 ### runCompaction (private)
 
@@ -628,9 +628,9 @@ This keeps compaction logic in one place (the turn runner layer) instead of dupl
 - `Execute()` returns `(*Result, nil)` → success result with `IsError=false`.
 - All tool errors are fed back to the LLM (never abort the loop on tool errors).
 
-### TurnResult
+### turnResult (internal)
 
-`TurnResult` contains:
+`turnResult` contains:
 - `Message` — the final LLM response that ended the turn.
 - `Messages` — all new messages generated during the turn (LLM responses + tool results).
 - `Usage` — aggregated token usage across all LLM calls in the turn.
@@ -682,8 +682,8 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 |--------|-------------|
 | `NewSession(ctx, cfg) (*Session, error)` | Creates a new session with ULID and timestamp. Persists session identity and can preload/persist initial history via `SessionConfig.Messages`. |
 | `LoadSession(ctx, cfg) (*Session, error)` | Loads an existing persisted session identity. Uses `LoadSessionConfig.Messages` when non-empty; otherwise preloads from `MessageRepository`. |
-| `Prompt(ctx, []ContentPart, opts PromptOptions) (*TurnResult, error)` | Builds a user message, appends it, runs a turn. `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. |
-| `Continue(ctx, opts PromptOptions) (*TurnResult, error)` | Runs a turn from current messages (retries). `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. |
+| `Prompt(ctx, []ContentPart, opts PromptOptions) (*SessionTurnResult, error)` | Builds a user message, appends it, runs a turn. `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. The returned `NewMessages` includes only turn-generated messages (no user message). |
+| `Continue(ctx, opts PromptOptions) (*SessionTurnResult, error)` | Runs a turn from current messages (retries). `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. |
 | `Compact(ctx) (*CompactResult, error)` | Delegates to `runCompaction` with `Force: true`. Appends the compaction message + aggregates usage if created. Returns `ErrSessionBusy` if a turn is running. |
 | `Session() model.Session` | Returns the session identity (ID and creation time). |
 | `State() SessionState` | Returns a thread-safe runtime snapshot (`running`, `operation`, `turn`, `message_count`, identity, usage). |

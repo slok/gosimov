@@ -54,7 +54,7 @@ func testToolIndex(tools ...tool.Tool) map[string]tool.Tool {
 func TestRunTurn(t *testing.T) {
 	tests := map[string]struct {
 		mock     func(tools []*toolmock.MockTool) turnConfig
-		expResp  func(t *testing.T, result *TurnResult)
+		expResp  func(t *testing.T, result *turnResult)
 		expErr   bool
 		expErrIs error // If set, checks errors.Is against this sentinel.
 	}{
@@ -98,7 +98,7 @@ func TestRunTurn(t *testing.T) {
 					},
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 
@@ -132,7 +132,7 @@ func TestRunTurn(t *testing.T) {
 					},
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 
@@ -217,7 +217,7 @@ func TestRunTurn(t *testing.T) {
 					},
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 
@@ -292,7 +292,7 @@ func TestRunTurn(t *testing.T) {
 					toolIndex: testToolIndex(tools[0]),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 
@@ -356,7 +356,7 @@ func TestRunTurn(t *testing.T) {
 					toolTimeout: 2 * time.Second,
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 				assert.Equal("done", result.Message.Content[0].Text)
@@ -410,7 +410,7 @@ func TestRunTurn(t *testing.T) {
 					toolIndex: testToolIndex(tools[0], tools[1]),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 
@@ -479,7 +479,7 @@ func TestRunTurn(t *testing.T) {
 					toolIndex: testToolIndex(tools[0]),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 
@@ -528,7 +528,7 @@ func TestRunTurn(t *testing.T) {
 					toolIndex: testToolIndex(tools[0]),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 
@@ -577,7 +577,7 @@ func TestRunTurn(t *testing.T) {
 					// No tools provided.
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 
@@ -653,7 +653,7 @@ func TestRunTurn(t *testing.T) {
 					},
 				}
 			},
-			expResp: func(t *testing.T, _ *TurnResult) {
+			expResp: func(t *testing.T, _ *turnResult) {
 				t.Helper()
 				// The assertion is implicitly that the test didn't panic.
 				// The actual mutation check is done outside via the config.Messages length.
@@ -676,7 +676,7 @@ func TestRunTurn(t *testing.T) {
 					},
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 
@@ -730,7 +730,7 @@ func TestRunTurn(t *testing.T) {
 					toolIndex: testToolIndex(tools[0]),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 
@@ -784,7 +784,7 @@ func TestRunTurn(t *testing.T) {
 					toolIndex: testToolIndex(tools[0]),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 
@@ -832,7 +832,7 @@ func TestRunTurn(t *testing.T) {
 					toolIndex: testToolIndex(tools[0]),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 
@@ -872,7 +872,7 @@ func TestRunTurn(t *testing.T) {
 					}),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 				// LLM should have received 2 messages (injected + original).
@@ -941,7 +941,7 @@ func TestRunTurn(t *testing.T) {
 					}),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 				// Processor should have been called twice (once per LLM call).
@@ -972,7 +972,7 @@ func TestRunTurn(t *testing.T) {
 					}),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 				assert.Equal("mutated by processor", result.Message.Content[0].Text)
@@ -1005,7 +1005,7 @@ func TestRunTurn(t *testing.T) {
 					}),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 				// LLM should see only 1 message (the filtered one), not 3.
@@ -1040,7 +1040,7 @@ func TestRunTurn(t *testing.T) {
 					}),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 				assert.Equal("saw 1 messages", result.Message.Content[0].Text)
@@ -1108,7 +1108,7 @@ func TestRunTurn(t *testing.T) {
 					}),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 				// Compactor should have been called twice (once per LLM call).
@@ -1154,7 +1154,7 @@ func TestRunTurn(t *testing.T) {
 					}),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 				// Compactor: 3 → 2, then processor: 2 → 3. LLM sees 3.
@@ -1183,7 +1183,7 @@ func TestRunTurn(t *testing.T) {
 					// No compactor set — defaults() will use NoopCompactor.
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 				assert.Equal("saw 2 messages", result.Message.Content[0].Text)
@@ -1232,7 +1232,7 @@ func TestRunTurn(t *testing.T) {
 					}),
 				}
 			},
-			expResp: func(t *testing.T, result *TurnResult) {
+			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
 

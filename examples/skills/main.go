@@ -165,27 +165,30 @@ func run(ctx context.Context) error {
 	}
 
 	fmt.Println("--- Turn messages ---")
-	for _, msg := range result.Messages {
+	for _, msg := range result.NewMessages {
 		printMessage(msg)
 	}
 
-	finalMessage := firstText(result.Message)
+	finalMessage := ""
+	if finalMsg := finalLLMMessage(result.NewMessages); finalMsg != nil {
+		finalMessage = firstText(*finalMsg)
+	}
 	if finalMessage == "" {
 		finalMessage = "(no text content in final LLM message)"
 	}
 	fmt.Printf("\nFinal LLM message:\n%s\n", finalMessage)
 
 	fmt.Println("\n--- Summary ---")
-	fmt.Printf("Messages in turn: %d\n", len(result.Messages))
+	fmt.Printf("Messages in turn: %d\n", len(result.NewMessages))
 	fmt.Printf("Total messages:   %d\n", len(session.Messages()))
 
 	usage := session.Usage()
 	fmt.Printf("Tokens:           %d total, %d input, %d output\n", usage.TotalTokens, usage.InputTokens, usage.OutputTokens)
 
-	if result.Message.Metadata != nil {
-		fmt.Printf("Model used:       %s\n", result.Message.Metadata.Model)
-		fmt.Printf("Provider:         %s\n", result.Message.Metadata.Provider)
-		fmt.Printf("Stop reason:      %s\n", result.Message.Metadata.StopReason)
+	if finalMsg := finalLLMMessage(result.NewMessages); finalMsg != nil && finalMsg.Metadata != nil {
+		fmt.Printf("Model used:       %s\n", finalMsg.Metadata.Model)
+		fmt.Printf("Provider:         %s\n", finalMsg.Metadata.Provider)
+		fmt.Printf("Stop reason:      %s\n", finalMsg.Metadata.StopReason)
 	}
 
 	return nil
@@ -277,6 +280,16 @@ func defaultString(values ...string) string {
 	}
 
 	return ""
+}
+
+func finalLLMMessage(messages []model.Message) *model.Message {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Kind == model.MessageKindLLM {
+			return &messages[i]
+		}
+	}
+
+	return nil
 }
 
 func main() {

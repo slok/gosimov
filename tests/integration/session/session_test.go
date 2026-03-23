@@ -171,7 +171,7 @@ func TestTokenUsageAccumulation(t *testing.T) {
 	turn1, err := promptWithRetry(t, ctx, session, []model.ContentPart{model.NewContentText(
 		"What color is the sky?")})
 	require.NoError(t, err)
-	turn1Usage := turn1.Usage
+	turn1Usage := usageFromTurnMessages(turn1.NewMessages)
 	assert.Greater(t, turn1Usage.TotalTokens, 0)
 	assert.GreaterOrEqual(t, turn1Usage.InputTokens, 0)
 	assert.Greater(t, turn1Usage.OutputTokens, 0)
@@ -182,7 +182,7 @@ func TestTokenUsageAccumulation(t *testing.T) {
 	turn2, err := promptWithRetry(t, ctx, session, []model.ContentPart{model.NewContentText(
 		"What color is grass?")})
 	require.NoError(t, err)
-	turn2Usage := turn2.Usage
+	turn2Usage := usageFromTurnMessages(turn2.NewMessages)
 	assert.Greater(t, turn2Usage.TotalTokens, 0)
 
 	// Session usage should accumulate across turns.

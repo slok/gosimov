@@ -155,13 +155,13 @@ func run(ctx context.Context) error {
 
 	// Print each message from the turn.
 	fmt.Println("--- Turn messages ---")
-	for _, msg := range result.Messages {
+	for _, msg := range result.NewMessages {
 		printMessage(msg)
 	}
 
 	// Summary.
 	fmt.Println("--- Summary ---")
-	fmt.Printf("Messages in turn: %d\n", len(result.Messages))
+	fmt.Printf("Messages in turn: %d\n", len(result.NewMessages))
 	fmt.Printf("Total messages:   %d\n", len(session.Messages()))
 	usage := session.Usage()
 	fmt.Printf("Tokens:           %d total, %d input, %d output\n", usage.TotalTokens, usage.InputTokens, usage.OutputTokens)

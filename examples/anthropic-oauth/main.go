@@ -165,8 +165,9 @@ func run(ctx context.Context) error {
 	}
 
 	answer := "(empty response)"
-	if len(res.Message.Content) > 0 {
-		answer = strings.TrimSpace(res.Message.Content[0].Text)
+	finalMsg := finalLLMMessage(res.NewMessages)
+	if finalMsg != nil && len(finalMsg.Content) > 0 {
+		answer = strings.TrimSpace(finalMsg.Content[0].Text)
 		if answer == "" {
 			answer = "(empty response)"
 		}
@@ -174,9 +175,9 @@ func run(ctx context.Context) error {
 
 	fmt.Printf("User: %s\n\n", cfg.prompt)
 	fmt.Printf("Assistant: %s\n", answer)
-	if res.Message.Metadata != nil {
-		fmt.Printf("Stop reason: %s\n", res.Message.Metadata.StopReason)
-		fmt.Printf("Model used:  %s\n", res.Message.Metadata.Model)
+	if finalMsg != nil && finalMsg.Metadata != nil {
+		fmt.Printf("Stop reason: %s\n", finalMsg.Metadata.StopReason)
+		fmt.Printf("Model used:  %s\n", finalMsg.Metadata.Model)
 	}
 
 	return nil
@@ -284,6 +285,16 @@ func quotaHint(err error) string {
 		"OAuth authentication succeeded, but the Claude backend request was rate/plan limited.",
 		"If your Anthropic plan usage is exhausted, 429 responses are expected until quota resets.",
 	}, "\n")
+}
+
+func finalLLMMessage(messages []model.Message) *model.Message {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Kind == model.MessageKindLLM {
+			return &messages[i]
+		}
+	}
+
+	return nil
 }
 
 func main() {

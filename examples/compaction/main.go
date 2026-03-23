@@ -181,9 +181,9 @@ func run(ctx context.Context) error {
 	return nil
 }
 
-func printTurn(name string, result *agent.TurnResult) {
+func printTurn(name string, result *agent.SessionTurnResult) {
 	fmt.Printf("--- %s ---\n", name)
-	for _, msg := range result.Messages {
+	for _, msg := range result.NewMessages {
 		switch msg.Kind {
 		case model.MessageKindLLM:
 			fmt.Printf("LLM: %s\n", truncate(firstText(msg), 110))

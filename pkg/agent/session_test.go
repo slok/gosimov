@@ -49,6 +49,23 @@ func withRequiredRepos(cfg agent.SessionConfig) agent.SessionConfig {
 	return cfg
 }
 
+func finalLLMFromTurnResult(t *testing.T, result *agent.SessionTurnResult) model.Message {
+	t.Helper()
+	require := require.New(t)
+
+	require.NotNil(result)
+	require.NotEmpty(result.NewMessages)
+
+	for i := len(result.NewMessages) - 1; i >= 0; i-- {
+		if result.NewMessages[i].Kind == model.MessageKindLLM {
+			return result.NewMessages[i]
+		}
+	}
+
+	t.Fatalf("no LLM message in turn result")
+	return model.Message{}
+}
+
 func TestNewSession(t *testing.T) {
 	tests := map[string]struct {
 		config   agent.SessionConfig
@@ -559,7 +576,7 @@ func TestSessionPrompt(t *testing.T) {
 	tests := map[string]struct {
 		mock    func(tools []*toolmock.MockTool) agent.SessionConfig
 		prompts [][]model.ContentPart
-		expResp func(t *testing.T, results []*agent.TurnResult, session *agent.Session)
+		expResp func(t *testing.T, results []*agent.SessionTurnResult, session *agent.Session)
 		expErr  bool
 	}{
 		"Simple prompt should return the LLM response and accumulate messages.": {
@@ -582,13 +599,13 @@ func TestSessionPrompt(t *testing.T) {
 			prompts: [][]model.ContentPart{
 				{model.NewContentText("hello")},
 			},
-			expResp: func(t *testing.T, results []*agent.TurnResult, session *agent.Session) {
+			expResp: func(t *testing.T, results []*agent.SessionTurnResult, session *agent.Session) {
 				t.Helper()
 				assert := assert.New(t)
 				require := require.New(t)
 
 				require.Len(results, 1)
-				assert.Equal("hello back", results[0].Message.Content[0].Text)
+				assert.Equal("hello back", finalLLMFromTurnResult(t, results[0]).Content[0].Text)
 
 				// Session should have 2 messages: user + LLM.
 				msgs := session.Messages()
@@ -630,7 +647,7 @@ func TestSessionPrompt(t *testing.T) {
 				{model.NewContentText("second")},
 				{model.NewContentText("third")},
 			},
-			expResp: func(t *testing.T, results []*agent.TurnResult, session *agent.Session) {
+			expResp: func(t *testing.T, results []*agent.SessionTurnResult, session *agent.Session) {
 				t.Helper()
 				assert := assert.New(t)
 				require := require.New(t)
@@ -638,11 +655,11 @@ func TestSessionPrompt(t *testing.T) {
 				require.Len(results, 3)
 
 				// First turn: LLM sees 1 message (user).
-				assert.Equal("response 1 (saw 1 msgs)", results[0].Message.Content[0].Text)
+				assert.Equal("response 1 (saw 1 msgs)", finalLLMFromTurnResult(t, results[0]).Content[0].Text)
 				// Second turn: LLM sees 3 messages (user + LLM + user).
-				assert.Equal("response 2 (saw 3 msgs)", results[1].Message.Content[0].Text)
+				assert.Equal("response 2 (saw 3 msgs)", finalLLMFromTurnResult(t, results[1]).Content[0].Text)
 				// Third turn: LLM sees 5 messages.
-				assert.Equal("response 3 (saw 5 msgs)", results[2].Message.Content[0].Text)
+				assert.Equal("response 3 (saw 5 msgs)", finalLLMFromTurnResult(t, results[2]).Content[0].Text)
 
 				// Session should have 6 messages: 3 user + 3 LLM.
 				msgs := session.Messages()
@@ -696,13 +713,13 @@ func TestSessionPrompt(t *testing.T) {
 			prompts: [][]model.ContentPart{
 				{model.NewContentText("calculate")},
 			},
-			expResp: func(t *testing.T, results []*agent.TurnResult, session *agent.Session) {
+			expResp: func(t *testing.T, results []*agent.SessionTurnResult, session *agent.Session) {
 				t.Helper()
 				assert := assert.New(t)
 				require := require.New(t)
 
 				require.Len(results, 1)
-				assert.Equal("done", results[0].Message.Content[0].Text)
+				assert.Equal("done", finalLLMFromTurnResult(t, results[0]).Content[0].Text)
 
 				// Session: user + LLM(tool use) + tool result + LLM(complete) = 4.
 				msgs := session.Messages()
@@ -737,7 +754,7 @@ func TestSessionPrompt(t *testing.T) {
 				{model.NewContentText("hello")},
 			},
 			expErr: true,
-			expResp: func(t *testing.T, _ []*agent.TurnResult, session *agent.Session) {
+			expResp: func(t *testing.T, _ []*agent.SessionTurnResult, session *agent.Session) {
 				t.Helper()
 				assert := assert.New(t)
 
@@ -771,13 +788,13 @@ func TestSessionPrompt(t *testing.T) {
 					model.NewContentImage([]byte("fake-png"), "image/png"),
 				},
 			},
-			expResp: func(t *testing.T, results []*agent.TurnResult, _ *agent.Session) {
+			expResp: func(t *testing.T, results []*agent.SessionTurnResult, _ *agent.Session) {
 				t.Helper()
 				assert := assert.New(t)
 				require := require.New(t)
 
 				require.Len(results, 1)
-				assert.Equal("got 2 parts", results[0].Message.Content[0].Text)
+				assert.Equal("got 2 parts", finalLLMFromTurnResult(t, results[0]).Content[0].Text)
 			},
 		},
 	}
@@ -795,7 +812,7 @@ func TestSessionPrompt(t *testing.T) {
 			session, err := agent.NewSession(context.Background(), cfg)
 			require.NoError(err)
 
-			var results []*agent.TurnResult
+			var results []*agent.SessionTurnResult
 			var lastErr error
 			for _, content := range test.prompts {
 				result, promptErr := session.Prompt(context.Background(), content, agent.PromptOptions{})
@@ -822,7 +839,7 @@ func TestSessionPrompt(t *testing.T) {
 func TestSessionContinue(t *testing.T) {
 	tests := map[string]struct {
 		setup   func(t *testing.T) *agent.Session
-		expResp func(t *testing.T, result *agent.TurnResult, session *agent.Session)
+		expResp func(t *testing.T, result *agent.SessionTurnResult, session *agent.Session)
 		expErr  bool
 	}{
 		"Continue with no messages should return an error.": {
@@ -866,11 +883,11 @@ func TestSessionContinue(t *testing.T) {
 
 				return s
 			},
-			expResp: func(t *testing.T, result *agent.TurnResult, session *agent.Session) {
+			expResp: func(t *testing.T, result *agent.SessionTurnResult, session *agent.Session) {
 				t.Helper()
 				assert := assert.New(t)
 
-				assert.Equal("continued", result.Message.Content[0].Text)
+				assert.Equal("continued", finalLLMFromTurnResult(t, result).Content[0].Text)
 				// Messages: injected user + LLM response = 2.
 				msgs := session.Messages()
 				assert.Len(msgs, 2)
@@ -1206,11 +1223,11 @@ func TestSessionMutators(t *testing.T) {
 
 				r1, err := s.Prompt(context.Background(), []model.ContentPart{model.NewContentText("hi")}, agent.PromptOptions{})
 				require.NoError(err)
-				assert.Equal("default", r1.Message.Content[0].Text)
+				assert.Equal("default", finalLLMFromTurnResult(t, r1).Content[0].Text)
 
 				r2, err := s.Prompt(context.Background(), []model.ContentPart{model.NewContentText("hi")}, agent.PromptOptions{SystemPrompt: "override"})
 				require.NoError(err)
-				assert.Equal("override", r2.Message.Content[0].Text)
+				assert.Equal("override", finalLLMFromTurnResult(t, r2).Content[0].Text)
 			},
 		},
 

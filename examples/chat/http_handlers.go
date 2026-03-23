@@ -584,13 +584,13 @@ func writeJSON(w http.ResponseWriter, status int, data any) {
 	_ = json.NewEncoder(w).Encode(data)
 }
 
-func shouldRetryForExecutionEvidence(result *agent.TurnResult) bool {
+func shouldRetryForExecutionEvidence(result *agent.SessionTurnResult) bool {
 	if result == nil {
 		return false
 	}
 
 	hasToolResult := false
-	for _, msg := range result.Messages {
+	for _, msg := range result.NewMessages {
 		if msg.Kind == model.MessageKindToolResult {
 			hasToolResult = true
 			break
@@ -601,12 +601,20 @@ func shouldRetryForExecutionEvidence(result *agent.TurnResult) bool {
 		return false
 	}
 
-	if result.Message.Kind != model.MessageKindLLM {
+	var finalLLM *model.Message
+	for i := len(result.NewMessages) - 1; i >= 0; i-- {
+		if result.NewMessages[i].Kind == model.MessageKindLLM {
+			finalLLM = &result.NewMessages[i]
+			break
+		}
+	}
+
+	if finalLLM == nil {
 		return false
 	}
 
-	textParts := make([]string, 0, len(result.Message.Content))
-	for _, p := range result.Message.Content {
+	textParts := make([]string, 0, len(finalLLM.Content))
+	for _, p := range finalLLM.Content {
 		if p.Type == model.ContentPartTypeText {
 			textParts = append(textParts, p.Text)
 		}
