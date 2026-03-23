@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/slok/gosimov/pkg/agent"
 	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/llm/opencodego"
@@ -126,7 +128,7 @@ func (c Config) NewSummaryProvider(t *testing.T) llm.Provider {
 	return p
 }
 
-func promptWithRetry(t *testing.T, ctx context.Context, session *agent.Session, content []model.ContentPart) (*agent.TurnResult, error) {
+func promptWithRetry(t *testing.T, ctx context.Context, session *agent.Session, content []model.ContentPart) (*agent.SessionTurnResult, error) {
 	t.Helper()
 
 	const maxAttempts = 3
@@ -156,4 +158,21 @@ func isRetryableIntegrationErr(err error) bool {
 
 	errMsg := err.Error()
 	return strings.Contains(errMsg, "status 429") || strings.Contains(errMsg, "status 500") || strings.Contains(errMsg, "rate limit")
+}
+
+func finalLLMMessageFromTurnResult(t *testing.T, result *agent.SessionTurnResult) model.Message {
+	t.Helper()
+	require := require.New(t)
+
+	require.NotNil(result)
+	require.NotEmpty(result.NewMessages)
+
+	for i := len(result.NewMessages) - 1; i >= 0; i-- {
+		if result.NewMessages[i].Kind == model.MessageKindLLM {
+			return result.NewMessages[i]
+		}
+	}
+
+	t.Fatalf("no LLM message in turn result")
+	return model.Message{}
 }

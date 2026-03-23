@@ -95,10 +95,9 @@ goodbye world
 	assert.GreaterOrEqual(t, toolResultCount, 3, "should have at least 3 tool results (write, edit, read)")
 
 	// Verify LLM made multiple iterations (more than just user + single LLM response).
-	assert.Greater(t, len(result.Messages), 1, "turn should have multiple messages (LLM + tool results)")
+	assert.Greater(t, len(result.NewMessages), 1, "turn should have multiple messages (LLM + tool results)")
 
 	// Token usage should be tracked across all iterations.
-	assert.Greater(t, result.Usage.TotalTokens, 0)
 	assert.Greater(t, session.Usage().TotalTokens, 0)
 }
 
@@ -139,7 +138,7 @@ func TestToolUsageListDirectory(t *testing.T) {
 
 	// The final response should mention the files.
 	responseText := ""
-	for _, cp := range result.Message.Content {
+	for _, cp := range finalLLMMessageFromTurnResult(t, result).Content {
 		responseText += cp.Text
 	}
 	assert.Contains(t, responseText, "alpha.txt")
@@ -155,5 +154,5 @@ func TestToolUsageListDirectory(t *testing.T) {
 	}
 	assert.True(t, hasToolResult, "should have at least one tool result from ls")
 
-	assert.Greater(t, result.Usage.TotalTokens, 0)
+	assert.Greater(t, session.Usage().TotalTokens, 0)
 }

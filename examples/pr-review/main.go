@@ -107,9 +107,9 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("review prompt failed: %w", err)
 	}
 
-	if len(result.Message.Content) > 0 {
+	if finalMsg := finalLLMMessage(result.NewMessages); finalMsg != nil && len(finalMsg.Content) > 0 {
 		fmt.Println("LLM final message:")
-		fmt.Println(result.Message.Content[0].Text)
+		fmt.Println(finalMsg.Content[0].Text)
 	}
 
 	fmt.Printf("\nInline comments posted: %d\n", state.InlineCommentsPosted())
@@ -143,4 +143,14 @@ func createTools(state *exampletools.State) ([]tool.Tool, error) {
 	}
 
 	return tools, nil
+}
+
+func finalLLMMessage(messages []model.Message) *model.Message {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Kind == model.MessageKindLLM {
+			return &messages[i]
+		}
+	}
+
+	return nil
 }

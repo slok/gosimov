@@ -80,7 +80,10 @@ func main() {
         panic(err)
     }
 
-    fmt.Println(result.Message.Content[0].Text)
+    if len(result.NewMessages) > 0 {
+        final := result.NewMessages[len(result.NewMessages)-1]
+        fmt.Println(final.Content[0].Text)
+    }
 
     usage := session.Usage()
     fmt.Printf("tokens: total=%d input=%d output=%d\n", usage.TotalTokens, usage.InputTokens, usage.OutputTokens)

@@ -49,13 +49,14 @@ func TestCompaction(t *testing.T) {
 	// Turn 1: ask about Go interfaces.
 	turn1, err := promptWithRetry(t, ctx, session, textParts("Explain what Go interfaces are in 2-3 sentences."))
 	require.NoError(t, err)
-	assert.Equal(t, model.StopReasonComplete, turn1.Message.Metadata.StopReason)
-	turn1Usage := turn1.Usage
+	turn1Final := finalLLMMessageFromTurnResult(t, turn1)
+	assert.Equal(t, model.StopReasonComplete, turn1Final.Metadata.StopReason)
 
 	// Turn 2: ask about Go channels.
 	turn2, err := promptWithRetry(t, ctx, session, textParts("Now explain what Go channels are in 2-3 sentences."))
 	require.NoError(t, err)
-	assert.Equal(t, model.StopReasonComplete, turn2.Message.Metadata.StopReason)
+	turn2Final := finalLLMMessageFromTurnResult(t, turn2)
+	assert.Equal(t, model.StopReasonComplete, turn2Final.Metadata.StopReason)
 
 	usageBeforeCompaction := session.Usage()
 	messagesBeforeCompaction := len(session.Messages())
@@ -98,7 +99,7 @@ func TestCompaction(t *testing.T) {
 
 	// The response should reference both topics, proving compacted context is usable.
 	responseText := ""
-	for _, cp := range turn3.Message.Content {
+	for _, cp := range finalLLMMessageFromTurnResult(t, turn3).Content {
 		responseText += cp.Text
 	}
 	// Check that at least one topic is mentioned (the LLM has the summary).
@@ -111,8 +112,8 @@ func TestCompaction(t *testing.T) {
 	// Final usage should be greater than all individual turns combined
 	// (includes compaction overhead).
 	finalUsage := session.Usage()
-	assert.Greater(t, finalUsage.TotalTokens, turn1Usage.TotalTokens,
-		"final usage should exceed turn 1 alone")
+	assert.Greater(t, finalUsage.TotalTokens, usageAfterCompaction.TotalTokens,
+		"final usage should exceed post-compaction usage after turn 3")
 }
 
 func TestCompactionResultFields(t *testing.T) {

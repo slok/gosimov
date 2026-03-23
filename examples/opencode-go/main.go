@@ -144,21 +144,21 @@ func run(ctx context.Context) error {
 	}
 
 	fmt.Println("--- Turn messages ---")
-	for _, msg := range result.Messages {
+	for _, msg := range result.NewMessages {
 		printMessage(msg)
 	}
 
 	fmt.Println("\n--- Summary ---")
-	fmt.Printf("Messages in turn: %d\n", len(result.Messages))
+	fmt.Printf("Messages in turn: %d\n", len(result.NewMessages))
 	fmt.Printf("Total messages:   %d\n", len(session.Messages()))
 
 	usage := session.Usage()
 	fmt.Printf("Tokens:           %d total, %d input, %d output\n", usage.TotalTokens, usage.InputTokens, usage.OutputTokens)
 
-	if result.Message.Metadata != nil {
-		fmt.Printf("Model used:       %s\n", result.Message.Metadata.Model)
-		fmt.Printf("Provider:         %s\n", result.Message.Metadata.Provider)
-		fmt.Printf("Stop reason:      %s\n", result.Message.Metadata.StopReason)
+	if finalMsg := finalLLMMessage(result.NewMessages); finalMsg != nil && finalMsg.Metadata != nil {
+		fmt.Printf("Model used:       %s\n", finalMsg.Metadata.Model)
+		fmt.Printf("Provider:         %s\n", finalMsg.Metadata.Provider)
+		fmt.Printf("Stop reason:      %s\n", finalMsg.Metadata.StopReason)
 	}
 
 	return nil
@@ -229,6 +229,16 @@ func defaultString(v, fallback string) string {
 	}
 
 	return v
+}
+
+func finalLLMMessage(messages []model.Message) *model.Message {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Kind == model.MessageKindLLM {
+			return &messages[i]
+		}
+	}
+
+	return nil
 }
 
 func main() {
