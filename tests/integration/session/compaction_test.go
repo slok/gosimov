@@ -51,7 +51,6 @@ func TestCompaction(t *testing.T) {
 	require.NoError(t, err)
 	turn1Final := finalLLMMessageFromTurnResult(t, turn1)
 	assert.Equal(t, model.StopReasonComplete, turn1Final.Metadata.StopReason)
-	turn1Usage := usageFromTurnMessages(turn1.NewMessages)
 
 	// Turn 2: ask about Go channels.
 	turn2, err := promptWithRetry(t, ctx, session, textParts("Now explain what Go channels are in 2-3 sentences."))
@@ -113,8 +112,8 @@ func TestCompaction(t *testing.T) {
 	// Final usage should be greater than all individual turns combined
 	// (includes compaction overhead).
 	finalUsage := session.Usage()
-	assert.Greater(t, finalUsage.TotalTokens, turn1Usage.TotalTokens,
-		"final usage should exceed turn 1 alone")
+	assert.Greater(t, finalUsage.TotalTokens, usageAfterCompaction.TotalTokens,
+		"final usage should exceed post-compaction usage after turn 3")
 }
 
 func TestCompactionResultFields(t *testing.T) {

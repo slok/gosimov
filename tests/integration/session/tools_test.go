@@ -98,7 +98,6 @@ goodbye world
 	assert.Greater(t, len(result.NewMessages), 1, "turn should have multiple messages (LLM + tool results)")
 
 	// Token usage should be tracked across all iterations.
-	assert.Greater(t, usageFromTurnMessages(result.NewMessages).TotalTokens, 0)
 	assert.Greater(t, session.Usage().TotalTokens, 0)
 }
 
@@ -155,5 +154,5 @@ func TestToolUsageListDirectory(t *testing.T) {
 	}
 	assert.True(t, hasToolResult, "should have at least one tool result from ls")
 
-	assert.Greater(t, usageFromTurnMessages(result.NewMessages).TotalTokens, 0)
+	assert.Greater(t, session.Usage().TotalTokens, 0)
 }

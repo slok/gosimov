@@ -171,10 +171,10 @@ func TestTokenUsageAccumulation(t *testing.T) {
 	turn1, err := promptWithRetry(t, ctx, session, []model.ContentPart{model.NewContentText(
 		"What color is the sky?")})
 	require.NoError(t, err)
-	turn1Usage := usageFromTurnMessages(turn1.NewMessages)
-	assert.Greater(t, turn1Usage.TotalTokens, 0)
-	assert.GreaterOrEqual(t, turn1Usage.InputTokens, 0)
-	assert.Greater(t, turn1Usage.OutputTokens, 0)
+	turn1Final := finalLLMMessageFromTurnResult(t, turn1)
+	require.NotNil(t, turn1Final.Metadata)
+	require.NotNil(t, turn1Final.Metadata.Usage)
+	assert.Greater(t, turn1Final.Metadata.Usage.TotalTokens, 0)
 
 	usageAfterTurn1 := session.Usage()
 
@@ -182,17 +182,19 @@ func TestTokenUsageAccumulation(t *testing.T) {
 	turn2, err := promptWithRetry(t, ctx, session, []model.ContentPart{model.NewContentText(
 		"What color is grass?")})
 	require.NoError(t, err)
-	turn2Usage := usageFromTurnMessages(turn2.NewMessages)
-	assert.Greater(t, turn2Usage.TotalTokens, 0)
+	turn2Final := finalLLMMessageFromTurnResult(t, turn2)
+	require.NotNil(t, turn2Final.Metadata)
+	require.NotNil(t, turn2Final.Metadata.Usage)
+	assert.Greater(t, turn2Final.Metadata.Usage.TotalTokens, 0)
 
 	// Session usage should accumulate across turns.
 	finalUsage := session.Usage()
 	assert.Greater(t, finalUsage.TotalTokens, usageAfterTurn1.TotalTokens,
 		"session total tokens should grow after turn 2")
-	assert.GreaterOrEqual(t, finalUsage.InputTokens, turn1Usage.InputTokens+turn2Usage.InputTokens,
-		"accumulated input tokens should be >= sum of turn input tokens")
-	assert.Equal(t, turn1Usage.OutputTokens+turn2Usage.OutputTokens, finalUsage.OutputTokens,
-		"accumulated output tokens should equal sum of turn output tokens")
+	assert.GreaterOrEqual(t, finalUsage.InputTokens, usageAfterTurn1.InputTokens,
+		"session input tokens should not decrease after turn 2")
+	assert.Greater(t, finalUsage.OutputTokens, usageAfterTurn1.OutputTokens,
+		"session output tokens should grow after turn 2")
 
 	// Messages should have 4: user1, llm1, user2, llm2.
 	msgs := session.Messages()

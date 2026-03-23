@@ -176,22 +176,3 @@ func finalLLMMessageFromTurnResult(t *testing.T, result *agent.SessionTurnResult
 	t.Fatalf("no LLM message in turn result")
 	return model.Message{}
 }
-
-func usageFromTurnMessages(messages []model.Message) model.Usage {
-	total := model.Usage{}
-	for _, msg := range messages {
-		if msg.Metadata == nil || msg.Metadata.Usage == nil {
-			continue
-		}
-
-		u := msg.Metadata.Usage
-		total.InputTokens += u.InputTokens
-		total.OutputTokens += u.OutputTokens
-		total.CacheReadTokens += u.CacheReadTokens
-		total.CacheWriteTokens += u.CacheWriteTokens
-		total.TotalTokens += u.TotalTokens
-		total.ReasoningTokens += u.ReasoningTokens
-	}
-
-	return total
-}
