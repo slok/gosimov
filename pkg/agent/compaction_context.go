@@ -21,14 +21,6 @@ func effectiveCompactionContext(messages []model.Message) []model.Message {
 		return messages
 	}
 
-	if checkpointIdx+1 == firstKeptIdx {
-		return messages[checkpointIdx:]
-	}
-
-	if checkpointIdx == firstKeptIdx {
-		return messages[firstKeptIdx:]
-	}
-
 	result := make([]model.Message, 0, 1+len(messages)-firstKeptIdx)
 	result = append(result, messages[checkpointIdx])
 	for i := firstKeptIdx; i < len(messages); i++ {
