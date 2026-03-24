@@ -593,9 +593,11 @@ func (s *Session) Compact(ctx context.Context) (*agentcontext.CompactResult, err
 	messages := s.messages
 	s.mu.Unlock()
 
+	runtimeMessages := effectiveCompactionContext(messages)
+
 	result, err := runCompaction(ctx, compactionConfig{
 		compactor:  s.compactor,
-		messages:   messages,
+		messages:   runtimeMessages,
 		onMessages: s.persistMessages,
 		opts:       agentcontext.CompactOptions{Force: true},
 		logger:     logger,
@@ -604,9 +606,9 @@ func (s *Session) Compact(ctx context.Context) (*agentcontext.CompactResult, err
 		return nil, err
 	}
 
-	if result.Message != nil {
+	if result.SummaryMessage != nil {
 		s.mu.Lock()
-		s.messages = append(s.messages, *result.Message)
+		s.messages = append(s.messages, *result.SummaryMessage)
 		s.usage = addUsage(s.usage, &model.MessageMetadata{Usage: &result.Usage})
 		s.mu.Unlock()
 

@@ -138,13 +138,13 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("forcing compaction: %w", err)
 	}
 	fmt.Printf("Compaction done in %s\n", time.Since(compactStart).Round(time.Millisecond))
-	if compactResult.Message == nil {
+	if compactResult.SummaryMessage == nil {
 		fmt.Println("No checkpoint generated (context too small for current keepRecentTokens).")
 	} else {
-		fmt.Printf("Checkpoint ID:  %s\n", compactResult.Message.ID)
-		fmt.Printf("First kept ID:  %s\n", compactResult.Message.Compaction.FirstKeptID)
-		fmt.Printf("Tokens before:  %d\n", compactResult.Message.Compaction.TokensBefore)
-		fmt.Printf("Summary:        %s\n", truncate(firstText(*compactResult.Message), 110))
+		fmt.Printf("Checkpoint ID:  %s\n", compactResult.SummaryMessage.ID)
+		fmt.Printf("First kept ID:  %s\n", compactResult.SummaryMessage.Compaction.FirstKeptID)
+		fmt.Printf("Tokens before:  %d\n", compactResult.SummaryMessage.Compaction.TokensBefore)
+		fmt.Printf("Summary:        %s\n", truncate(firstText(*compactResult.SummaryMessage), 110))
 	}
 	fmt.Println()
 

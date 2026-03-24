@@ -66,10 +66,10 @@ func TestCompaction(t *testing.T) {
 	require.NoError(t, err)
 
 	// Compaction should have created a checkpoint message.
-	require.NotNil(t, compactResult.Message, "compaction should create a checkpoint message")
-	assert.Equal(t, model.MessageKindCompaction, compactResult.Message.Kind)
-	require.NotNil(t, compactResult.Message.Compaction, "compaction message should have CompactionData")
-	assert.NotEmpty(t, compactResult.Message.Compaction.FirstKeptID, "should have FirstKeptID")
+	require.NotNil(t, compactResult.SummaryMessage, "compaction should create a checkpoint message")
+	assert.Equal(t, model.MessageKindCompaction, compactResult.SummaryMessage.Kind)
+	require.NotNil(t, compactResult.SummaryMessage.Compaction, "compaction message should have CompactionData")
+	assert.NotEmpty(t, compactResult.SummaryMessage.Compaction.FirstKeptID, "should have FirstKeptID")
 
 	// Compaction should have used tokens for the summarization call.
 	assert.Greater(t, compactResult.Usage.TotalTokens, 0, "compaction summarization should use tokens")
@@ -156,31 +156,27 @@ func TestCompactionResultFields(t *testing.T) {
 	result, err := session.Compact(ctx)
 	require.NoError(t, err)
 
-	require.NotNil(t, result.Message)
-	assert.Equal(t, model.MessageKindCompaction, result.Message.Kind)
+	require.NotNil(t, result.SummaryMessage)
+	assert.Equal(t, model.MessageKindCompaction, result.SummaryMessage.Kind)
 
 	// Content should have the summary text.
-	require.NotEmpty(t, result.Message.Content)
-	assert.NotEmpty(t, result.Message.Content[0].Text, "compaction summary should have text content")
+	require.NotEmpty(t, result.SummaryMessage.Content)
+	assert.NotEmpty(t, result.SummaryMessage.Content[0].Text, "compaction summary should have text content")
 
 	// CompactionData fields.
-	require.NotNil(t, result.Message.Compaction)
-	assert.NotEmpty(t, result.Message.Compaction.FirstKeptID)
-	assert.Greater(t, result.Message.Compaction.TokensBefore, 0, "TokensBefore should be > 0")
+	require.NotNil(t, result.SummaryMessage.Compaction)
+	assert.NotEmpty(t, result.SummaryMessage.Compaction.FirstKeptID)
+	assert.Greater(t, result.SummaryMessage.Compaction.TokensBefore, 0, "TokensBefore should be > 0")
 
-	// Filtered messages (what would be sent to LLM after compaction).
-	assert.NotEmpty(t, result.Messages, "filtered messages should not be empty")
-
-	// The filtered messages should start with or contain the compaction message.
-	var filteredHasCompaction bool
-	for _, m := range result.Messages {
-		if m.Kind == model.MessageKindCompaction {
-			filteredHasCompaction = true
+	// The checkpoint boundary should reference a message from pre-compaction history.
+	var foundFirstKept bool
+	for _, m := range messagesBefore {
+		if m.ID == result.SummaryMessage.Compaction.FirstKeptID {
+			foundFirstKept = true
 			break
 		}
 	}
-	assert.True(t, filteredHasCompaction, "filtered messages should include compaction checkpoint")
-	assertCompactionFilteredOldMessages(t, messagesBefore, result.Messages, result.Message.Compaction.FirstKeptID)
+	assert.True(t, foundFirstKept, "FirstKeptID should reference a message in pre-compaction history")
 
 	// Usage from the summarization call.
 	assert.GreaterOrEqual(t, result.Usage.InputTokens, 0)
@@ -224,12 +220,12 @@ func TestCompactionNoopWhenNotForced(t *testing.T) {
 	// if there is no compactable history beyond keep-recent boundaries.
 	result, err := session.Compact(ctx)
 	require.NoError(t, err)
-	if result.Message == nil {
+	if result.SummaryMessage == nil {
 		assert.Equal(t, 0, result.Usage.TotalTokens)
 		return
 	}
 
-	assert.Equal(t, model.MessageKindCompaction, result.Message.Kind)
+	assert.Equal(t, model.MessageKindCompaction, result.SummaryMessage.Kind)
 }
 
 // textParts is a helper to create simple text content parts.
@@ -249,27 +245,4 @@ func containsAny(s string, substrs ...string) bool {
 		}
 	}
 	return false
-}
-
-func assertCompactionFilteredOldMessages(t *testing.T, before, filtered []model.Message, firstKeptID string) {
-	t.Helper()
-
-	firstKeptIdx := -1
-	for i, m := range before {
-		if m.ID == firstKeptID {
-			firstKeptIdx = i
-			break
-		}
-	}
-	require.GreaterOrEqual(t, firstKeptIdx, 0, "first kept message should exist in pre-compaction history")
-
-	compactedIDs := map[string]struct{}{}
-	for _, m := range before[:firstKeptIdx] {
-		compactedIDs[m.ID] = struct{}{}
-	}
-
-	for _, m := range filtered {
-		_, compacted := compactedIDs[m.ID]
-		assert.False(t, compacted, "filtered context should not include compacted message %q", m.ID)
-	}
 }

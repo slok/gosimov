@@ -106,16 +106,16 @@ var _ agentcontext.Compactor = (*Compactor)(nil)
 //  1. Always apply the latest existing checkpoint to produce the effective context.
 //  2. If forced, summarize older messages and return a new compaction checkpoint.
 //  3. If not forced, summarize only when estimated tokens exceed the threshold;
-//     otherwise return filtered context only.
+//     otherwise return no new checkpoint.
 func (c *Compactor) Compact(ctx context.Context, messages []model.Message, opts agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
 	effective := effectiveMessages(messages)
 	if !c.shouldCreateCheckpoint(ctx, opts.Force, effective) {
-		return &agentcontext.CompactResult{Messages: effective}, nil
+		return &agentcontext.CompactResult{}, nil
 	}
 
 	split, ok := c.splitForCompaction(effective)
 	if !ok {
-		return &agentcontext.CompactResult{Messages: effective}, nil
+		return &agentcontext.CompactResult{}, nil
 	}
 
 	firstKeptID := firstMessageID(split.toKeep)
@@ -132,12 +132,9 @@ func (c *Compactor) Compact(ctx context.Context, messages []model.Message, opts 
 	}
 
 	checkpoint := createCheckpoint(summary, firstKeptID, estimateMessagesTokens(effective))
-	filtered := prependCheckpoint(split.toKeep, checkpoint)
-
 	return &agentcontext.CompactResult{
-		Message:  &checkpoint,
-		Messages: filtered,
-		Usage:    usage,
+		SummaryMessage: &checkpoint,
+		Usage:          usage,
 	}, nil
 }
 

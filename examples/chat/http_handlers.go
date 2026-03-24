@@ -357,7 +357,7 @@ func (a *app) handleCompactAny(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	compacted := result != nil && result.Message != nil
+	compacted := result != nil && result.SummaryMessage != nil
 
 	log.Printf("compact ok session_id=%s compacted=%t", sessionID, compacted)
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "compacted": compacted})

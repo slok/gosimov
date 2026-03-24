@@ -3,15 +3,14 @@
 // Two interfaces handle different concerns:
 //
 //   - [Compactor] manages context compaction: it decides when to compact,
-//     creates compaction checkpoints, and filters messages based on those
-//     checkpoints. It may make LLM calls for summarization.
+//     creates compaction checkpoints, and may make LLM calls for summarization.
 //
 //   - [Processor] is a pure transform on the message list before each LLM call,
 //     for concerns like message injection, token trimming, or filtering.
 //     It must not mutate the input slice or have side effects.
 //
-// Both run on every LLM call within a turn. The compactor runs first
-// (may compact + filter), then the processor transforms the result.
+// Both run on every LLM call within a turn. The compactor runs first,
+// then the processor transforms the runtime context messages.
 package context
 
 import (
@@ -34,16 +33,9 @@ type CompactOptions struct {
 
 // CompactResult is returned by [Compactor.Compact].
 type CompactResult struct {
-	// Message is the compaction checkpoint message created during compaction.
-	// Nil if no compaction was needed (threshold not exceeded and Force was false).
-	// The caller is responsible for appending this to the conversation history
-	// and persisting it.
-	Message *model.Message
-	// Messages is the filtered message list for the LLM.
-	// If compaction occurred, this excludes content covered by the summary.
-	// If no compaction occurred, this may still be filtered based on existing
-	// compaction checkpoints in the history.
-	Messages []model.Message
+	// SummaryMessage is the compaction checkpoint message created during compaction.
+	// It is nil if no new checkpoint was created (e.g., compaction not needed or forced off).
+	SummaryMessage *model.Message
 	// Usage is the token usage from the summarization LLM call.
 	// Zero if no compaction was performed.
 	Usage model.Usage
@@ -54,13 +46,8 @@ type CompactResult struct {
 // On each call, the compactor may:
 //  1. Decide the context needs compaction (threshold check, or forced via [CompactOptions.Force]).
 //  2. Create a [model.MessageKindCompaction] message with a summary (via a dedicated LLM call).
-//  3. Return filtered messages that exclude content covered by the summary.
 //
-// Implementations must treat input messages as immutable and return a new slice
-// when they need to transform ordering or values.
-//
-// If no compaction is needed, it returns filtered messages based on any
-// existing compaction checkpoints in the history.
+// Implementations must treat input messages as immutable.
 //
 // The compactor is called on every LLM call within a turn (including
 // iterations after tool results are appended). It can also be called
@@ -80,11 +67,11 @@ type Processor interface {
 	ProcessContext(ctx context.Context, messages []model.Message) ([]model.Message, error)
 }
 
-// NoopCompactor is a [Compactor] that passes messages through unchanged.
+// NoopCompactor is a [Compactor] that never creates checkpoints.
 // Used as the default when no compactor is configured.
 type NoopCompactor struct{}
 
-// Compact implements [Compactor]. It never compacts and returns all messages unchanged.
-func (NoopCompactor) Compact(_ context.Context, messages []model.Message, _ CompactOptions) (*CompactResult, error) {
-	return &CompactResult{Messages: messages}, nil
+// Compact implements [Compactor]. It never creates checkpoint messages.
+func (NoopCompactor) Compact(_ context.Context, _ []model.Message, _ CompactOptions) (*CompactResult, error) {
+	return &CompactResult{}, nil
 }
