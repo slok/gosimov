@@ -159,18 +159,6 @@ func TestCreateCheckpoint(t *testing.T) {
 	assert.False(t, got.CreatedAt.IsZero())
 }
 
-func TestPrependCheckpoint(t *testing.T) {
-	checkpoint := model.Message{ID: "c1", Kind: model.MessageKindCompaction}
-	messages := []model.Message{{ID: "m1"}, {ID: "m2"}}
-
-	got := prependCheckpoint(messages, checkpoint)
-
-	require.Len(t, got, 3)
-	assert.Equal(t, "c1", got[0].ID)
-	assert.Equal(t, "m1", got[1].ID)
-	assert.Equal(t, "m2", got[2].ID)
-}
-
 func TestFirstMessageID(t *testing.T) {
 	tests := map[string]struct {
 		msgs []model.Message

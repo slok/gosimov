@@ -1029,10 +1029,10 @@ func TestSessionState(t *testing.T) {
 
 				started := make(chan struct{})
 				release := make(chan struct{})
-				compactor := &testCompactor{fn: func(_ context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+				compactor := &testCompactor{fn: func(_ context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
 					close(started)
 					<-release
-					return &agentcontext.CompactResult{Messages: msgs}, nil
+					return &agentcontext.CompactResult{}, nil
 				}}
 
 				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
@@ -1653,7 +1653,7 @@ func TestSessionCompact(t *testing.T) {
 					fn: func(_ context.Context, msgs []model.Message, opts agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
 						gotOpts = opts
 						gotMsgs = msgs
-						return &agentcontext.CompactResult{Messages: msgs}, nil
+						return &agentcontext.CompactResult{}, nil
 					},
 				}
 
@@ -1695,8 +1695,7 @@ func TestSessionCompact(t *testing.T) {
 				require.NoError(err)
 				require.NotNil(result)
 
-				assert.Nil(result.Message, "NoopCompactor should not create a compaction message")
-				assert.Len(result.Messages, 1)
+				assert.Nil(result.SummaryMessage, "NoopCompactor should not create a compaction message")
 			},
 		},
 
@@ -1714,11 +1713,10 @@ func TestSessionCompact(t *testing.T) {
 				}
 
 				compactor := &testCompactor{
-					fn: func(_ context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+					fn: func(_ context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
 						return &agentcontext.CompactResult{
-							Message:  &compactionMsg,
-							Messages: msgs,
-							Usage:    model.Usage{InputTokens: 100, OutputTokens: 50},
+							SummaryMessage: &compactionMsg,
+							Usage:          model.Usage{InputTokens: 100, OutputTokens: 50},
 						}, nil
 					},
 				}
@@ -1736,7 +1734,7 @@ func TestSessionCompact(t *testing.T) {
 
 				result, err := s.Compact(context.Background())
 				require.NoError(err)
-				require.NotNil(result.Message)
+				require.NotNil(result.SummaryMessage)
 
 				// The compaction message should be appended to session history.
 				msgs := s.Messages()
@@ -1769,10 +1767,9 @@ func TestSessionCompact(t *testing.T) {
 				}
 
 				compactor := &testCompactor{
-					fn: func(_ context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+					fn: func(_ context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
 						return &agentcontext.CompactResult{
-							Message:  &compactionMsg,
-							Messages: msgs,
+							SummaryMessage: &compactionMsg,
 						}, nil
 					},
 				}
@@ -1916,10 +1913,10 @@ func TestSessionRuntimeContextValues(t *testing.T) {
 				var gotInfo *model.LLMModelInfo
 
 				compactor := &testCompactor{
-					fn: func(ctx context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+					fn: func(ctx context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
 						gotSessionID = agent.SessionIDFromCtx(ctx)
 						gotInfo = agent.LLMModelInfoFromCtx(ctx)
-						return &agentcontext.CompactResult{Messages: msgs}, nil
+						return &agentcontext.CompactResult{}, nil
 					},
 				}
 

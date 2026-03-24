@@ -26,14 +26,6 @@ func applyLatestCheckpoint(messages []model.Message) []model.Message {
 		return messages
 	}
 
-	if checkpointIdx+1 == firstKeptIdx {
-		return messages[checkpointIdx:]
-	}
-
-	if checkpointIdx == firstKeptIdx {
-		return messages[firstKeptIdx:]
-	}
-
 	return checkpointAndFollowing(messages, checkpointIdx, firstKeptIdx)
 }
 
@@ -106,13 +98,6 @@ func createCheckpoint(summary, firstKeptID string, tokensBefore int) model.Messa
 			TokensBefore: tokensBefore,
 		},
 	}
-}
-
-func prependCheckpoint(messages []model.Message, checkpoint model.Message) []model.Message {
-	result := make([]model.Message, 0, 1+len(messages))
-	result = append(result, checkpoint)
-
-	return append(result, messages...)
 }
 
 // firstMessageID returns the first non-empty message ID from a slice.

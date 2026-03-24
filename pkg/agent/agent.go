@@ -122,11 +122,12 @@ func runTurn(ctx context.Context, config turnConfig) (*turnResult, error) {
 			return nil, fmt.Errorf("agent loop exceeded max iterations (%d): %w", config.maxIterations, pkgerrors.ErrMaxIterations)
 		}
 
-		// Compactor: may create compaction checkpoints and filter messages
-		// based on existing compaction markers. Runs before the context processor.
+		llmMessages := effectiveCompactionContext(allMessages)
+
+		// Compactor: may create compaction checkpoints. Runs before the context processor.
 		compactResult, err := runCompaction(ctx, compactionConfig{
 			compactor:  config.compactor,
-			messages:   allMessages,
+			messages:   llmMessages,
 			onMessages: config.onMessages,
 			opts:       agentcontext.CompactOptions{},
 			logger: config.logger.WithValues(gosimovlog.KV{
@@ -141,32 +142,14 @@ func runTurn(ctx context.Context, config turnConfig) (*turnResult, error) {
 			return nil, err
 		}
 
-		allMessages = compactResult.Messages
-
-		// If compaction created a checkpoint, append it to turn state.
-		if compactResult.Message != nil {
-			newMessages = append(newMessages, *compactResult.Message)
-			totalUsage = addUsage(totalUsage, &model.MessageMetadata{Usage: &compactResult.Usage})
-
-			// Compactors can return the checkpoint in two valid shapes:
-			//   1. Message != nil and Messages already includes that checkpoint.
-			//   2. Message != nil and Messages excludes it (caller must add it).
-			// For the current turn state we need the checkpoint exactly once, so
-			// detect by ID and append only when it is missing.
-			checkpointInMessages := false
-			for i := range allMessages {
-				if allMessages[i].ID == compactResult.Message.ID {
-					checkpointInMessages = true
-					break
-				}
-			}
-
-			if !checkpointInMessages {
-				allMessages = append(allMessages, *compactResult.Message)
-			}
+		// If compaction created a checkpoint, append it to turn and full history.
+		if compactResult.SummaryMessage != nil {
+			newMessages = append(newMessages, *compactResult.SummaryMessage)
+			totalUsage = usageutil.Add(totalUsage, compactResult.Usage)
+			allMessages = append(allMessages, *compactResult.SummaryMessage)
 		}
 
-		llmMessages := compactResult.Messages
+		llmMessages = effectiveCompactionContext(allMessages)
 
 		// Context processor: pure transform on the (already compacted) messages.
 		if config.contextProcessor != nil {
@@ -404,24 +387,22 @@ func runCompaction(ctx context.Context, config compactionConfig) (*agentcontext.
 		return nil, fmt.Errorf("compaction failed: %w", err)
 	}
 
-	createdCheckpoint := result.Message != nil
+	createdCheckpoint := result.SummaryMessage != nil
 	config.logger.WithValues(gosimovlog.KV{
 		"duration_ms":        time.Since(started).Milliseconds(),
 		"force":              config.opts.Force,
 		"input_messages":     len(config.messages),
-		"output_messages":    len(result.Messages),
 		"created_checkpoint": createdCheckpoint,
 	}).Debugf("Message compactor executed")
 
-	if result.Message != nil {
+	if result.SummaryMessage != nil {
 		config.logger.WithValues(gosimovlog.KV{
 			"duration_ms":         time.Since(started).Milliseconds(),
-			"compacted_messages":  len(config.messages) - len(result.Messages),
 			"usage_input_tokens":  result.Usage.InputTokens,
 			"usage_output_tokens": result.Usage.OutputTokens,
 		}).Infof("Compaction checkpoint created")
 
-		if err := notifyMessages(ctx, config.onMessages, *result.Message); err != nil {
+		if err := notifyMessages(ctx, config.onMessages, *result.SummaryMessage); err != nil {
 			return nil, fmt.Errorf("persisting compaction message: %w", err)
 		}
 	}

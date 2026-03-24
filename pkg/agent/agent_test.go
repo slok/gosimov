@@ -1015,7 +1015,7 @@ func TestRunTurn(t *testing.T) {
 			},
 		},
 
-		"Compactor should filter messages before LLM call.": {
+		"Runtime context should apply latest checkpoint before LLM call.": {
 			mock: func(_ []*toolmock.MockTool) turnConfig {
 				return turnConfig{
 					provider: fake.NewProvider(func(_ context.Context, req llm.Request) (*llm.Response, error) {
@@ -1030,20 +1030,20 @@ func TestRunTurn(t *testing.T) {
 						}, nil
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("old")}},
-						{Kind: model.MessageKindLLM, Content: []model.ContentPart{model.NewContentText("old reply")}},
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("new")}},
+						{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("old")}},
+						{ID: "m2", Kind: model.MessageKindLLM, Content: []model.ContentPart{model.NewContentText("old reply")}},
+						{ID: "c1", Kind: model.MessageKindCompaction, Content: []model.ContentPart{model.NewContentText("summary")}, Compaction: &model.CompactionData{FirstKeptID: "m3"}},
+						{ID: "m3", Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("new")}},
 					},
-					compactor: compactorFunc(func(_ context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
-						// Only keep the last message (simulating compaction).
-						return &agentcontext.CompactResult{Messages: msgs[len(msgs)-1:]}, nil
+					compactor: compactorFunc(func(_ context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+						return &agentcontext.CompactResult{}, nil
 					}),
 				}
 			},
 			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
-				assert.Equal("saw 1 messages", result.Message.Content[0].Text)
+				assert.Equal("saw 2 messages", result.Message.Content[0].Text)
 			},
 		},
 
@@ -1102,9 +1102,9 @@ func TestRunTurn(t *testing.T) {
 						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hi")}},
 					},
 					toolIndex: testToolIndex(tools[0]),
-					compactor: compactorFunc(func(_ context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+					compactor: compactorFunc(func(_ context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
 						compactorCallCount++
-						return &agentcontext.CompactResult{Messages: msgs}, nil
+						return &agentcontext.CompactResult{}, nil
 					}),
 				}
 			},
@@ -1116,7 +1116,7 @@ func TestRunTurn(t *testing.T) {
 			},
 		},
 
-		"Compactor runs before context processor.": {
+		"Checkpoint context runs before context processor.": {
 			mock: func(_ []*toolmock.MockTool) turnConfig {
 				return turnConfig{
 					provider: fake.NewProvider(func(_ context.Context, req llm.Request) (*llm.Response, error) {
@@ -1131,16 +1131,13 @@ func TestRunTurn(t *testing.T) {
 						}, nil
 					}),
 					messages: []model.Message{
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("a")}},
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("b")}},
-						{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("c")}},
+						{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("a")}},
+						{ID: "m2", Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("b")}},
+						{ID: "c1", Kind: model.MessageKindCompaction, Content: []model.ContentPart{model.NewContentText("sum")}, Compaction: &model.CompactionData{FirstKeptID: "m3"}},
+						{ID: "m3", Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("c")}},
 					},
-					// Compactor keeps last 2 messages.
-					compactor: compactorFunc(func(_ context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
-						if len(msgs) > 2 {
-							return &agentcontext.CompactResult{Messages: msgs[len(msgs)-2:]}, nil
-						}
-						return &agentcontext.CompactResult{Messages: msgs}, nil
+					compactor: compactorFunc(func(_ context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+						return &agentcontext.CompactResult{}, nil
 					}),
 					// Processor adds 1 message to the front.
 					contextProcessor: processorFunc(func(_ context.Context, msgs []model.Message) ([]model.Message, error) {
@@ -1157,7 +1154,7 @@ func TestRunTurn(t *testing.T) {
 			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
-				// Compactor: 3 → 2, then processor: 2 → 3. LLM sees 3.
+				// Effective checkpoint context: 2 messages, then processor adds 1.
 				assert.Equal("saw 3 messages", result.Message.Content[0].Text)
 			},
 		},
@@ -1225,9 +1222,8 @@ func TestRunTurn(t *testing.T) {
 							},
 						}
 						return &agentcontext.CompactResult{
-							Message:  &compactionMsg,
-							Messages: msgs[len(msgs)-1:], // Only "new".
-							Usage:    model.Usage{InputTokens: 100, OutputTokens: 50},
+							SummaryMessage: &compactionMsg,
+							Usage:          model.Usage{InputTokens: 100, OutputTokens: 50},
 						}, nil
 					}),
 				}
@@ -1236,8 +1232,8 @@ func TestRunTurn(t *testing.T) {
 				t.Helper()
 				assert := assert.New(t)
 
-				// LLM should see 1 message (the filtered "new").
-				assert.Equal("saw 1 messages", result.Message.Content[0].Text)
+				// LLM sees summary + first kept message.
+				assert.Equal("saw 2 messages", result.Message.Content[0].Text)
 
 				// Result should include: compaction message + LLM response = 2 new messages.
 				assert.Len(result.Messages, 2)
@@ -1295,7 +1291,7 @@ func TestRunCompaction(t *testing.T) {
 		expResp func(t *testing.T, result *agentcontext.CompactResult)
 		expErr  bool
 	}{
-		"Noop compactor should return nil message and all messages.": {
+		"Noop compactor should return nil summary message.": {
 			config: compactionConfig{
 				// No compactor — defaults() sets NoopCompactor.
 				messages: []model.Message{
@@ -1306,9 +1302,7 @@ func TestRunCompaction(t *testing.T) {
 				t.Helper()
 				assert := assert.New(t)
 
-				assert.Nil(result.Message)
-				assert.Len(result.Messages, 1)
-				assert.Equal("m1", result.Messages[0].ID)
+				assert.Nil(result.SummaryMessage)
 			},
 		},
 
@@ -1326,11 +1320,10 @@ func TestRunCompaction(t *testing.T) {
 						{ID: "m1", Kind: model.MessageKindUser},
 						{ID: "m2", Kind: model.MessageKindUser},
 					},
-					compactor: compactorFunc(func(_ context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+					compactor: compactorFunc(func(_ context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
 						return &agentcontext.CompactResult{
-							Message:  &compactionMsg,
-							Messages: msgs[len(msgs)-1:],
-							Usage:    model.Usage{InputTokens: 100, OutputTokens: 50},
+							SummaryMessage: &compactionMsg,
+							Usage:          model.Usage{InputTokens: 100, OutputTokens: 50},
 						}, nil
 					}),
 					onMessages: func(_ context.Context, msgs []model.Message) error {
@@ -1344,11 +1337,9 @@ func TestRunCompaction(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				require.NotNil(result.Message)
-				assert.Equal("c1", result.Message.ID)
-				assert.Equal(model.MessageKindCompaction, result.Message.Kind)
-				assert.Len(result.Messages, 1)
-				assert.Equal("m2", result.Messages[0].ID)
+				require.NotNil(result.SummaryMessage)
+				assert.Equal("c1", result.SummaryMessage.ID)
+				assert.Equal(model.MessageKindCompaction, result.SummaryMessage.Kind)
 				assert.Equal(100, result.Usage.InputTokens)
 				assert.Equal(50, result.Usage.OutputTokens)
 			},
@@ -1359,8 +1350,8 @@ func TestRunCompaction(t *testing.T) {
 				messages: []model.Message{
 					{ID: "m1", Kind: model.MessageKindUser},
 				},
-				compactor: compactorFunc(func(_ context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
-					return &agentcontext.CompactResult{Messages: msgs}, nil
+				compactor: compactorFunc(func(_ context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+					return &agentcontext.CompactResult{}, nil
 				}),
 				onMessages: func(_ context.Context, _ []model.Message) error {
 					// If this is called, the test will fail because
@@ -1372,8 +1363,7 @@ func TestRunCompaction(t *testing.T) {
 				t.Helper()
 				assert := assert.New(t)
 
-				assert.Nil(result.Message)
-				assert.Len(result.Messages, 1)
+				assert.Nil(result.SummaryMessage)
 			},
 		},
 
@@ -1399,10 +1389,9 @@ func TestRunCompaction(t *testing.T) {
 					messages: []model.Message{
 						{ID: "m1", Kind: model.MessageKindUser},
 					},
-					compactor: compactorFunc(func(_ context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+					compactor: compactorFunc(func(_ context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
 						return &agentcontext.CompactResult{
-							Message:  &compactionMsg,
-							Messages: msgs,
+							SummaryMessage: &compactionMsg,
 						}, nil
 					}),
 					onMessages: func(_ context.Context, _ []model.Message) error {
@@ -1455,9 +1444,9 @@ func TestRunCompactionForwardsOptions(t *testing.T) {
 			_, err := runCompaction(context.Background(), compactionConfig{
 				messages: []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
 				opts:     test.opts,
-				compactor: compactorFunc(func(_ context.Context, msgs []model.Message, opts agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+				compactor: compactorFunc(func(_ context.Context, _ []model.Message, opts agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
 					gotOpts = opts
-					return &agentcontext.CompactResult{Messages: msgs}, nil
+					return &agentcontext.CompactResult{}, nil
 				}),
 			})
 

@@ -75,12 +75,8 @@ func TestCompactorCompact(t *testing.T) {
 			},
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
 				assert := assert.New(t)
-				require := require.New(t)
 
-				assert.Nil(got.Message)
-				require.Len(got.Messages, 2)
-				assert.Equal("m1", got.Messages[0].ID)
-				assert.Equal("m2", got.Messages[1].ID)
+				assert.Nil(got.SummaryMessage)
 			},
 		},
 		"Force false above threshold should compact automatically.": {
@@ -108,10 +104,9 @@ func TestCompactorCompact(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				require.NotNil(got.Message)
-				assert.Equal(model.MessageKindCompaction, got.Message.Kind)
-				assert.Equal("m2", got.Message.Compaction.FirstKeptID)
-				require.Len(got.Messages, 3)
+				require.NotNil(got.SummaryMessage)
+				assert.Equal(model.MessageKindCompaction, got.SummaryMessage.Kind)
+				assert.Equal("m2", got.SummaryMessage.Compaction.FirstKeptID)
 				assert.Equal(11, got.Usage.InputTokens)
 				assert.Equal(7, got.Usage.OutputTokens)
 			},
@@ -130,13 +125,8 @@ func TestCompactorCompact(t *testing.T) {
 			},
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
 				assert := assert.New(t)
-				require := require.New(t)
 
-				assert.Nil(got.Message)
-				require.Len(got.Messages, 3)
-				assert.Equal("c1", got.Messages[0].ID)
-				assert.Equal("m3", got.Messages[1].ID)
-				assert.Equal("m4", got.Messages[2].ID)
+				assert.Nil(got.SummaryMessage)
 			},
 		},
 		"Force false with invalid checkpoint should pass through.": {
@@ -151,13 +141,8 @@ func TestCompactorCompact(t *testing.T) {
 			},
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
 				assert := assert.New(t)
-				require := require.New(t)
 
-				assert.Nil(got.Message)
-				require.Len(got.Messages, 3)
-				assert.Equal("m1", got.Messages[0].ID)
-				assert.Equal("c1", got.Messages[1].ID)
-				assert.Equal("m2", got.Messages[2].ID)
+				assert.Nil(got.SummaryMessage)
 			},
 		},
 		"Force false with unknown checkpoint boundary should pass through.": {
@@ -172,13 +157,8 @@ func TestCompactorCompact(t *testing.T) {
 			},
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
 				assert := assert.New(t)
-				require := require.New(t)
 
-				assert.Nil(got.Message)
-				require.Len(got.Messages, 3)
-				assert.Equal("m1", got.Messages[0].ID)
-				assert.Equal("c1", got.Messages[1].ID)
-				assert.Equal("m2", got.Messages[2].ID)
+				assert.Nil(got.SummaryMessage)
 			},
 		},
 		"Force true with empty messages should be a no-op.": {
@@ -192,8 +172,7 @@ func TestCompactorCompact(t *testing.T) {
 			opts: agentcontext.CompactOptions{Force: true},
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
 				assert := assert.New(t)
-				assert.Nil(got.Message)
-				assert.Empty(got.Messages)
+				assert.Nil(got.SummaryMessage)
 			},
 		},
 		"Force true should create checkpoint and return compacted context.": {
@@ -219,13 +198,9 @@ func TestCompactorCompact(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				require.NotNil(got.Message)
-				assert.Equal(model.MessageKindCompaction, got.Message.Kind)
-				assert.Equal("m2", got.Message.Compaction.FirstKeptID)
-				require.Len(got.Messages, 3)
-				assert.Equal(model.MessageKindCompaction, got.Messages[0].Kind)
-				assert.Equal("m2", got.Messages[1].ID)
-				assert.Equal("m3", got.Messages[2].ID)
+				require.NotNil(got.SummaryMessage)
+				assert.Equal(model.MessageKindCompaction, got.SummaryMessage.Kind)
+				assert.Equal("m2", got.SummaryMessage.Compaction.FirstKeptID)
 				assert.Equal(10, got.Usage.InputTokens)
 				assert.Equal(5, got.Usage.OutputTokens)
 			},
@@ -249,12 +224,8 @@ func TestCompactorCompact(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				require.NotNil(got.Message)
-				assert.Equal("m2", got.Message.Compaction.FirstKeptID)
-				require.Len(got.Messages, 4)
-				assert.Equal("m2", got.Messages[1].ID)
-				assert.Equal("m3", got.Messages[2].ID)
-				assert.Equal("m4", got.Messages[3].ID)
+				require.NotNil(got.SummaryMessage)
+				assert.Equal("m2", got.SummaryMessage.Compaction.FirstKeptID)
 			},
 		},
 		"Force true should include custom instructions in summary prompt.": {
@@ -277,7 +248,7 @@ func TestCompactorCompact(t *testing.T) {
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
 				require := require.New(t)
 
-				require.NotNil(got.Message)
+				require.NotNil(got.SummaryMessage)
 			},
 		},
 		"Force true should fail when summary has no text.": {
@@ -351,7 +322,7 @@ func TestCompactorCompact(t *testing.T) {
 			opts: agentcontext.CompactOptions{Force: true},
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
 				require := require.New(t)
-				require.NotNil(got.Message)
+				require.NotNil(got.SummaryMessage)
 			},
 		},
 		"Force true with defaults should use default max summary tokens.": {
@@ -377,8 +348,8 @@ func TestCompactorCompact(t *testing.T) {
 				assert := assert.New(t)
 				require := require.New(t)
 
-				require.NotNil(got.Message)
-				assert.Equal("m2", got.Message.Compaction.FirstKeptID)
+				require.NotNil(got.SummaryMessage)
+				assert.Equal("m2", got.SummaryMessage.Compaction.FirstKeptID)
 			},
 		},
 		"Force false with defaults should auto-compact when threshold is exceeded.": {
@@ -396,7 +367,7 @@ func TestCompactorCompact(t *testing.T) {
 			},
 			assert: func(t *testing.T, got *agentcontext.CompactResult) {
 				require := require.New(t)
-				require.NotNil(got.Message)
+				require.NotNil(got.SummaryMessage)
 			},
 		},
 	}
