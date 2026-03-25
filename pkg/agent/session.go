@@ -242,6 +242,12 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		return nil, fmt.Errorf("invalid session config: %w", err)
 	}
 
+	initialMessages := cloneMessages(cfg.Messages)
+	liveMessages, err := sanitizeLiveCompactionHistory(initialMessages)
+	if err != nil {
+		return nil, fmt.Errorf("invalid initial messages live history: %w", err)
+	}
+
 	sess := model.Session{
 		ID:        id.NewULID(conventions.IDPrefixSession),
 		CreatedAt: time.Now(),
@@ -251,7 +257,6 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		return nil, fmt.Errorf("persisting session: %w", err)
 	}
 
-	initialMessages := cloneMessages(cfg.Messages)
 	if len(initialMessages) > 0 {
 		if err := cfg.MessageRepository.StoreMessages(ctx, sess.ID, initialMessages); err != nil {
 			return nil, fmt.Errorf("persisting initial messages: %w", err)
@@ -267,7 +272,7 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		toolIndex:          toolIndex,
 		toolTimeout:        cfg.ToolTimeout,
 		maxIterations:      cfg.TurnMaxIterations,
-		messages:           initialMessages,
+		messages:           liveMessages,
 		usage:              usageFromMessages(initialMessages),
 		sessionRepo:        cfg.SessionRepository,
 		messageRepo:        cfg.MessageRepository,
@@ -317,8 +322,14 @@ func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 	}
 
 	if len(cfg.Messages) > 0 {
-		s.messages = cloneMessages(cfg.Messages)
-		s.usage = usageFromMessages(s.messages)
+		fullMessages := cloneMessages(cfg.Messages)
+		liveMessages, err := sanitizeLiveCompactionHistory(fullMessages)
+		if err != nil {
+			return nil, fmt.Errorf("invalid load messages live history: %w", err)
+		}
+
+		s.messages = liveMessages
+		s.usage = usageFromMessages(fullMessages)
 		return s, nil
 	}
 
@@ -327,7 +338,12 @@ func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 		return nil, fmt.Errorf("loading existing messages: %w", err)
 	}
 
-	s.messages = msgs
+	liveMessages, err := sanitizeLiveCompactionHistory(msgs)
+	if err != nil {
+		return nil, fmt.Errorf("invalid loaded messages live history: %w", err)
+	}
+
+	s.messages = liveMessages
 	s.usage = usageFromMessages(msgs)
 
 	return s, nil
@@ -502,7 +518,7 @@ func (s *Session) runTurn(ctx context.Context, messages []model.Message, opts Pr
 	}
 
 	s.mu.Lock()
-	s.messages = append(s.messages, runnerResult.Messages...)
+	s.messages = runnerResult.LiveMessages
 	s.usage = addUsage(s.usage, &model.MessageMetadata{Usage: &runnerResult.Usage})
 	s.mu.Unlock()
 
@@ -519,7 +535,9 @@ func (s *Session) persistMessages(ctx context.Context, msgs []model.Message) err
 	return s.messageRepo.StoreMessages(ctx, s.session.ID, msgs)
 }
 
-// Messages returns a copy of the conversation history.
+// Messages returns a copy of the in-memory live/effective conversation history.
+//
+// Full append-only session history is available in the message repository.
 func (s *Session) Messages() []model.Message {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -593,11 +611,9 @@ func (s *Session) Compact(ctx context.Context) (*agentcontext.CompactResult, err
 	messages := s.messages
 	s.mu.Unlock()
 
-	runtimeMessages := effectiveCompactionContext(messages)
-
 	result, err := runCompaction(ctx, compactionConfig{
 		compactor:  s.compactor,
-		messages:   runtimeMessages,
+		messages:   messages,
 		onMessages: s.persistMessages,
 		opts:       agentcontext.CompactOptions{Force: true},
 		logger:     logger,
@@ -607,8 +623,14 @@ func (s *Session) Compact(ctx context.Context) (*agentcontext.CompactResult, err
 	}
 
 	if result.SummaryMessage != nil {
+		updatedMessages := append(messages, *result.SummaryMessage)
+		updatedMessages, err = sanitizeLiveCompactionHistory(updatedMessages)
+		if err != nil {
+			return nil, fmt.Errorf("sanitizing live history after compaction: %w", err)
+		}
+
 		s.mu.Lock()
-		s.messages = append(s.messages, *result.SummaryMessage)
+		s.messages = updatedMessages
 		s.usage = addUsage(s.usage, &model.MessageMetadata{Usage: &result.Usage})
 		s.mu.Unlock()
 

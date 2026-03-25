@@ -1015,7 +1015,7 @@ func TestRunTurn(t *testing.T) {
 			},
 		},
 
-		"Runtime context should apply latest checkpoint before LLM call.": {
+		"Turn should use provided live messages as-is.": {
 			mock: func(_ []*toolmock.MockTool) turnConfig {
 				return turnConfig{
 					provider: fake.NewProvider(func(_ context.Context, req llm.Request) (*llm.Response, error) {
@@ -1043,7 +1043,7 @@ func TestRunTurn(t *testing.T) {
 			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
-				assert.Equal("saw 2 messages", result.Message.Content[0].Text)
+				assert.Equal("saw 4 messages", result.Message.Content[0].Text)
 			},
 		},
 
@@ -1116,7 +1116,7 @@ func TestRunTurn(t *testing.T) {
 			},
 		},
 
-		"Checkpoint context runs before context processor.": {
+		"Context processor should run on provided live messages.": {
 			mock: func(_ []*toolmock.MockTool) turnConfig {
 				return turnConfig{
 					provider: fake.NewProvider(func(_ context.Context, req llm.Request) (*llm.Response, error) {
@@ -1154,8 +1154,8 @@ func TestRunTurn(t *testing.T) {
 			expResp: func(t *testing.T, result *turnResult) {
 				t.Helper()
 				assert := assert.New(t)
-				// Effective checkpoint context: 2 messages, then processor adds 1.
-				assert.Equal("saw 3 messages", result.Message.Content[0].Text)
+				// Input has 4 live messages, then processor adds 1.
+				assert.Equal("saw 5 messages", result.Message.Content[0].Text)
 			},
 		},
 
@@ -1399,6 +1399,25 @@ func TestRunCompaction(t *testing.T) {
 					},
 				}
 			}(),
+			expErr: true,
+		},
+
+		"Invalid compaction summary boundary should fail before persisting.": {
+			config: compactionConfig{
+				messages: []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
+				compactor: compactorFunc(func(_ context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+					return &agentcontext.CompactResult{
+						SummaryMessage: &model.Message{
+							ID:         "c1",
+							Kind:       model.MessageKindCompaction,
+							Compaction: &model.CompactionData{FirstKeptID: "missing"},
+						},
+					}, nil
+				}),
+				onMessages: func(_ context.Context, _ []model.Message) error {
+					return fmt.Errorf("onMessages should not be called")
+				},
+			},
 			expErr: true,
 		},
 	}
