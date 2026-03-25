@@ -59,7 +59,6 @@ func TestCompaction(t *testing.T) {
 	assert.Equal(t, model.StopReasonComplete, turn2Final.Metadata.StopReason)
 
 	usageBeforeCompaction := session.Usage()
-	messagesBeforeCompaction := len(session.Messages())
 
 	// Force compaction between turns.
 	compactResult, err := session.Compact(ctx)
@@ -78,10 +77,6 @@ func TestCompaction(t *testing.T) {
 	usageAfterCompaction := session.Usage()
 	assert.Greater(t, usageAfterCompaction.TotalTokens, usageBeforeCompaction.TotalTokens,
 		"session usage should increase after compaction")
-
-	// Session messages should include the compaction message.
-	assert.Greater(t, len(session.Messages()), messagesBeforeCompaction,
-		"message count should increase after compaction")
 
 	// Verify compaction message is in the message list.
 	var foundCompaction bool

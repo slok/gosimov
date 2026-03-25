@@ -1,45 +1,48 @@
 package agent
 
-import "github.com/slok/gosimov/pkg/model"
+import (
+	"fmt"
 
-// effectiveCompactionContext returns the runtime context derived from full
-// append-only history.
+	"github.com/slok/gosimov/pkg/model"
+	"github.com/slok/gosimov/pkg/pkgerrors"
+)
+
+// sanitizeLiveCompactionHistory returns the live/effective history shape used
+// by session runtime memory and LLM calls.
 //
-// If there is a valid latest compaction checkpoint, runtime context shape is:
-//   - latest checkpoint message
-//   - all messages from checkpoint.Compaction.FirstKeptID onward
+// If there is no compaction message, history is returned unchanged.
+// If there is a latest compaction message, output shape is:
+//   - latest compaction message
+//   - all messages from compaction.FirstKeptID onward (excluding duplicate compaction)
 //
-// If there is no valid latest checkpoint, full history is returned as-is.
-func effectiveCompactionContext(messages []model.Message) []model.Message {
-	checkpointIdx, checkpoint := latestCompactionCheckpoint(messages)
-	if checkpoint == nil || checkpoint.Compaction == nil || checkpoint.Compaction.FirstKeptID == "" {
-		return messages
+// A malformed latest compaction message fails fast.
+func sanitizeLiveCompactionHistory(messages []model.Message) ([]model.Message, error) {
+	compactionIdx, compactionMsg := latestCompactionMessage(messages)
+	if compactionMsg == nil {
+		return messages, nil
 	}
 
-	firstKeptIdx := messageIndexByID(messages, checkpoint.Compaction.FirstKeptID)
+	firstKeptIdx := messageIndexByID(messages, compactionMsg.Compaction.FirstKeptID)
 	if firstKeptIdx == -1 {
-		return messages
+		return nil, fmt.Errorf("invalid compaction checkpoint %q: first kept id %q not found: %w", compactionMsg.ID, compactionMsg.Compaction.FirstKeptID, pkgerrors.ErrNotValid)
 	}
 
 	result := make([]model.Message, 0, 1+len(messages)-firstKeptIdx)
-	result = append(result, messages[checkpointIdx])
+	result = append(result, *compactionMsg)
 	for i := firstKeptIdx; i < len(messages); i++ {
-		if i == checkpointIdx {
+		if i == compactionIdx {
 			continue
 		}
+
 		result = append(result, messages[i])
 	}
 
-	return result
+	return result, nil
 }
 
-func latestCompactionCheckpoint(messages []model.Message) (int, *model.Message) {
+func latestCompactionMessage(messages []model.Message) (int, *model.Message) {
 	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Kind != model.MessageKindCompaction || messages[i].Compaction == nil {
-			continue
-		}
-
-		if messages[i].Compaction.FirstKeptID == "" {
+		if messages[i].Kind != model.MessageKindCompaction {
 			continue
 		}
 

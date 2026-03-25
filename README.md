@@ -259,8 +259,9 @@ _, _ = loaded.Continue(ctx, agent.PromptOptions{})
 ```
 
 Advanced customization: `LoadSessionConfig.Messages` can override repository-preloaded
-history when non-empty (for example, pre-trimmed/pre-sanitized messages). Nil and
-empty behave the same and load from `MessageRepository`.
+history when non-empty. The repository remains the full-history source of truth,
+while session memory keeps only live/effective history (`[latest summary, ...non-compacted messages]`).
+Nil and empty behave the same and load from `MessageRepository`.
 
 `LoadSession` cannot be used to reset a session's history to empty; create a new
 session when you want a reset.

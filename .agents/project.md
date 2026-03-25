@@ -684,10 +684,10 @@ Each `Session` holds a `model.Session` (domain entity with ID and CreatedAt) tha
 | `LoadSession(ctx, cfg) (*Session, error)` | Loads an existing persisted session identity. Uses `LoadSessionConfig.Messages` when non-empty; otherwise preloads from `MessageRepository`. |
 | `Prompt(ctx, []ContentPart, opts PromptOptions) (*SessionTurnResult, error)` | Builds a user message, appends it, runs a turn. `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. The returned `NewMessages` includes only turn-generated messages (no user message). |
 | `Continue(ctx, opts PromptOptions) (*SessionTurnResult, error)` | Runs a turn from current messages (retries). `PromptOptions` can override `SystemPrompt` and `TurnMaxIterations` for that call. |
-| `Compact(ctx) (*CompactResult, error)` | Delegates to `runCompaction` with `Force: true`. Appends the compaction message + aggregates usage if created. Returns `ErrSessionBusy` if a turn is running. |
+| `Compact(ctx) (*CompactResult, error)` | Delegates to `runCompaction` with `Force: true`. When a checkpoint is created, session memory is sanitized to live/effective history and usage is aggregated. Returns `ErrSessionBusy` if a turn is running. |
 | `Session() model.Session` | Returns the session identity (ID and creation time). |
 | `State() SessionState` | Returns a thread-safe runtime snapshot (`running`, `operation`, `turn`, `message_count`, identity, usage). |
-| `Messages() []Message` | Returns a copy of the conversation history. |
+| `Messages() []Message` | Returns a copy of the in-memory live/effective history (`[latest summary, ...non-compacted messages]`). Full history lives in `MessageRepository`. |
 | `Usage() Usage` | Returns aggregated usage across all turns. |
 
 `PromptOptions` fields:
@@ -728,8 +728,7 @@ The compactor runs **first** on every LLM call within a turn. When no `Compactor
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `Message` | `*model.Message` | Compaction checkpoint message (nil if no compaction needed). |
-| `Messages` | `[]model.Message` | Filtered messages for the LLM. Excludes content covered by any compaction checkpoints. |
+| `SummaryMessage` | `*model.Message` | Compaction checkpoint message (nil if no compaction needed). |
 | `Usage` | `model.Usage` | Token usage from the summarization LLM call (zero if no compaction). |
 
 `pkg/agent/context/simple` provides the first real compactor implementation. Design:
@@ -751,12 +750,12 @@ The processor runs **after** the compactor on every LLM call within a turn.
 
 ```
 for each iteration:
-    1. compactor.Compact(allMessages, CompactOptions{}) → compactResult
-    2. If compactResult.Message != nil → append to allMessages, persist, aggregate usage
-    3. llmMessages = compactResult.Messages
+    1. compactor.Compact(liveMessages, CompactOptions{}) → compactResult
+    2. If compactResult.SummaryMessage != nil → append to liveMessages, sanitize, persist, aggregate usage
+    3. llmMessages = liveMessages
     4. processor.ProcessContext(llmMessages) → llmMessages      // pure transform
     5. LLM call with llmMessages
-    6. If tool use → execute tools, append to allMessages, go to 1
+    6. If tool use → execute tools, append to liveMessages, go to 1
 ```
 
 ### Compaction Model

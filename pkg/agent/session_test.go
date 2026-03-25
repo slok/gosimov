@@ -234,6 +234,44 @@ func TestNewSessionInitialMessages(t *testing.T) {
 			},
 		},
 
+		"Initial messages should keep full store but sanitize session live history.": {
+			run: func(t *testing.T) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				repo := memory.NewRepository()
+				messages := []model.Message{
+					{ID: "m1", Kind: model.MessageKindUser},
+					{ID: "m2", Kind: model.MessageKindLLM},
+					{ID: "m3", Kind: model.MessageKindUser, Metadata: &model.MessageMetadata{Usage: &model.Usage{InputTokens: 2, OutputTokens: 1}}},
+					{ID: "c1", Kind: model.MessageKindCompaction, Compaction: &model.CompactionData{FirstKeptID: "m3"}},
+				}
+
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
+					Provider:          fake.NewEchoProvider(),
+					SessionRepository: repo,
+					MessageRepository: repo,
+					Messages:          messages,
+				}))
+				require.NoError(err)
+
+				stored, err := repo.ListMessages(context.Background(), s.Session().ID, store.ListOpts{})
+				require.NoError(err)
+				require.Len(stored.Items, 4)
+
+				live := s.Messages()
+				require.Len(live, 2)
+				assert.Equal("c1", live[0].ID)
+				assert.Equal("m3", live[1].ID)
+
+				u := s.Usage()
+				assert.Equal(2, u.InputTokens)
+				assert.Equal(1, u.OutputTokens)
+				assert.Equal(3, u.TotalTokens)
+			},
+		},
+
 		"Initial messages should be copied.": {
 			run: func(t *testing.T) {
 				t.Helper()
@@ -493,6 +531,52 @@ func TestLoadSession(t *testing.T) {
 			},
 			expErr:   true,
 			expErrIs: pkgerrors.ErrNotFound,
+		},
+
+		"Invalid latest checkpoint in loaded repository messages should fail.": {
+			prepare: func(t *testing.T) agent.LoadSessionConfig {
+				t.Helper()
+				require := require.New(t)
+
+				repo := memory.NewRepository()
+				require.NoError(repo.CreateSession(context.Background(), model.Session{ID: "s-load-invalid-checkpoint", CreatedAt: time.Now().UTC()}))
+				require.NoError(repo.StoreMessages(context.Background(), "s-load-invalid-checkpoint", []model.Message{
+					{ID: "m1", Kind: model.MessageKindUser},
+					{ID: "c1", Kind: model.MessageKindCompaction, Compaction: &model.CompactionData{}},
+				}))
+
+				return agent.LoadSessionConfig{
+					SessionID:         "s-load-invalid-checkpoint",
+					Provider:          fake.NewEchoProvider(),
+					SessionRepository: repo,
+					MessageRepository: repo,
+				}
+			},
+			expErr:   true,
+			expErrIs: pkgerrors.ErrNotValid,
+		},
+
+		"Invalid latest checkpoint in provided load messages should fail.": {
+			prepare: func(t *testing.T) agent.LoadSessionConfig {
+				t.Helper()
+				require := require.New(t)
+
+				repo := memory.NewRepository()
+				require.NoError(repo.CreateSession(context.Background(), model.Session{ID: "s-load-invalid-checkpoint-override", CreatedAt: time.Now().UTC()}))
+
+				return agent.LoadSessionConfig{
+					SessionID:         "s-load-invalid-checkpoint-override",
+					Provider:          fake.NewEchoProvider(),
+					SessionRepository: repo,
+					MessageRepository: repo,
+					Messages: []model.Message{
+						{ID: "m1", Kind: model.MessageKindUser},
+						{ID: "c1", Kind: model.MessageKindCompaction, Compaction: &model.CompactionData{}},
+					},
+				}
+			},
+			expErr:   true,
+			expErrIs: pkgerrors.ErrNotValid,
 		},
 	}
 
@@ -1699,7 +1783,7 @@ func TestSessionCompact(t *testing.T) {
 			},
 		},
 
-		"Compact creating a message should append it to session history.": {
+		"Compact creating a message should sanitize session live history.": {
 			run: func(t *testing.T) {
 				t.Helper()
 				assert := assert.New(t)
@@ -1736,12 +1820,12 @@ func TestSessionCompact(t *testing.T) {
 				require.NoError(err)
 				require.NotNil(result.SummaryMessage)
 
-				// The compaction message should be appended to session history.
+				// Session live history should be sanitized after compaction.
 				msgs := s.Messages()
 				require.Len(msgs, 2)
-				assert.Equal("m1", msgs[0].ID)
-				assert.Equal("compact-1", msgs[1].ID)
-				assert.Equal(model.MessageKindCompaction, msgs[1].Kind)
+				assert.Equal("compact-1", msgs[0].ID)
+				assert.Equal(model.MessageKindCompaction, msgs[0].Kind)
+				assert.Equal("m1", msgs[1].ID)
 
 				// Usage should be aggregated.
 				usage := s.Usage()

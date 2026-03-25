@@ -73,6 +73,8 @@ type turnResult struct {
 	Message model.Message
 	// Messages is all new messages generated during the turn (LLM responses + tool results).
 	Messages []model.Message
+	// LiveMessages is the final live/effective history after the turn ends.
+	LiveMessages []model.Message
 	// Usage is the aggregated token usage across all LLM calls in the turn.
 	Usage model.Usage
 }
@@ -99,7 +101,7 @@ func runTurn(ctx context.Context, config turnConfig) (*turnResult, error) {
 		return nil, fmt.Errorf("invalid agent turn config: %w", err)
 	}
 
-	allMessages := config.messages
+	liveMessages := config.messages
 
 	var (
 		newMessages []model.Message
@@ -111,7 +113,7 @@ func runTurn(ctx context.Context, config turnConfig) (*turnResult, error) {
 			"component":      "agent.turn",
 			"iteration":      iteration,
 			"max_iterations": config.maxIterations,
-			"message_count":  len(allMessages),
+			"message_count":  len(liveMessages),
 		}).Debugf("Turn iteration started")
 
 		if err := ensureTurnContextActive(ctx); err != nil {
@@ -122,12 +124,10 @@ func runTurn(ctx context.Context, config turnConfig) (*turnResult, error) {
 			return nil, fmt.Errorf("agent loop exceeded max iterations (%d): %w", config.maxIterations, pkgerrors.ErrMaxIterations)
 		}
 
-		llmMessages := effectiveCompactionContext(allMessages)
-
 		// Compactor: may create compaction checkpoints. Runs before the context processor.
 		compactResult, err := runCompaction(ctx, compactionConfig{
 			compactor:  config.compactor,
-			messages:   llmMessages,
+			messages:   liveMessages,
 			onMessages: config.onMessages,
 			opts:       agentcontext.CompactOptions{},
 			logger: config.logger.WithValues(gosimovlog.KV{
@@ -146,10 +146,15 @@ func runTurn(ctx context.Context, config turnConfig) (*turnResult, error) {
 		if compactResult.SummaryMessage != nil {
 			newMessages = append(newMessages, *compactResult.SummaryMessage)
 			totalUsage = usageutil.Add(totalUsage, compactResult.Usage)
-			allMessages = append(allMessages, *compactResult.SummaryMessage)
+			liveMessages = append(liveMessages, *compactResult.SummaryMessage)
+
+			liveMessages, err = sanitizeLiveCompactionHistory(liveMessages)
+			if err != nil {
+				return nil, fmt.Errorf("sanitizing live history after compaction: %w", err)
+			}
 		}
 
-		llmMessages = effectiveCompactionContext(allMessages)
+		llmMessages := liveMessages
 
 		// Context processor: pure transform on the (already compacted) messages.
 		if config.contextProcessor != nil {
@@ -187,7 +192,7 @@ func runTurn(ctx context.Context, config turnConfig) (*turnResult, error) {
 		resp.Message.ID = id.NewULID(conventions.IDPrefixMessageLLM)
 		resp.Message.CreatedAt = time.Now()
 
-		allMessages = append(allMessages, resp.Message)
+		liveMessages = append(liveMessages, resp.Message)
 		newMessages = append(newMessages, resp.Message)
 		totalUsage = addUsage(totalUsage, resp.Message.Metadata)
 
@@ -214,9 +219,10 @@ func runTurn(ctx context.Context, config turnConfig) (*turnResult, error) {
 		switch stopReason {
 		case model.StopReasonComplete, model.StopReasonMaxTokens, model.StopReasonNone:
 			return &turnResult{
-				Message:  resp.Message,
-				Messages: newMessages,
-				Usage:    totalUsage,
+				Message:      resp.Message,
+				Messages:     newMessages,
+				LiveMessages: liveMessages,
+				Usage:        totalUsage,
 			}, nil
 
 		case model.StopReasonError:
@@ -230,7 +236,7 @@ func runTurn(ctx context.Context, config turnConfig) (*turnResult, error) {
 			if err != nil {
 				return nil, fmt.Errorf("executing tool calls: %w", err)
 			}
-			allMessages = append(allMessages, toolResults...)
+			liveMessages = append(liveMessages, toolResults...)
 			newMessages = append(newMessages, toolResults...)
 
 		default:
@@ -387,27 +393,41 @@ func runCompaction(ctx context.Context, config compactionConfig) (*agentcontext.
 		return nil, fmt.Errorf("compaction failed: %w", err)
 	}
 
-	createdCheckpoint := result.SummaryMessage != nil
+	if result.SummaryMessage == nil {
+		return result, nil
+	}
+
+	if err := validateCompactionSummary(*result.SummaryMessage, config.messages); err != nil {
+		return nil, fmt.Errorf("invalid compaction summary message: %w", err)
+	}
+
 	config.logger.WithValues(gosimovlog.KV{
-		"duration_ms":        time.Since(started).Milliseconds(),
-		"force":              config.opts.Force,
-		"input_messages":     len(config.messages),
-		"created_checkpoint": createdCheckpoint,
-	}).Debugf("Message compactor executed")
+		"duration_ms":         time.Since(started).Milliseconds(),
+		"usage_input_tokens":  result.Usage.InputTokens,
+		"usage_output_tokens": result.Usage.OutputTokens,
+	}).Infof("Compaction checkpoint created")
 
-	if result.SummaryMessage != nil {
-		config.logger.WithValues(gosimovlog.KV{
-			"duration_ms":         time.Since(started).Milliseconds(),
-			"usage_input_tokens":  result.Usage.InputTokens,
-			"usage_output_tokens": result.Usage.OutputTokens,
-		}).Infof("Compaction checkpoint created")
-
-		if err := notifyMessages(ctx, config.onMessages, *result.SummaryMessage); err != nil {
-			return nil, fmt.Errorf("persisting compaction message: %w", err)
-		}
+	if err := notifyMessages(ctx, config.onMessages, *result.SummaryMessage); err != nil {
+		return nil, fmt.Errorf("persisting compaction message: %w", err)
 	}
 
 	return result, nil
+}
+
+func validateCompactionSummary(summary model.Message, messages []model.Message) error {
+	if summary.Kind != model.MessageKindCompaction {
+		return fmt.Errorf("summary message kind %q is not compaction: %w", summary.Kind, pkgerrors.ErrNotValid)
+	}
+
+	if summary.Compaction == nil || summary.Compaction.FirstKeptID == "" {
+		return fmt.Errorf("missing first kept id: %w", pkgerrors.ErrNotValid)
+	}
+
+	if messageIndexByID(messages, summary.Compaction.FirstKeptID) == -1 {
+		return fmt.Errorf("first kept id %q not found in existing messages: %w", summary.Compaction.FirstKeptID, pkgerrors.ErrNotValid)
+	}
+
+	return nil
 }
 
 // addUsage aggregates usage from a message's metadata into an existing total.
