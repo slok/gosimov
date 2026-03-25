@@ -658,10 +658,11 @@ func TestLoadSessionProvidedMessagesAreCopied(t *testing.T) {
 
 func TestSessionPrompt(t *testing.T) {
 	tests := map[string]struct {
-		mock    func(tools []*toolmock.MockTool) agent.SessionConfig
-		prompts [][]model.ContentPart
-		expResp func(t *testing.T, results []*agent.SessionTurnResult, session *agent.Session)
-		expErr  bool
+		mock     func(tools []*toolmock.MockTool) agent.SessionConfig
+		prompts  [][]model.ContentPart
+		expResp  func(t *testing.T, results []*agent.SessionTurnResult, session *agent.Session)
+		expErr   bool
+		expErrIs error
 	}{
 		"Simple prompt should return the LLM response and accumulate messages.": {
 			mock: func(_ []*toolmock.MockTool) agent.SessionConfig {
@@ -881,6 +882,578 @@ func TestSessionPrompt(t *testing.T) {
 				assert.Equal("got 2 parts", finalLLMFromTurnResult(t, results[0]).Content[0].Text)
 			},
 		},
+
+		// -- Stop reason edge cases --
+
+		"StopReasonError should return ErrLLMError.": {
+			mock: func(_ []*toolmock.MockTool) agent.SessionConfig {
+				return agent.SessionConfig{
+					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+						return &llm.Response{
+							Message: model.Message{
+								Kind:     model.MessageKindLLM,
+								Metadata: &model.MessageMetadata{StopReason: model.StopReasonError},
+							},
+						}, nil
+					}),
+				}
+			},
+			prompts:  [][]model.ContentPart{{model.NewContentText("hi")}},
+			expErr:   true,
+			expErrIs: pkgerrors.ErrLLMError,
+		},
+
+		"StopReasonAborted should return ErrAborted.": {
+			mock: func(_ []*toolmock.MockTool) agent.SessionConfig {
+				return agent.SessionConfig{
+					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+						return &llm.Response{
+							Message: model.Message{
+								Kind:     model.MessageKindLLM,
+								Metadata: &model.MessageMetadata{StopReason: model.StopReasonAborted},
+							},
+						}, nil
+					}),
+				}
+			},
+			prompts:  [][]model.ContentPart{{model.NewContentText("hi")}},
+			expErr:   true,
+			expErrIs: pkgerrors.ErrAborted,
+		},
+
+		"Unknown stop reason should return ErrLLMError.": {
+			mock: func(_ []*toolmock.MockTool) agent.SessionConfig {
+				return agent.SessionConfig{
+					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+						return &llm.Response{
+							Message: model.Message{
+								Kind:     model.MessageKindLLM,
+								Metadata: &model.MessageMetadata{StopReason: model.StopReason("unexpected_reason")},
+							},
+						}, nil
+					}),
+				}
+			},
+			prompts:  [][]model.ContentPart{{model.NewContentText("hi")}},
+			expErr:   true,
+			expErrIs: pkgerrors.ErrLLMError,
+		},
+
+		"StopReasonMaxTokens should return a valid truncated result.": {
+			mock: func(_ []*toolmock.MockTool) agent.SessionConfig {
+				return agent.SessionConfig{
+					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+						return &llm.Response{
+							Message: model.Message{
+								Kind:    model.MessageKindLLM,
+								Content: []model.ContentPart{model.NewContentText("truncated")},
+								Metadata: &model.MessageMetadata{
+									StopReason: model.StopReasonMaxTokens,
+								},
+							},
+						}, nil
+					}),
+				}
+			},
+			prompts: [][]model.ContentPart{{model.NewContentText("hi")}},
+			expResp: func(t *testing.T, results []*agent.SessionTurnResult, _ *agent.Session) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.Len(results, 1)
+				assert.Equal("truncated", finalLLMFromTurnResult(t, results[0]).Content[0].Text)
+			},
+		},
+
+		"No metadata on LLM response should treat as complete.": {
+			mock: func(_ []*toolmock.MockTool) agent.SessionConfig {
+				return agent.SessionConfig{
+					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+						return &llm.Response{
+							Message: model.Message{
+								Kind:    model.MessageKindLLM,
+								Content: []model.ContentPart{model.NewContentText("no metadata")},
+							},
+						}, nil
+					}),
+				}
+			},
+			prompts: [][]model.ContentPart{{model.NewContentText("hi")}},
+			expResp: func(t *testing.T, results []*agent.SessionTurnResult, session *agent.Session) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.Len(results, 1)
+				assert.Equal("no metadata", finalLLMFromTurnResult(t, results[0]).Content[0].Text)
+				assert.Len(session.Messages(), 2) // user + LLM
+			},
+		},
+
+		// -- Tool execution edge cases --
+
+		"Multiple tool calls in one response should all execute.": {
+			mock: func(tools []*toolmock.MockTool) agent.SessionConfig {
+				callCount := 0
+				provider := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+					callCount++
+					if callCount == 1 {
+						return &llm.Response{
+							Message: model.Message{
+								Kind: model.MessageKindLLM,
+								ToolCallRequests: []model.ToolCallRequest{
+									{ID: "tc1", ToolID: "tool-a", Arguments: json.RawMessage(`{"a":1}`)},
+									{ID: "tc2", ToolID: "tool-b", Arguments: json.RawMessage(`{"b":2}`)},
+								},
+								Metadata: &model.MessageMetadata{StopReason: model.StopReasonToolUse},
+							},
+						}, nil
+					}
+					return &llm.Response{
+						Message: model.Message{
+							Kind:     model.MessageKindLLM,
+							Content:  []model.ContentPart{model.NewContentText("done")},
+							Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
+						},
+					}, nil
+				})
+
+				tools[0].On("ID").Return("tool-a")
+				tools[0].On("Description").Return("tool a")
+				tools[0].On("Schema").Return(json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`))
+				tools[0].On("Execute", mock.Anything, json.RawMessage(`{"a":1}`)).Return(&tool.Result{
+					Content: []model.ContentPart{model.NewContentText("result-a")},
+				}, nil)
+
+				tools[1].On("ID").Return("tool-b")
+				tools[1].On("Description").Return("tool b")
+				tools[1].On("Schema").Return(json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`))
+				tools[1].On("Execute", mock.Anything, json.RawMessage(`{"b":2}`)).Return(&tool.Result{
+					Content: []model.ContentPart{model.NewContentText("result-b")},
+				}, nil)
+
+				return agent.SessionConfig{
+					Provider: provider,
+					Tools:    []tool.Tool{tools[0], tools[1]},
+				}
+			},
+			prompts: [][]model.ContentPart{{model.NewContentText("do both")}},
+			expResp: func(t *testing.T, results []*agent.SessionTurnResult, session *agent.Session) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.Len(results, 1)
+				assert.Equal("done", finalLLMFromTurnResult(t, results[0]).Content[0].Text)
+
+				// Session: user + LLM(tool use) + tool-a + tool-b + LLM(complete) = 5.
+				msgs := session.Messages()
+				assert.Len(msgs, 5)
+				assert.Equal(model.MessageKindToolResult, msgs[2].Kind)
+				assert.Equal("result-a", msgs[2].Content[0].Text)
+				assert.Equal(model.MessageKindToolResult, msgs[3].Kind)
+				assert.Equal("result-b", msgs[3].Content[0].Text)
+			},
+		},
+
+		"Multi-round tool calls should loop until the LLM completes.": {
+			mock: func(tools []*toolmock.MockTool) agent.SessionConfig {
+				callCount := 0
+				provider := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+					callCount++
+					switch callCount {
+					case 1:
+						return &llm.Response{
+							Message: model.Message{
+								Kind: model.MessageKindLLM,
+								ToolCallRequests: []model.ToolCallRequest{
+									{ID: "tc1", ToolID: "step", Arguments: json.RawMessage(`{"n":1}`)},
+								},
+								Metadata: &model.MessageMetadata{StopReason: model.StopReasonToolUse},
+							},
+						}, nil
+					case 2:
+						return &llm.Response{
+							Message: model.Message{
+								Kind: model.MessageKindLLM,
+								ToolCallRequests: []model.ToolCallRequest{
+									{ID: "tc2", ToolID: "step", Arguments: json.RawMessage(`{"n":2}`)},
+								},
+								Metadata: &model.MessageMetadata{StopReason: model.StopReasonToolUse},
+							},
+						}, nil
+					default:
+						return &llm.Response{
+							Message: model.Message{
+								Kind:     model.MessageKindLLM,
+								Content:  []model.ContentPart{model.NewContentText("all done")},
+								Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
+							},
+						}, nil
+					}
+				})
+
+				tools[0].On("ID").Return("step")
+				tools[0].On("Description").Return("step tool")
+				tools[0].On("Schema").Return(json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`))
+				tools[0].On("Execute", mock.Anything, json.RawMessage(`{"n":1}`)).Return(&tool.Result{
+					Content: []model.ContentPart{model.NewContentText("step-1-done")},
+				}, nil).Once()
+				tools[0].On("Execute", mock.Anything, json.RawMessage(`{"n":2}`)).Return(&tool.Result{
+					Content: []model.ContentPart{model.NewContentText("step-2-done")},
+				}, nil).Once()
+
+				return agent.SessionConfig{
+					Provider: provider,
+					Tools:    []tool.Tool{tools[0]},
+				}
+			},
+			prompts: [][]model.ContentPart{{model.NewContentText("do steps")}},
+			expResp: func(t *testing.T, results []*agent.SessionTurnResult, session *agent.Session) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.Len(results, 1)
+				assert.Equal("all done", finalLLMFromTurnResult(t, results[0]).Content[0].Text)
+
+				// Session: user + LLM1 + tool1 + LLM2 + tool2 + LLM3 = 6.
+				msgs := session.Messages()
+				assert.Len(msgs, 6)
+			},
+		},
+
+		"Tool execution error should become error result and loop continues.": {
+			mock: func(tools []*toolmock.MockTool) agent.SessionConfig {
+				callCount := 0
+				provider := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+					callCount++
+					if callCount == 1 {
+						return &llm.Response{
+							Message: model.Message{
+								Kind: model.MessageKindLLM,
+								ToolCallRequests: []model.ToolCallRequest{
+									{ID: "tc1", ToolID: "broken", Arguments: json.RawMessage(`{}`)},
+								},
+								Metadata: &model.MessageMetadata{StopReason: model.StopReasonToolUse},
+							},
+						}, nil
+					}
+					return &llm.Response{
+						Message: model.Message{
+							Kind:     model.MessageKindLLM,
+							Content:  []model.ContentPart{model.NewContentText("I see the error")},
+							Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
+						},
+					}, nil
+				})
+
+				tools[0].On("ID").Return("broken")
+				tools[0].On("Description").Return("broken tool")
+				tools[0].On("Schema").Return(json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`))
+				tools[0].On("Execute", mock.Anything, json.RawMessage(`{}`)).Return(nil, fmt.Errorf("disk full"))
+
+				return agent.SessionConfig{
+					Provider: provider,
+					Tools:    []tool.Tool{tools[0]},
+				}
+			},
+			prompts: [][]model.ContentPart{{model.NewContentText("use broken tool")}},
+			expResp: func(t *testing.T, results []*agent.SessionTurnResult, session *agent.Session) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.Len(results, 1)
+				assert.Equal("I see the error", finalLLMFromTurnResult(t, results[0]).Content[0].Text)
+
+				// Session: user + LLM(tool use) + error tool result + LLM(complete) = 4.
+				msgs := session.Messages()
+				require.Len(msgs, 4)
+				assert.True(msgs[2].IsError)
+				assert.Equal("disk full", msgs[2].Content[0].Text)
+			},
+		},
+
+		"Tool not found should create error result and continue.": {
+			mock: func(_ []*toolmock.MockTool) agent.SessionConfig {
+				callCount := 0
+				provider := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+					callCount++
+					if callCount == 1 {
+						return &llm.Response{
+							Message: model.Message{
+								Kind: model.MessageKindLLM,
+								ToolCallRequests: []model.ToolCallRequest{
+									{ID: "tc1", ToolID: "nonexistent", Arguments: json.RawMessage(`{}`)},
+								},
+								Metadata: &model.MessageMetadata{StopReason: model.StopReasonToolUse},
+							},
+						}, nil
+					}
+					return &llm.Response{
+						Message: model.Message{
+							Kind:     model.MessageKindLLM,
+							Content:  []model.ContentPart{model.NewContentText("tool was missing")},
+							Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
+						},
+					}, nil
+				})
+
+				return agent.SessionConfig{
+					Provider: provider,
+					// No tools provided.
+				}
+			},
+			prompts: [][]model.ContentPart{{model.NewContentText("call missing tool")}},
+			expResp: func(t *testing.T, results []*agent.SessionTurnResult, session *agent.Session) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.Len(results, 1)
+				assert.Equal("tool was missing", finalLLMFromTurnResult(t, results[0]).Content[0].Text)
+
+				msgs := session.Messages()
+				require.Len(msgs, 4)
+				assert.True(msgs[2].IsError)
+				assert.Contains(msgs[2].Content[0].Text, "not found")
+			},
+		},
+
+		"Tool timeout should set context deadline.": {
+			mock: func(tools []*toolmock.MockTool) agent.SessionConfig {
+				callCount := 0
+				provider := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+					callCount++
+					if callCount == 1 {
+						return &llm.Response{
+							Message: model.Message{
+								Kind: model.MessageKindLLM,
+								ToolCallRequests: []model.ToolCallRequest{
+									{ID: "tc1", ToolID: "slow-tool", Arguments: json.RawMessage(`{}`)},
+								},
+								Metadata: &model.MessageMetadata{StopReason: model.StopReasonToolUse},
+							},
+						}, nil
+					}
+					return &llm.Response{
+						Message: model.Message{
+							Kind:     model.MessageKindLLM,
+							Content:  []model.ContentPart{model.NewContentText("done")},
+							Metadata: &model.MessageMetadata{StopReason: model.StopReasonComplete},
+						},
+					}, nil
+				})
+
+				tools[0].On("ID").Return("slow-tool")
+				tools[0].On("Description").Return("slow tool")
+				tools[0].On("Schema").Return(json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`))
+				tools[0].On("Execute", mock.MatchedBy(func(ctx context.Context) bool {
+					_, ok := ctx.Deadline()
+					return ok
+				}), json.RawMessage(`{}`)).Return(&tool.Result{
+					Content: []model.ContentPart{model.NewContentText("ok")},
+				}, nil)
+
+				return agent.SessionConfig{
+					Provider:    provider,
+					Tools:       []tool.Tool{tools[0]},
+					ToolTimeout: 2 * time.Second,
+				}
+			},
+			prompts: [][]model.ContentPart{{model.NewContentText("run")}},
+			expResp: func(t *testing.T, results []*agent.SessionTurnResult, _ *agent.Session) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.Len(results, 1)
+				assert.Equal("done", finalLLMFromTurnResult(t, results[0]).Content[0].Text)
+			},
+		},
+
+		"Usage should be aggregated across tool call iterations within a turn.": {
+			mock: func(tools []*toolmock.MockTool) agent.SessionConfig {
+				callCount := 0
+				provider := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+					callCount++
+					if callCount == 1 {
+						return &llm.Response{
+							Message: model.Message{
+								Kind: model.MessageKindLLM,
+								ToolCallRequests: []model.ToolCallRequest{
+									{ID: "tc1", ToolID: "t", Arguments: json.RawMessage(`{}`)},
+								},
+								Metadata: &model.MessageMetadata{
+									StopReason: model.StopReasonToolUse,
+									Usage:      &model.Usage{InputTokens: 100, OutputTokens: 50},
+								},
+							},
+						}, nil
+					}
+					return &llm.Response{
+						Message: model.Message{
+							Kind:    model.MessageKindLLM,
+							Content: []model.ContentPart{model.NewContentText("done")},
+							Metadata: &model.MessageMetadata{
+								StopReason: model.StopReasonComplete,
+								Usage:      &model.Usage{InputTokens: 200, OutputTokens: 100},
+							},
+						},
+					}, nil
+				})
+
+				tools[0].On("ID").Return("t")
+				tools[0].On("Description").Return("tool t")
+				tools[0].On("Schema").Return(json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`))
+				tools[0].On("Execute", mock.Anything, mock.Anything).Return(&tool.Result{
+					Content: []model.ContentPart{model.NewContentText("ok")},
+				}, nil)
+
+				return agent.SessionConfig{
+					Provider: provider,
+					Tools:    []tool.Tool{tools[0]},
+				}
+			},
+			prompts: [][]model.ContentPart{{model.NewContentText("hi")}},
+			expResp: func(t *testing.T, _ []*agent.SessionTurnResult, session *agent.Session) {
+				t.Helper()
+				assert := assert.New(t)
+
+				usage := session.Usage()
+				assert.Equal(300, usage.InputTokens)
+				assert.Equal(150, usage.OutputTokens)
+			},
+		},
+
+		// -- Within-turn compaction --
+
+		"Compactor creating a message mid-turn should append to history.": {
+			mock: func(_ []*toolmock.MockTool) agent.SessionConfig {
+				return agent.SessionConfig{
+					Provider: fake.NewProvider(func(_ context.Context, req llm.Request) (*llm.Response, error) {
+						return &llm.Response{
+							Message: model.Message{
+								Kind:    model.MessageKindLLM,
+								Content: []model.ContentPart{model.NewContentText(fmt.Sprintf("saw %d messages", len(req.Messages)))},
+								Metadata: &model.MessageMetadata{
+									StopReason: model.StopReasonComplete,
+								},
+							},
+						}, nil
+					}),
+					Messages: []model.Message{
+						{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("old")}},
+						{ID: "m2", Kind: model.MessageKindLLM, Content: []model.ContentPart{model.NewContentText("old reply")}},
+					},
+					Compactor: &testCompactor{fn: func(_ context.Context, msgs []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+						// Dynamically reference the last message (the new user prompt) as first kept.
+						lastID := msgs[len(msgs)-1].ID
+						compactionMsg := model.Message{
+							ID:      "c1",
+							Kind:    model.MessageKindCompaction,
+							Content: []model.ContentPart{model.NewContentText("summary")},
+							Compaction: &model.CompactionData{
+								FirstKeptID: lastID,
+							},
+						}
+						return &agentcontext.CompactResult{
+							SummaryMessage: &compactionMsg,
+							Usage:          model.Usage{InputTokens: 100, OutputTokens: 50},
+						}, nil
+					}},
+				}
+			},
+			prompts: [][]model.ContentPart{
+				{model.NewContentText("new")},
+			},
+			expResp: func(t *testing.T, results []*agent.SessionTurnResult, session *agent.Session) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.Len(results, 1)
+				// LLM sees compaction summary + last message = 2 messages.
+				assert.Equal("saw 2 messages", finalLLMFromTurnResult(t, results[0]).Content[0].Text)
+
+				// Compaction usage should be aggregated.
+				usage := session.Usage()
+				assert.GreaterOrEqual(usage.InputTokens, 100)
+				assert.GreaterOrEqual(usage.OutputTokens, 50)
+			},
+		},
+
+		"Compactor should run on every iteration in the turn loop.": {
+			mock: func(tools []*toolmock.MockTool) agent.SessionConfig {
+				compactorCallCount := 0
+				callCount := 0
+				provider := fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+					callCount++
+					if callCount == 1 {
+						return &llm.Response{
+							Message: model.Message{
+								Kind: model.MessageKindLLM,
+								ToolCallRequests: []model.ToolCallRequest{
+									{ID: "tc1", ToolID: "t", Arguments: json.RawMessage(`{}`)},
+								},
+								Metadata: &model.MessageMetadata{StopReason: model.StopReasonToolUse},
+							},
+						}, nil
+					}
+					return &llm.Response{
+						Message: model.Message{
+							Kind:    model.MessageKindLLM,
+							Content: []model.ContentPart{model.NewContentText(fmt.Sprintf("compactor called %d times", compactorCallCount))},
+							Metadata: &model.MessageMetadata{
+								StopReason: model.StopReasonComplete,
+							},
+						},
+					}, nil
+				})
+
+				tools[0].On("ID").Return("t")
+				tools[0].On("Description").Return("tool t")
+				tools[0].On("Schema").Return(json.RawMessage(`{"type":"object","properties":{},"additionalProperties":false}`))
+				tools[0].On("Execute", mock.Anything, mock.Anything).Return(&tool.Result{
+					Content: []model.ContentPart{model.NewContentText("ok")},
+				}, nil)
+
+				return agent.SessionConfig{
+					Provider: provider,
+					Tools:    []tool.Tool{tools[0]},
+					Compactor: &testCompactor{fn: func(_ context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+						compactorCallCount++
+						return &agentcontext.CompactResult{}, nil
+					}},
+				}
+			},
+			prompts: [][]model.ContentPart{{model.NewContentText("hi")}},
+			expResp: func(t *testing.T, results []*agent.SessionTurnResult, _ *agent.Session) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.Len(results, 1)
+				// Compactor should have been called twice (once per LLM call).
+				assert.Equal("compactor called 2 times", finalLLMFromTurnResult(t, results[0]).Content[0].Text)
+			},
+		},
+
+		// -- Context cancellation --
+
+		"Context cancellation should propagate.": {
+			mock: func(_ []*toolmock.MockTool) agent.SessionConfig {
+				return agent.SessionConfig{
+					Provider: fake.NewProvider(func(_ context.Context, _ llm.Request) (*llm.Response, error) {
+						return nil, context.Canceled
+					}),
+				}
+			},
+			prompts: [][]model.ContentPart{{model.NewContentText("hi")}},
+			expErr:  true,
+		},
 	}
 
 	for name, test := range tests {
@@ -889,6 +1462,7 @@ func TestSessionPrompt(t *testing.T) {
 			require := require.New(t)
 
 			mockTools := []*toolmock.MockTool{
+				toolmock.NewMockTool(t),
 				toolmock.NewMockTool(t),
 			}
 
@@ -909,6 +1483,9 @@ func TestSessionPrompt(t *testing.T) {
 
 			if test.expErr {
 				assert.Error(lastErr)
+				if test.expErrIs != nil {
+					assert.ErrorIs(lastErr, test.expErrIs)
+				}
 			} else {
 				assert.NoError(lastErr)
 			}
@@ -1944,6 +2521,41 @@ func TestSessionCompact(t *testing.T) {
 				_, err = s.Compact(context.Background())
 				assert.Error(err)
 				assert.Contains(err.Error(), "compaction boom")
+
+				// Session state should be unmodified.
+				msgs := s.Messages()
+				assert.Len(msgs, 1)
+				assert.Equal("m1", msgs[0].ID)
+			},
+		},
+
+		"Invalid compaction summary boundary should fail.": {
+			run: func(t *testing.T) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				compactor := &testCompactor{
+					fn: func(_ context.Context, _ []model.Message, _ agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+						return &agentcontext.CompactResult{
+							SummaryMessage: &model.Message{
+								ID:         "c1",
+								Kind:       model.MessageKindCompaction,
+								Compaction: &model.CompactionData{FirstKeptID: "missing"},
+							},
+						}, nil
+					},
+				}
+
+				s, err := agent.NewSession(context.Background(), withRequiredRepos(agent.SessionConfig{
+					Provider:  fake.NewEchoProvider(),
+					Compactor: compactor,
+					Messages:  []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
+				}))
+				require.NoError(err)
+
+				_, err = s.Compact(context.Background())
+				assert.Error(err)
 
 				// Session state should be unmodified.
 				msgs := s.Messages()
