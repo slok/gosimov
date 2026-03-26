@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/slok/gosimov/internal/utils/id"
+	messageutil "github.com/slok/gosimov/internal/utils/message"
+	usageutil "github.com/slok/gosimov/internal/utils/usage"
 	agentcontext "github.com/slok/gosimov/pkg/agent/context"
 	"github.com/slok/gosimov/pkg/conventions"
 	"github.com/slok/gosimov/pkg/llm"
@@ -203,7 +205,7 @@ func (c *LoadSessionConfig) defaults() error {
 // Session manages a multi-turn conversation with an LLM.
 //
 // It accumulates messages across turns, tracks total usage, and delegates
-// each turn to [runTurn]. A session is the stateful wrapper that makes
+// each turn to [Session.runTurn]. A session is the stateful wrapper that makes
 // multi-turn conversations ergonomic.
 //
 // Session is safe for concurrent access, but only one [Prompt] or [Continue]
@@ -242,7 +244,7 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		return nil, fmt.Errorf("invalid session config: %w", err)
 	}
 
-	initialMessages := cloneMessages(cfg.Messages)
+	initialMessages := messageutil.CloneMessages(cfg.Messages)
 	liveMessages, err := sanitizeLiveCompactionHistory(initialMessages)
 	if err != nil {
 		return nil, fmt.Errorf("invalid initial messages live history: %w", err)
@@ -322,7 +324,7 @@ func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 	}
 
 	if len(cfg.Messages) > 0 {
-		fullMessages := cloneMessages(cfg.Messages)
+		fullMessages := messageutil.CloneMessages(cfg.Messages)
 		liveMessages, err := sanitizeLiveCompactionHistory(fullMessages)
 		if err != nil {
 			return nil, fmt.Errorf("invalid load messages live history: %w", err)
@@ -387,27 +389,18 @@ func usageFromMessages(messages []model.Message) model.Usage {
 	total := model.Usage{}
 
 	for _, msg := range messages {
-		total = addUsage(total, msg.Metadata)
+		if msg.Metadata != nil && msg.Metadata.Usage != nil {
+			total = usageutil.Add(total, *msg.Metadata.Usage)
+		}
 	}
 
 	return total
 }
 
-func cloneMessages(messages []model.Message) []model.Message {
-	if messages == nil {
-		return nil
-	}
-
-	cloned := make([]model.Message, len(messages))
-	copy(cloned, messages)
-
-	return cloned
-}
-
 // Prompt sends a user message and runs a full turn.
 //
 // It builds a [model.MessageKindUser] message from the given content,
-// appends it to the conversation, runs a turn via [runTurn], and
+// appends it to the conversation, runs a turn via [Session.runTurn], and
 // appends all generated messages to the session history.
 func (s *Session) Prompt(ctx context.Context, content []model.ContentPart, opts PromptOptions) (*SessionTurnResult, error) {
 	if err := s.beginRun(SessionOperationPrompt); err != nil {
@@ -427,10 +420,8 @@ func (s *Session) Prompt(ctx context.Context, content []model.ContentPart, opts 
 	}
 
 	// Persist user message eagerly (before running the turn).
-	if s.messageRepo != nil {
-		if err := s.messageRepo.StoreMessages(ctx, s.session.ID, []model.Message{userMsg}); err != nil {
-			return nil, fmt.Errorf("persisting user message: %w", err)
-		}
+	if err := s.messageRepo.StoreMessages(ctx, s.session.ID, []model.Message{userMsg}); err != nil {
+		return nil, fmt.Errorf("persisting user message: %w", err)
 	}
 
 	s.mu.Lock()
@@ -443,14 +434,14 @@ func (s *Session) Prompt(ctx context.Context, content []model.ContentPart, opts 
 		return nil, err
 	}
 
-	logger.WithValues(gosimovlog.KV{"turn_messages": len(result.NewMessages)}).Debugf("Prompt turn ended")
+	logger.WithValues(gosimovlog.KV{"turn_messages": len(result.Messages)}).Debugf("Prompt turn ended")
 
-	return result, nil
+	return &SessionTurnResult{NewMessages: result.Messages}, nil
 }
 
 // Continue resumes the conversation from the current message history.
 //
-// Use this for retries after errors. It calls [runTurn] with the current
+// Use this for retries after errors. It calls [Session.runTurn] with the current
 // messages without adding a new user message.
 func (s *Session) Continue(ctx context.Context, opts PromptOptions) (*SessionTurnResult, error) {
 	if err := s.beginRun(SessionOperationContinue); err != nil {
@@ -475,17 +466,33 @@ func (s *Session) Continue(ctx context.Context, opts PromptOptions) (*SessionTur
 		return nil, err
 	}
 
-	logger.WithValues(gosimovlog.KV{"turn_messages": len(result.NewMessages)}).Debugf("Session continuation ended")
+	logger.WithValues(gosimovlog.KV{"turn_messages": len(result.Messages)}).Debugf("Session continuation ended")
 
-	return result, nil
+	return &SessionTurnResult{NewMessages: result.Messages}, nil
 }
 
-// runTurn executes a turn and updates session state with the results.
+// runTurn executes one turn of the agent loop: sends messages to the LLM,
+// handles tool call requests, and loops until the LLM stops requesting tools.
+//
+// The loop:
+//  1. Runs the compactor (may compact + filter messages based on checkpoints).
+//  2. Runs the context processor (pure transform on the compacted messages).
+//  3. Calls the LLM with the processed messages.
+//  4. If the LLM responds with [model.StopReasonToolUse], executes the requested tools,
+//     appends results to the conversation, and loops back to step 1.
+//  5. If the LLM responds with [model.StopReasonComplete] or [model.StopReasonMaxTokens],
+//     returns the result.
+//  6. If the LLM responds with [model.StopReasonError], returns an error.
+//
+// Tool execution errors (Go errors from Execute) are wrapped as [model.MessageKindToolResult]
+// with IsError=true and fed back to the LLM, letting it decide how to proceed.
+//
+// The input message elements are treated as immutable.
 //
 // Each message produced during the turn (LLM responses and tool results) is
-// persisted individually via the onMessages callback as it is created.
-
-func (s *Session) runTurn(ctx context.Context, messages []model.Message, opts PromptOptions) (*SessionTurnResult, error) {
+// persisted individually via the message repository as it is created.
+// Session state (messages, usage) is updated before returning.
+func (s *Session) runTurn(ctx context.Context, messages []model.Message, opts PromptOptions) (*turnResult, error) {
 	ctx = s.ctxWithRuntimeInfo(ctx)
 
 	systemPrompt := s.systemPrompt
@@ -498,41 +505,257 @@ func (s *Session) runTurn(ctx context.Context, messages []model.Message, opts Pr
 		maxIterations = opts.TurnMaxIterations
 	}
 
-	runnerResult, err := runTurn(ctx, turnConfig{
-		session:            s.session,
-		provider:           s.provider,
-		systemPrompt:       systemPrompt,
-		disablePromptCache: s.disablePromptCache,
-		messages:           messages,
-		tools:              s.tools,
-		toolIndex:          s.toolIndex,
-		toolTimeout:        s.toolTimeout,
-		maxIterations:      maxIterations,
-		onMessages:         s.persistMessages,
-		compactor:          s.compactor,
-		contextProcessor:   s.contextProcessor,
-		logger:             s.sessionLogger(""),
-	})
-	if err != nil {
+	logger := s.sessionLogger("")
+	liveMessages := messages
+
+	var (
+		newMessages []model.Message
+		totalUsage  model.Usage
+	)
+
+	for iteration := 0; ; iteration++ {
+		logger.WithValues(gosimovlog.KV{
+			"component":      "agent.turn",
+			"iteration":      iteration,
+			"max_iterations": maxIterations,
+			"message_count":  len(liveMessages),
+		}).Debugf("Turn iteration started")
+
+		if err := ensureTurnContextActive(ctx); err != nil {
+			return nil, err
+		}
+
+		if maxIterations > 0 && iteration >= maxIterations {
+			return nil, fmt.Errorf("agent loop exceeded max iterations (%d): %w", maxIterations, pkgerrors.ErrMaxIterations)
+		}
+
+		// Compactor: may create compaction checkpoints. Runs before the context processor.
+		compactResult, err := s.runCompaction(ctx, liveMessages, agentcontext.CompactOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("running compaction: %w", err)
+		}
+
+		if err := ensureTurnContextActive(ctx); err != nil {
+			return nil, err
+		}
+
+		// If compaction created a checkpoint, append it to turn and full history.
+		if compactResult.SummaryMessage != nil {
+			newMessages = append(newMessages, *compactResult.SummaryMessage)
+			totalUsage = usageutil.Add(totalUsage, compactResult.Usage)
+			liveMessages = append(liveMessages, *compactResult.SummaryMessage)
+
+			liveMessages, err = sanitizeLiveCompactionHistory(liveMessages)
+			if err != nil {
+				return nil, fmt.Errorf("sanitizing live history after compaction: %w", err)
+			}
+		}
+
+		llmMessages := liveMessages
+
+		// Context processor: pure transform on the (already compacted) messages.
+		if s.contextProcessor != nil {
+			llmMessages, err = s.contextProcessor.ProcessContext(ctx, messageutil.CloneMessages(llmMessages))
+			if err != nil {
+				return nil, fmt.Errorf("context processing failed: %w", err)
+			}
+		}
+
+		if err := ensureTurnContextActive(ctx); err != nil {
+			return nil, err
+		}
+
+		// Build the LLM request.
+		req := llm.Request{
+			SystemPrompt: systemPrompt,
+			SessionID:    s.session.ID,
+			Messages:     llmMessages,
+			Tools:        toToolDefinitions(s.tools),
+			Config:       llm.RequestConfig{EnablePromptCache: !s.disablePromptCache},
+		}
+
+		// Call the LLM.
+		llmStart := time.Now()
+		resp, err := s.provider.Call(ctx, req)
+		if err != nil {
+			return nil, fmt.Errorf("llm call failed: %w", err)
+		}
+
+		if err := ensureTurnContextActive(ctx); err != nil {
+			return nil, err
+		}
+
+		// Stamp the response message with ID and timestamp.
+		resp.Message.ID = id.NewULID(conventions.IDPrefixMessageLLM)
+		resp.Message.CreatedAt = time.Now()
+
+		liveMessages = append(liveMessages, resp.Message)
+		newMessages = append(newMessages, resp.Message)
+
+		if resp.Message.Metadata != nil && resp.Message.Metadata.Usage != nil {
+			totalUsage = usageutil.Add(totalUsage, *resp.Message.Metadata.Usage)
+		}
+
+		// Persist the LLM response.
+		if err := s.messageRepo.StoreMessages(ctx, s.session.ID, []model.Message{resp.Message}); err != nil {
+			return nil, fmt.Errorf("persisting llm response: %w", err)
+		}
+
+		// Decide what to do based on stop reason.
+		stopReason := model.StopReasonNone
+		if resp.Message.Metadata != nil {
+			stopReason = resp.Message.Metadata.StopReason
+		}
+
+		logger.WithValues(gosimovlog.KV{
+			"component":            "agent.turn",
+			"iteration":            iteration,
+			"llm_message_count":    len(llmMessages),
+			"duration":             time.Since(llmStart),
+			"stop_reason":          string(stopReason),
+			"prompt_cache_enabled": !s.disablePromptCache,
+		}).Debugf("LLM call completed")
+
+		switch stopReason {
+		case model.StopReasonComplete, model.StopReasonMaxTokens, model.StopReasonNone:
+			result := &turnResult{
+				Message:      resp.Message,
+				Messages:     newMessages,
+				LiveMessages: liveMessages,
+				Usage:        totalUsage,
+			}
+
+			s.mu.Lock()
+			s.messages = result.LiveMessages
+			s.usage = usageutil.Add(s.usage, result.Usage)
+			s.mu.Unlock()
+
+			return result, nil
+
+		case model.StopReasonError:
+			return nil, fmt.Errorf("llm returned error stop reason: %w", pkgerrors.ErrLLMError)
+
+		case model.StopReasonAborted:
+			return nil, fmt.Errorf("llm request was aborted: %w", pkgerrors.ErrAborted)
+
+		case model.StopReasonToolUse:
+			toolResults, err := s.executeToolCalls(ctx, resp.Message.ToolCallRequests)
+			if err != nil {
+				return nil, fmt.Errorf("executing tool calls: %w", err)
+			}
+			liveMessages = append(liveMessages, toolResults...)
+			newMessages = append(newMessages, toolResults...)
+
+		default:
+			return nil, fmt.Errorf("llm returned unexpected stop reason %q: %w", stopReason, pkgerrors.ErrLLMError)
+		}
+	}
+}
+
+// executeToolCalls runs each tool call request and returns tool result messages.
+// Each tool result is persisted individually via the message repository as it is created.
+func (s *Session) executeToolCalls(ctx context.Context, requests []model.ToolCallRequest) ([]model.Message, error) {
+	if err := ensureTurnContextActive(ctx); err != nil {
 		return nil, err
 	}
 
-	s.mu.Lock()
-	s.messages = runnerResult.LiveMessages
-	s.usage = addUsage(s.usage, &model.MessageMetadata{Usage: &runnerResult.Usage})
-	s.mu.Unlock()
+	logger := s.sessionLogger("")
+	results := make([]model.Message, 0, len(requests))
 
-	return &SessionTurnResult{NewMessages: runnerResult.Messages}, nil
-}
+	for _, req := range requests {
+		if err := ensureTurnContextActive(ctx); err != nil {
+			return nil, err
+		}
 
-// persistMessages is the onMessagesFn callback that persists messages to the store.
-// It is only wired when a MessageRepository is configured.
-func (s *Session) persistMessages(ctx context.Context, msgs []model.Message) error {
-	if s.messageRepo == nil {
-		return nil
+		start := time.Now()
+		msg := s.executeOneToolCall(ctx, req)
+		durationMS := time.Since(start).Milliseconds()
+
+		if err := ensureTurnContextActive(ctx); err != nil {
+			return nil, err
+		}
+
+		results = append(results, msg)
+
+		logger.WithValues(gosimovlog.KV{
+			"component":    "agent.turn",
+			"tool_id":      req.ToolID,
+			"tool_call_id": req.ID,
+			"duration_ms":  durationMS,
+			"is_error":     msg.IsError,
+		}).Debugf("Tool call executed")
+
+		if err := s.messageRepo.StoreMessages(ctx, s.session.ID, []model.Message{msg}); err != nil {
+			return nil, err
+		}
 	}
 
-	return s.messageRepo.StoreMessages(ctx, s.session.ID, msgs)
+	return results, nil
+}
+
+// executeOneToolCall executes a single tool call and returns a tool result message.
+//
+// If the tool returns an error, err.Error() is sent to the LLM as an error tool result.
+// The agent loop never aborts on tool errors — they are always fed back to the LLM.
+func (s *Session) executeOneToolCall(ctx context.Context, req model.ToolCallRequest) model.Message {
+	t, ok := s.toolIndex[req.ToolID]
+	if !ok {
+		return newToolResultMessage(req.ID, []model.ContentPart{model.NewContentText(fmt.Sprintf("tool %q not found", req.ToolID))}, true)
+	}
+
+	toolCtx := ctx
+	cancel := func() {}
+	if s.toolTimeout > 0 {
+		toolCtx, cancel = context.WithTimeout(ctx, s.toolTimeout)
+	}
+	defer cancel()
+
+	result, err := t.Execute(toolCtx, req.Arguments)
+	if err != nil {
+		return newToolResultMessage(req.ID, []model.ContentPart{model.NewContentText(err.Error())}, true)
+	}
+
+	return newToolResultMessage(req.ID, result.Content, false)
+}
+
+// runCompaction executes one compaction pass.
+//
+// It delegates to the configured [agentcontext.Compactor] and, if a compaction checkpoint
+// message is created, validates and persists it via the message repository.
+//
+// The caller is responsible for updating in-memory state (appending the message
+// to session history, aggregating usage).
+func (s *Session) runCompaction(ctx context.Context, messages []model.Message, opts agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
+	logger := s.logger.WithValues(gosimovlog.KV{
+		"component": "agent.compaction",
+	})
+
+	started := time.Now()
+
+	result, err := s.compactor.Compact(ctx, messages, opts)
+	if err != nil {
+		return nil, fmt.Errorf("compaction failed: %w", err)
+	}
+
+	if result.SummaryMessage == nil {
+		return result, nil
+	}
+
+	if err := validateCompactionSummary(*result.SummaryMessage, messages); err != nil {
+		return nil, fmt.Errorf("invalid compaction summary message: %w", err)
+	}
+
+	logger.WithValues(gosimovlog.KV{
+		"duration_ms":         time.Since(started).Milliseconds(),
+		"usage_input_tokens":  result.Usage.InputTokens,
+		"usage_output_tokens": result.Usage.OutputTokens,
+	}).Infof("Compaction checkpoint created")
+
+	if err := s.messageRepo.StoreMessages(ctx, s.session.ID, []model.Message{*result.SummaryMessage}); err != nil {
+		return nil, fmt.Errorf("persisting compaction message: %w", err)
+	}
+
+	return result, nil
 }
 
 // Messages returns a copy of the in-memory live/effective conversation history.
@@ -587,9 +810,9 @@ func (s *Session) State() SessionState {
 
 // Compact forces a context compaction between turns.
 //
-// It delegates to [runCompaction] with [CompactOptions.Force] set to true.
+// It delegates to [Session.runCompaction] with [CompactOptions.Force] set to true.
 // If the compactor creates a compaction checkpoint message, it is appended to the
-// conversation history and persisted (persistence happens inside [runCompaction]).
+// conversation history and persisted (persistence happens inside [Session.runCompaction]).
 //
 // Returns the [CompactResult] so the caller can inspect the compaction message
 // and usage. If no compactor is configured (NoopCompactor), the result will have
@@ -611,13 +834,7 @@ func (s *Session) Compact(ctx context.Context) (*agentcontext.CompactResult, err
 	messages := s.messages
 	s.mu.Unlock()
 
-	result, err := runCompaction(ctx, compactionConfig{
-		compactor:  s.compactor,
-		messages:   messages,
-		onMessages: s.persistMessages,
-		opts:       agentcontext.CompactOptions{Force: true},
-		logger:     logger,
-	})
+	result, err := s.runCompaction(ctx, messages, agentcontext.CompactOptions{Force: true})
 	if err != nil {
 		return nil, err
 	}
@@ -631,7 +848,7 @@ func (s *Session) Compact(ctx context.Context) (*agentcontext.CompactResult, err
 
 		s.mu.Lock()
 		s.messages = updatedMessages
-		s.usage = addUsage(s.usage, &model.MessageMetadata{Usage: &result.Usage})
+		s.usage = usageutil.Add(s.usage, result.Usage)
 		s.mu.Unlock()
 
 		logger.Debugf("Compaction succeeded, checkpoint message appended to conversation history")
