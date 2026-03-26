@@ -493,14 +493,6 @@ func (s *Session) Continue(ctx context.Context, opts PromptOptions) (*SessionTur
 // persisted individually via the message repository as it is created.
 // Session state (messages, usage) is updated before returning.
 func (s *Session) runTurn(ctx context.Context, messages []model.Message, opts PromptOptions) (*turnResult, error) {
-	if s.provider == nil {
-		return nil, fmt.Errorf("provider is required: %w", pkgerrors.ErrNotValid)
-	}
-
-	if len(messages) == 0 {
-		return nil, fmt.Errorf("messages is required: %w", pkgerrors.ErrNotValid)
-	}
-
 	ctx = s.ctxWithRuntimeInfo(ctx)
 
 	systemPrompt := s.systemPrompt
