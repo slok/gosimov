@@ -8,9 +8,10 @@ import (
 	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/llm/internal/anthropicmsg"
 	"github.com/slok/gosimov/pkg/llm/internal/openaichat"
-	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
 )
+
+//go:generate go run ../internal/cmd/genmodels -target opencode-go -out ./models_gen.go
 
 const (
 	defaultBaseURL = "https://opencode.ai/zen/go/v1"
@@ -25,13 +26,13 @@ type Config struct {
 	Client      *http.Client
 }
 
-func (c *Config) defaults() (model.LLMModelInfo, modelAPIFormat, error) {
+func (c *Config) defaults() error {
 	if c.TokenSource == nil {
-		return model.LLMModelInfo{}, "", fmt.Errorf("token source is required: %w", pkgerrors.ErrNotValid)
+		return fmt.Errorf("token source is required: %w", pkgerrors.ErrNotValid)
 	}
 
 	if strings.TrimSpace(c.Model) == "" {
-		return model.LLMModelInfo{}, "", fmt.Errorf("model is required: %w", pkgerrors.ErrNotValid)
+		return fmt.Errorf("model is required: %w", pkgerrors.ErrNotValid)
 	}
 
 	if strings.TrimSpace(c.BaseURL) == "" {
@@ -42,24 +43,24 @@ func (c *Config) defaults() (model.LLMModelInfo, modelAPIFormat, error) {
 		c.Client = http.DefaultClient
 	}
 
-	info, ok := ModelByID(c.Model)
-	if !ok {
-		return model.LLMModelInfo{}, "", fmt.Errorf("unsupported opencode-go model %q: %w", c.Model, pkgerrors.ErrNotValid)
-	}
-
-	format, ok := ModelFormatByID(c.Model)
-	if !ok {
-		return model.LLMModelInfo{}, "", fmt.Errorf("missing api format for opencode-go model %q: %w", c.Model, pkgerrors.ErrNotValid)
-	}
-
-	return info, format, nil
+	return nil
 }
 
 // New creates a new OpenCode Go provider.
 func New(cfg Config) (llm.Provider, error) {
-	info, format, err := cfg.defaults()
+	err := cfg.defaults()
 	if err != nil {
 		return nil, fmt.Errorf("invalid opencode-go provider config: %w", err)
+	}
+
+	info, ok := ModelByID(cfg.Model)
+	if !ok {
+		return nil, fmt.Errorf("unsupported opencode-go model %q: %w", cfg.Model, pkgerrors.ErrNotValid)
+	}
+
+	format, ok := ModelFormatByID(cfg.Model)
+	if !ok {
+		return nil, fmt.Errorf("missing api format for opencode-go model %q: %w", cfg.Model, pkgerrors.ErrNotValid)
 	}
 
 	switch format {

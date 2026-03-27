@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/slok/gosimov/internal/utils/id"
-	messageutil "github.com/slok/gosimov/internal/utils/message"
 	usageutil "github.com/slok/gosimov/internal/utils/usage"
 	agentcontext "github.com/slok/gosimov/pkg/agent/context"
 	"github.com/slok/gosimov/pkg/conventions"
@@ -98,14 +97,6 @@ func (s *Session) runTurn(ctx context.Context, messages []model.Message, opts Pr
 		}
 
 		llmMessages := liveMessages
-
-		// Context processor: pure transform on the (already compacted) messages.
-		if s.contextProcessor != nil {
-			llmMessages, err = s.contextProcessor.ProcessContext(ctx, messageutil.CloneMessages(llmMessages))
-			if err != nil {
-				return nil, fmt.Errorf("context processing failed: %w", err)
-			}
-		}
 
 		if err := ensureTurnContextActive(ctx); err != nil {
 			return nil, err

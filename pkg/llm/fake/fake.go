@@ -7,21 +7,25 @@ import (
 	"github.com/slok/gosimov/pkg/model"
 )
 
+// CompleteFn is the function signature for an LLM call.
+// Used by fake providers and function-based adapters.
+type CompleteFn func(ctx context.Context, req llm.Request) (*llm.Response, error)
+
 // Provider is a configurable LLM provider that delegates to a function.
 // Use [NewProvider] with a custom function, or [NewEchoProvider] for a
 // pre-configured echo implementation.
 type Provider struct {
-	fn        llm.CompleteFn
+	fn        CompleteFn
 	modelInfo model.LLMModelInfo
 }
 
 // NewProvider creates a Provider that delegates to the given function.
-func NewProvider(fn llm.CompleteFn) *Provider {
+func NewProvider(fn CompleteFn) *Provider {
 	return &Provider{fn: fn}
 }
 
 // NewProviderWithModelInfo creates a Provider with explicit model metadata.
-func NewProviderWithModelInfo(fn llm.CompleteFn, modelInfo model.LLMModelInfo) *Provider {
+func NewProviderWithModelInfo(fn CompleteFn, modelInfo model.LLMModelInfo) *Provider {
 	return &Provider{fn: fn, modelInfo: modelInfo}
 }
 
