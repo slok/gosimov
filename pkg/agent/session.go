@@ -56,11 +56,6 @@ type SessionConfig struct {
 	// It may create compaction checkpoints and filters messages based on those checkpoints.
 	// Implementations must treat messages as immutable.
 	Compactor agentcontext.Compactor
-	// ContextProcessor transforms messages before each LLM call (optional).
-	// If set, it is called on every LLM call within a turn (including iterations
-	// after tool results), after the compactor. Implementations must treat
-	// messages as immutable and return a new slice when transforming.
-	ContextProcessor agentcontext.Processor
 	// Logger records session and turn lifecycle events (optional).
 	// If nil, [log.Noop] is used.
 	Logger gosimovlog.Logger
@@ -123,8 +118,6 @@ type LoadSessionConfig struct {
 	Messages []model.Message
 	// Compactor manages context compaction within the agent loop (optional).
 	Compactor agentcontext.Compactor
-	// ContextProcessor transforms messages before each LLM call (optional).
-	ContextProcessor agentcontext.Processor
 	// Logger records session and turn lifecycle events (optional).
 	// If nil, [log.Noop] is used.
 	Logger gosimovlog.Logger
@@ -227,7 +220,6 @@ type Session struct {
 	sessionRepo        store.SessionRepository
 	messageRepo        store.MessageRepository
 	compactor          agentcontext.Compactor
-	contextProcessor   agentcontext.Processor
 	logger             gosimovlog.Logger
 }
 
@@ -279,7 +271,6 @@ func NewSession(ctx context.Context, cfg SessionConfig) (*Session, error) {
 		sessionRepo:        cfg.SessionRepository,
 		messageRepo:        cfg.MessageRepository,
 		compactor:          cfg.Compactor,
-		contextProcessor:   cfg.ContextProcessor,
 		logger:             cfg.Logger,
 	}
 
@@ -319,7 +310,6 @@ func LoadSession(ctx context.Context, cfg LoadSessionConfig) (*Session, error) {
 		sessionRepo:        cfg.SessionRepository,
 		messageRepo:        cfg.MessageRepository,
 		compactor:          cfg.Compactor,
-		contextProcessor:   cfg.ContextProcessor,
 		logger:             cfg.Logger,
 	}
 

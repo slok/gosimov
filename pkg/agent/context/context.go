@@ -56,17 +56,6 @@ type Compactor interface {
 	Compact(ctx context.Context, messages []model.Message, opts CompactOptions) (*CompactResult, error)
 }
 
-// Processor transforms messages before they are sent to the LLM.
-//
-// Implementations must not mutate the input slice. Return a new slice
-// with the desired messages for the LLM call.
-//
-// The processor is called on every LLM call within a turn (including
-// iterations after tool results are appended), after the compactor.
-type Processor interface {
-	ProcessContext(ctx context.Context, messages []model.Message) ([]model.Message, error)
-}
-
 // NoopCompactor is a [Compactor] that never creates checkpoints.
 // Used as the default when no compactor is configured.
 type NoopCompactor struct{}

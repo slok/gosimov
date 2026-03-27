@@ -25,10 +25,6 @@ type Provider interface {
 	ModelInfo() model.LLMModelInfo
 }
 
-// CompleteFn is the function signature for an LLM call.
-// Used by fake providers and function-based adapters.
-type CompleteFn func(ctx context.Context, req Request) (*Response, error)
-
 // Request is what gets sent to the LLM.
 type Request struct {
 	SystemPrompt string
@@ -60,4 +56,26 @@ type RequestConfig struct {
 // The caller is responsible for setting ID and CreatedAt before storing.
 type Response struct {
 	Message model.Message
+}
+
+// NoopProvider is a Provider that returns an empty response with a "noop" model.
+var NoopProvider = noopProvider(false)
+
+type noopProvider bool
+
+func (p *noopProvider) Call(ctx context.Context, req Request) (*Response, error) {
+	return &Response{
+		Message: model.Message{
+			Kind: model.MessageKindLLM,
+			Metadata: &model.MessageMetadata{
+				StopReason: model.StopReasonComplete,
+				Model:      "noop",
+				Provider:   "noop",
+			},
+		},
+	}, nil
+}
+
+func (p *noopProvider) ModelInfo() model.LLMModelInfo {
+	return model.LLMModelInfo{Name: "noop"}
 }

@@ -15,7 +15,7 @@ import (
 
 func TestProviderCall(t *testing.T) {
 	tests := map[string]struct {
-		fn      llm.CompleteFn
+		fn      fake.CompleteFn
 		req     llm.Request
 		expResp *llm.Response
 		expErr  bool
