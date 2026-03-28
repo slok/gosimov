@@ -35,16 +35,22 @@ const (
 	ModelGpt53Codex              = "gpt-5.3-codex"
 	ModelGpt53CodexSpark         = "gpt-5.3-codex-spark"
 	ModelGpt54                   = "gpt-5.4"
+	ModelGpt54Mini               = "gpt-5.4-mini"
+	ModelGpt54Nano               = "gpt-5.4-nano"
 	ModelGpt54Pro                = "gpt-5.4-pro"
 	ModelGrokCode                = "grok-code"
 	ModelKimiK2                  = "kimi-k2"
 	ModelKimiK2Thinking          = "kimi-k2-thinking"
 	ModelKimiK25                 = "kimi-k2.5"
 	ModelKimiK25Free             = "kimi-k2.5-free"
+	ModelMimoV2FlashFree         = "mimo-v2-flash-free"
+	ModelMimoV2OmniFree          = "mimo-v2-omni-free"
+	ModelMimoV2ProFree           = "mimo-v2-pro-free"
 	ModelMinimaxM21              = "minimax-m2.1"
 	ModelMinimaxM21Free          = "minimax-m2.1-free"
 	ModelMinimaxM25              = "minimax-m2.5"
 	ModelMinimaxM25Free          = "minimax-m2.5-free"
+	ModelNemotron3SuperFree      = "nemotron-3-super-free"
 	ModelQwen3Coder              = "qwen3-coder"
 	ModelTrinityLargePreviewFree = "trinity-large-preview-free"
 )
@@ -79,16 +85,22 @@ var modelIDs = []string{
 	"gpt-5.3-codex",
 	"gpt-5.3-codex-spark",
 	"gpt-5.4",
+	"gpt-5.4-mini",
+	"gpt-5.4-nano",
 	"gpt-5.4-pro",
 	"grok-code",
 	"kimi-k2",
 	"kimi-k2-thinking",
 	"kimi-k2.5",
 	"kimi-k2.5-free",
+	"mimo-v2-flash-free",
+	"mimo-v2-omni-free",
+	"mimo-v2-pro-free",
 	"minimax-m2.1",
 	"minimax-m2.1-free",
 	"minimax-m2.5",
 	"minimax-m2.5-free",
+	"nemotron-3-super-free",
 	"qwen3-coder",
 	"trinity-large-preview-free",
 }
@@ -384,6 +396,26 @@ var modelsByID = map[string]model.LLMModelInfo{
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},
+	"gpt-5.4-mini": {
+		ID:               "gpt-5.4-mini",
+		Name:             "GPT-5.4 Mini",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    400000,
+		MaxOutputTokens:  128000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"gpt-5.4-nano": {
+		ID:               "gpt-5.4-nano",
+		Name:             "GPT-5.4 Nano",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    400000,
+		MaxOutputTokens:  128000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
 	"gpt-5.4-pro": {
 		ID:               "gpt-5.4-pro",
 		Name:             "GPT-5.4 Pro",
@@ -444,6 +476,36 @@ var modelsByID = map[string]model.LLMModelInfo{
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityText, model.LLMModelInputModalityVideo},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},
+	"mimo-v2-flash-free": {
+		ID:               "mimo-v2-flash-free",
+		Name:             "MiMo V2 Flash Free",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    262144,
+		MaxOutputTokens:  65536,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"mimo-v2-omni-free": {
+		ID:               "mimo-v2-omni-free",
+		Name:             "MiMo V2 Omni Free",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    262144,
+		MaxOutputTokens:  64000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityAudio, model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"mimo-v2-pro-free": {
+		ID:               "mimo-v2-pro-free",
+		Name:             "MiMo V2 Pro Free",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    1048576,
+		MaxOutputTokens:  64000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
 	"minimax-m2.1": {
 		ID:               "minimax-m2.1",
 		Name:             "MiniMax M2.1",
@@ -481,6 +543,16 @@ var modelsByID = map[string]model.LLMModelInfo{
 		ToolCall:         true,
 		ContextWindow:    204800,
 		MaxOutputTokens:  131072,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"nemotron-3-super-free": {
+		ID:               "nemotron-3-super-free",
+		Name:             "Nemotron 3 Super Free",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    1000000,
+		MaxOutputTokens:  128000,
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},

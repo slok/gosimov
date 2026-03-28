@@ -1,13 +1,13 @@
 all: false
 packages:
-  github.com/slok/gankler/pkg/tool:
+  github.com/slok/gosimov/pkg/tool:
     interfaces:
       Tool:
         config:
           dir: "pkg/tool/toolmock"
           filename: "mocks.go"
           pkgname: "toolmock"
-  github.com/slok/gankler/pkg/tool/shell:
+  github.com/slok/gosimov/pkg/tool/shell:
     interfaces:
       Executor:
         config:

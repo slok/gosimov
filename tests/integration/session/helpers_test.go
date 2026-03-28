@@ -22,9 +22,9 @@ import (
 //
 //	GOSIMOV_INTEGRATION           - must be "true" to enable integration tests
 //	INTEGRATION_OPENCODE_GO_API_KEY         - required, OpenCode Go API key
-//	INTEGRATION_OPENCODE_GO_MODEL           - optional, model for conversation (default: "minimax-m2.5")
-//	OPENCODEGO_INTEGRATION_SUMMARY_MODEL    - optional, model for compaction summarization (default: same as model)
-//	OPENCODEGO_INTEGRATION_TIMEOUT          - optional, per-prompt timeout as Go duration (default: "3m")
+//	INTEGRATION_OPENCODE_GO_MODEL           - optional, model for conversation
+//	OPENCODEGO_INTEGRATION_SUMMARY_MODEL    - optional, model for compaction summarization
+//	OPENCODEGO_INTEGRATION_TIMEOUT          - optional, per-prompt timeout as Go duration
 type Config struct {
 	APIKey       string
 	Model        string
