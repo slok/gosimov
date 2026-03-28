@@ -37,7 +37,7 @@ jobs:
         env:
           GOSIMOV_INTEGRATION: "true"
           INTEGRATION_OPENCODE_GO_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
-          INTEGRATION_OPENCODE_GO_MODEL: minimax-m2.5
-          OPENCODEGO_INTEGRATION_SUMMARY_MODEL: minimax-m2.5
+          INTEGRATION_OPENCODE_GO_MODEL: minimax-m2.7
+          OPENCODEGO_INTEGRATION_SUMMARY_MODEL: minimax-m2.7
           OPENCODEGO_INTEGRATION_TIMEOUT: 4m
         run: go test -v -count=1 ./tests/integration/session/

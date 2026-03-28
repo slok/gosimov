@@ -26,6 +26,7 @@ fmt: ## Formats code.
 .PHONY: go-gen
 go-gen: ## Generates Go code (mocks, etc.).
 	mockery
+	go generate ./...
 
 .PHONY: ci
 ci: check test ## Runs all CI checks.

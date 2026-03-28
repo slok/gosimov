@@ -36,6 +36,8 @@ const (
 	ModelGpt53Codex          = "gpt-5.3-codex"
 	ModelGpt53CodexSpark     = "gpt-5.3-codex-spark"
 	ModelGpt54               = "gpt-5.4"
+	ModelGpt54Mini           = "gpt-5.4-mini"
+	ModelGpt54Nano           = "gpt-5.4-nano"
 	ModelGpt54Pro            = "gpt-5.4-pro"
 	ModelO1                  = "o1"
 	ModelO1Mini              = "o1-mini"
@@ -83,6 +85,8 @@ var openAIModelIDs = []string{
 	"gpt-5.3-codex",
 	"gpt-5.3-codex-spark",
 	"gpt-5.4",
+	"gpt-5.4-mini",
+	"gpt-5.4-nano",
 	"gpt-5.4-pro",
 	"o1",
 	"o1-mini",
@@ -396,6 +400,26 @@ var openAIModelsByID = map[string]model.LLMModelInfo{
 		Reasoning:        true,
 		ToolCall:         true,
 		ContextWindow:    1050000,
+		MaxOutputTokens:  128000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"gpt-5.4-mini": {
+		ID:               "gpt-5.4-mini",
+		Name:             "GPT-5.4 mini",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    400000,
+		MaxOutputTokens:  128000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"gpt-5.4-nano": {
+		ID:               "gpt-5.4-nano",
+		Name:             "GPT-5.4 nano",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    400000,
 		MaxOutputTokens:  128000,
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
