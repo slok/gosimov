@@ -3,9 +3,11 @@ package simple
 import (
 	"context"
 	"fmt"
+	"time"
 
-	"github.com/slok/gosimov/pkg/agent"
+	"github.com/slok/gosimov/internal/utils/id"
 	agentcontext "github.com/slok/gosimov/pkg/agent/context"
+	"github.com/slok/gosimov/pkg/conventions"
 	"github.com/slok/gosimov/pkg/llm"
 	"github.com/slok/gosimov/pkg/model"
 	"github.com/slok/gosimov/pkg/pkgerrors"
@@ -48,28 +50,11 @@ func (c *Config) defaults() error {
 		c.ReserveTokens = defaultReserveTokens
 	}
 
-	if c.contextWindowTokens() <= c.ReserveTokens {
-		return fmt.Errorf("context window tokens must be greater than reserve tokens: %w", pkgerrors.ErrNotValid)
-	}
-
 	if c.MaxSummaryTokens <= 0 {
 		c.MaxSummaryTokens = defaultMaxSummaryTokens
 	}
 
 	return nil
-}
-
-func (c *Config) contextWindowTokens() int {
-	if c.Provider == nil {
-		return defaultContextWindowTokens
-	}
-
-	contextWindow := c.Provider.ModelInfo().ContextWindow
-	if contextWindow > 0 {
-		return contextWindow
-	}
-
-	return defaultContextWindowTokens
 }
 
 type Compactor struct {
@@ -98,8 +83,6 @@ func New(cfg Config) (*Compactor, error) {
 	}, nil
 }
 
-var _ agentcontext.Compactor = (*Compactor)(nil)
-
 // Compact applies existing checkpoints and, when forced, creates a new checkpoint.
 //
 // Behavior:
@@ -108,12 +91,13 @@ var _ agentcontext.Compactor = (*Compactor)(nil)
 //  3. If not forced, summarize only when estimated tokens exceed the threshold;
 //     otherwise return no new checkpoint.
 func (c *Compactor) Compact(ctx context.Context, messages []model.Message, opts agentcontext.CompactOptions) (*agentcontext.CompactResult, error) {
-	effective := effectiveMessages(messages)
-	if !c.shouldCreateCheckpoint(ctx, opts.Force, effective) {
+	filteredMsgs := filterFromLatestCompactionMessage(messages)
+
+	if !opts.Force && !c.shouldCompact(ctx, filteredMsgs) {
 		return &agentcontext.CompactResult{}, nil
 	}
 
-	split, ok := c.splitForCompaction(effective)
+	split, ok := c.splitForCompaction(filteredMsgs)
 	if !ok {
 		return &agentcontext.CompactResult{}, nil
 	}
@@ -131,23 +115,19 @@ func (c *Compactor) Compact(ctx context.Context, messages []model.Message, opts 
 		return nil, fmt.Errorf("summarizing context: %w", err)
 	}
 
-	checkpoint := createCheckpoint(summary, firstKeptID, estimateMessagesTokens(effective))
 	return &agentcontext.CompactResult{
-		SummaryMessage: &checkpoint,
-		Usage:          usage,
+		SummaryMessage: &model.Message{
+			ID:        id.NewULID(conventions.IDPrefixCompaction),
+			Kind:      model.MessageKindCompaction,
+			CreatedAt: time.Now(),
+			Content:   []model.ContentPart{model.NewContentText(summary)},
+			Compaction: &model.CompactionData{
+				FirstKeptID:  firstKeptID,
+				TokensBefore: estimateMessagesTokens(filteredMsgs),
+			},
+		},
+		Usage: usage,
 	}, nil
-}
-
-func effectiveMessages(messages []model.Message) []model.Message {
-	return applyLatestCheckpoint(messages)
-}
-
-func (c *Compactor) shouldCreateCheckpoint(ctx context.Context, force bool, messages []model.Message) bool {
-	if force {
-		return true
-	}
-
-	return c.shouldCompact(ctx, messages)
 }
 
 func (c *Compactor) splitForCompaction(messages []model.Message) (compactionSplit, bool) {
@@ -170,17 +150,8 @@ func (c *Compactor) shouldCompact(ctx context.Context, messages []model.Message)
 		return false
 	}
 
-	maxInputTokens := c.contextWindowTokensFromCtx(ctx) - c.reserveTokens
+	maxInputTokens := contextWindowTokensFromCtx(ctx) - c.reserveTokens
 	return estimateMessagesTokens(messages) > maxInputTokens
-}
-
-func (c *Compactor) contextWindowTokensFromCtx(ctx context.Context) int {
-	info := agent.LLMModelInfoFromCtx(ctx)
-	if info != nil && info.ContextWindow > 0 {
-		return info.ContextWindow
-	}
-
-	return defaultContextWindowTokens
 }
 
 // summarize performs the dedicated summary LLM call and extracts text + usage.
@@ -191,10 +162,8 @@ func (c *Compactor) summarize(ctx context.Context, messages []model.Message, pre
 	resp, err := c.provider.Call(ctx, llm.Request{
 		SystemPrompt: summarizationSystemPrompt,
 		Messages: []model.Message{{
-			Kind: model.MessageKindUser,
-			Content: []model.ContentPart{model.NewContentText(
-
-				prompt)},
+			Kind:    model.MessageKindUser,
+			Content: []model.ContentPart{model.NewContentText(prompt)},
 		}},
 		Config: llm.RequestConfig{MaxTokens: c.maxSummaryTokens},
 	})
