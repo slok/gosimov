@@ -7,7 +7,7 @@ require (
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.11.1
-	github.com/yuin/goldmark v1.7.16
+	github.com/yuin/goldmark v1.8.2
 )
 
 require (
