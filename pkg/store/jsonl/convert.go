@@ -67,10 +67,11 @@ type toolCallLine struct {
 
 // metadataLine holds LLM response metadata.
 type metadataLine struct {
-	Usage      *usageLine       `json:"usage,omitempty"`
-	StopReason model.StopReason `json:"stop_reason,omitempty"`
-	Model      string           `json:"model,omitempty"`
-	Provider   string           `json:"provider,omitempty"`
+	Usage                *usageLine        `json:"usage,omitempty"`
+	StopReason           model.StopReason  `json:"stop_reason,omitempty"`
+	Model                string            `json:"model,omitempty"`
+	Provider             string            `json:"provider,omitempty"`
+	ProviderInternalData map[string]string `json:"provider_internal_data,omitempty"`
 }
 
 // usageLine holds token usage data.
@@ -245,9 +246,10 @@ func lineToContentPart(cl contentPartLine) model.ContentPart {
 
 func metadataToLine(md *model.MessageMetadata) *metadataLine {
 	ml := &metadataLine{
-		StopReason: md.StopReason,
-		Model:      md.Model,
-		Provider:   md.Provider,
+		StopReason:           md.StopReason,
+		Model:                md.Model,
+		Provider:             md.Provider,
+		ProviderInternalData: md.ProviderInternalData,
 	}
 
 	if md.Usage != nil {
@@ -267,9 +269,10 @@ func metadataToLine(md *model.MessageMetadata) *metadataLine {
 
 func lineToMetadata(ml *metadataLine) *model.MessageMetadata {
 	md := &model.MessageMetadata{
-		StopReason: ml.StopReason,
-		Model:      ml.Model,
-		Provider:   ml.Provider,
+		StopReason:           ml.StopReason,
+		Model:                ml.Model,
+		Provider:             ml.Provider,
+		ProviderInternalData: ml.ProviderInternalData,
 	}
 
 	if ml.Usage != nil {

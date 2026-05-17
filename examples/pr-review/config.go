@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/slok/gosimov/pkg/llm/opencodego"
 )
 
 var trustedAssociations = map[string]struct{}{
@@ -35,7 +37,7 @@ func loadConfig() (config, error) {
 	var cfg config
 
 	flag.StringVar(&cfg.apiKey, "api-key", envFirst("OPENCODE_GO_API_KEY", "INTEGRATION_OPENCODE_GO_API_KEY"), "OpenCode Go API key")
-	flag.StringVar(&cfg.modelID, "model", envFirst("OPENCODE_GO_MODEL", "INTEGRATION_OPENCODE_GO_MODEL", "minimax-m2.7"), "OpenCode Go model ID")
+	flag.StringVar(&cfg.modelID, "model", envFirst("OPENCODE_GO_MODEL", "INTEGRATION_OPENCODE_GO_MODEL", opencodego.ModelDeepseekV4Flash), "OpenCode Go model ID")
 	flag.StringVar(&cfg.repo, "repo", strings.TrimSpace(os.Getenv("GITHUB_REPOSITORY")), "GitHub repository owner/name")
 	flag.IntVar(&cfg.prNumber, "pr", 0, "Pull request number")
 	flag.StringVar(&cfg.eventName, "event-name", strings.TrimSpace(os.Getenv("GITHUB_EVENT_NAME")), "GitHub event name")

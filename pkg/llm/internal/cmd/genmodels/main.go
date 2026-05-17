@@ -14,7 +14,23 @@ import (
 	"text/template"
 )
 
-const modelsDevURL = "https://models.dev/api.json"
+const (
+	modelsDevURL = "https://models.dev/api.json"
+
+	providerIDOpenAI     = "openai"
+	providerIDZen        = "opencode"
+	providerIDAnthropic  = "anthropic"
+	providerIDOpenCodeGo = "opencode-go"
+
+	providerNPMAnthropic = "@ai-sdk/anthropic"
+
+	modelIDMinimaxM27 = "minimax-m2.7"
+	modelIDQwen35Plus = "qwen3.5-plus"
+	modelIDQwen36Plus = "qwen3.6-plus"
+
+	goModelAPIFormatOpenAICompatible = "modelAPIFormatOpenAICompatible"
+	goModelAPIFormatAnthropic        = "modelAPIFormatAnthropic"
+)
 
 type providerData struct {
 	NPM    string               `json:"npm"`
@@ -51,6 +67,7 @@ type entry struct {
 	ConstName        string
 	Name             string
 	ProviderNPM      string
+	APIFormat        string
 	Reasoning        bool
 	ToolCall         bool
 	ContextWindow    int
@@ -99,13 +116,13 @@ func main() {
 
 	var generated []byte
 	switch *target {
-	case "openai":
+	case providerIDOpenAI:
 		generated, err = generateOpenAI(providers)
 	case "zen":
 		generated, err = generateZen(providers)
-	case "anthropic":
+	case providerIDAnthropic:
 		generated, err = generateAnthropic(providers)
-	case "opencode-go":
+	case providerIDOpenCodeGo:
 		generated, err = generateOpenCodeGo(providers)
 	default:
 		fatalf("unsupported target %q", *target)
@@ -120,46 +137,46 @@ func main() {
 }
 
 func generateOpenAI(providers map[string]providerData) ([]byte, error) {
-	src, ok := providers["openai"]
+	src, ok := providers[providerIDOpenAI]
 	if !ok {
 		return nil, fmt.Errorf("provider openai not found")
 	}
 
-	all := normalizeEntries(src.Models, src.NPM, func(modelData) bool { return true })
-	chatgpt := normalizeEntries(src.Models, src.NPM, isChatGPTModel)
+	all := normalizeEntries(providerIDOpenAI, src.Models, src.NPM, func(modelData) bool { return true })
+	chatgpt := normalizeEntries(providerIDOpenAI, src.Models, src.NPM, isChatGPTModel)
 
 	return renderTemplate(openAITemplate, openAITemplateData{Entries: all, ChatGPTEntries: chatgpt})
 }
 
 func generateZen(providers map[string]providerData) ([]byte, error) {
-	src, ok := providers["opencode"]
+	src, ok := providers[providerIDZen]
 	if !ok {
 		return nil, fmt.Errorf("provider opencode not found")
 	}
 
-	entries := normalizeEntries(src.Models, src.NPM, func(modelData) bool { return true })
+	entries := normalizeEntries(providerIDZen, src.Models, src.NPM, func(modelData) bool { return true })
 
 	return renderTemplate(zenTemplate, zenTemplateData{Entries: entries})
 }
 
 func generateAnthropic(providers map[string]providerData) ([]byte, error) {
-	src, ok := providers["anthropic"]
+	src, ok := providers[providerIDAnthropic]
 	if !ok {
 		return nil, fmt.Errorf("provider anthropic not found")
 	}
 
-	entries := normalizeEntries(src.Models, src.NPM, func(modelData) bool { return true })
+	entries := normalizeEntries(providerIDAnthropic, src.Models, src.NPM, func(modelData) bool { return true })
 
 	return renderTemplate(anthropicTemplate, anthropicTemplateData{Entries: entries})
 }
 
 func generateOpenCodeGo(providers map[string]providerData) ([]byte, error) {
-	src, ok := providers["opencode-go"]
+	src, ok := providers[providerIDOpenCodeGo]
 	if !ok {
 		return nil, fmt.Errorf("provider opencode-go not found")
 	}
 
-	entries := normalizeEntries(src.Models, src.NPM, func(modelData) bool { return true })
+	entries := normalizeEntries(providerIDOpenCodeGo, src.Models, src.NPM, func(modelData) bool { return true })
 
 	return renderTemplate(opencodeGoTemplate, opencodeGoTemplateData{Entries: entries})
 }
@@ -438,7 +455,7 @@ var modelFormatsByID = map[string]modelAPIFormat{
 	// We use it as the canonical signal for the underlying API shape this model expects.
 	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
 	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	{{ printf "%q" .ID }}: {{ if eq .ProviderNPM "@ai-sdk/anthropic" }}modelAPIFormatAnthropic{{ else }}modelAPIFormatOpenAICompatible{{ end }},
+	{{ printf "%q" .ID }}: {{ .APIFormat }},
 {{- end }}
 }
 
@@ -468,7 +485,7 @@ func SupportedModelIDs() []string {
 }
 `
 
-func normalizeEntries(models map[string]modelData, defaultProviderNPM string, include func(modelData) bool) []entry {
+func normalizeEntries(providerID string, models map[string]modelData, defaultProviderNPM string, include func(modelData) bool) []entry {
 	ids := make([]string, 0, len(models))
 	for id := range models {
 		ids = append(ids, id)
@@ -494,6 +511,7 @@ func normalizeEntries(models map[string]modelData, defaultProviderNPM string, in
 			ConstName:        constName,
 			Name:             m.Name,
 			ProviderNPM:      modelProviderNPM(m, defaultProviderNPM),
+			APIFormat:        modelAPIFormatConst(providerID, defaultProviderNPM, m),
 			Reasoning:        m.Reasoning,
 			ToolCall:         m.ToolCall,
 			ContextWindow:    m.Limit.Context,
@@ -517,6 +535,30 @@ func modelProviderNPM(m modelData, defaultProviderNPM string) string {
 	}
 
 	return strings.TrimSpace(defaultProviderNPM)
+}
+
+func modelAPIFormatConst(providerID, defaultProviderNPM string, m modelData) string {
+	npm := modelProviderNPM(m, defaultProviderNPM)
+	if providerID == providerIDOpenCodeGo && opencodeGoOpenAICompatibleModel(m.ID) {
+		return goModelAPIFormatOpenAICompatible
+	}
+
+	if npm == providerNPMAnthropic {
+		return goModelAPIFormatAnthropic
+	}
+
+	return goModelAPIFormatOpenAICompatible
+}
+
+func opencodeGoOpenAICompatibleModel(modelID string) bool {
+	switch modelID {
+	case modelIDMinimaxM27, modelIDQwen35Plus, modelIDQwen36Plus:
+		// models.dev marks these OpenCode Go models as Anthropic-backed, but the
+		// actual OpenCode Go endpoint expects the OpenAI-compatible chat route.
+		return true
+	default:
+		return false
+	}
 }
 
 func inputModalityConsts(mods []string) []string {

@@ -42,7 +42,7 @@ func loadConfig() (config, error) {
 	var cfg config
 
 	flag.StringVar(&cfg.apiKey, "api-key", os.Getenv("OPENCODE_GO_API_KEY"), "OpenCode Go API key (or set OPENCODE_GO_API_KEY)")
-	flag.StringVar(&cfg.modelID, "model", defaultString(os.Getenv("OPENCODE_GO_MODEL"), opencodego.ModelKimiK25), "OpenCode Go model ID")
+	flag.StringVar(&cfg.modelID, "model", defaultString(os.Getenv("OPENCODE_GO_MODEL"), opencodego.ModelDeepseekV4Flash), "OpenCode Go model ID")
 	flag.StringVar(&cfg.prompt, "prompt", "Prepare release notes for this repository. Use available skills when relevant.", "Prompt to execute")
 	flag.StringVar(&cfg.systemPrompt, "system-prompt", "You are a helpful coding assistant. Prefer loading a relevant skill before running task-specific workflows.", "System prompt")
 	flag.BoolVar(&cfg.debug, "debug", false, "Enable debug logs for tool execution")

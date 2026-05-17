@@ -46,7 +46,7 @@ const (
 
 var defaultModelByProvider = map[providerKind]string{
 	providerZen:        "glm-5-free",
-	providerOpenCodeGo: "kimi-k2.5",
+	providerOpenCodeGo: "deepseek-v4-flash",
 	providerOpenAI:     "gpt-5",
 	providerCodex:      "gpt-5.3-codex",
 	providerAnthropic:  "claude-sonnet-4-6",
