@@ -30,6 +30,7 @@ github.com/slok/gosimov/
     agent/context/ # Context interfaces (Compactor, Processor)
     agent/context/simple/ # Simple LLM compactor (force-only checkpoint creation)
     llm/           # LLM provider interface and types
+    llm/customopenaicompatible/ # Custom OpenAI-compatible provider for local servers like Ollama/llama.cpp
     llm/fake/      # Fake LLM providers for testing
     llm/openai/    # OpenAI-compatible Chat Completions provider
     pkgerrors/     # Shared sentinel errors
@@ -47,6 +48,7 @@ github.com/slok/gosimov/
   examples/
     chat/         # Browser chat server (HTTP + SSE) using subscriber-backed message persistence
     compaction/   # Multi-turn example with Zen provider + simple compactor + forced Session.Compact
+    local-openai-compatible/ # End-to-end example using a custom OpenAI-compatible server
     pprof/        # Deterministic fake-provider workload runner for pprof and benchmark profiling
     openai-oauth/ # OAuth auth-code+PKCE example with file-backed credentials and auto refresh
     pr-review/    # CI-ready PR reviewer using dedicated GitHub tools (no generic shell)

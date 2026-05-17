@@ -13,6 +13,7 @@ Build your own agentic developer/operator experience directly in your Go systems
 - Simple session API (`Prompt`, `Continue`, `Compact`) with minimal setup.
 - Built-in tool-calling loop with JSON schema contracts and structured tool results.
 - Multi-provider support (Zen, OpenCode Go, OpenAI, ChatGPT/Codex).
+- Custom OpenAI-compatible provider support for local servers like Ollama and llama.cpp.
 - Optional persistence backends (`memory`, `jsonl`) plus live subscriptions via `subscriber`.
 - Context compaction support for long-running conversations.
 - Runtime state + usage tracking for observability and UI integration.
@@ -101,6 +102,9 @@ go run ./examples/opencode-go --api-key "$OPENCODE_GO_API_KEY"
 
 # OpenCode Go provider + custom skill tool
 go run ./examples/skills --api-key "$OPENCODE_GO_API_KEY"
+
+# Local/custom OpenAI-compatible server + tools
+go run ./examples/local-openai-compatible
 
 # Fake provider scripted flow (offline)
 go run ./examples/simple

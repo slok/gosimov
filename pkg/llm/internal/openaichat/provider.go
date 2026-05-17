@@ -27,9 +27,6 @@ type Config struct {
 }
 
 func (c *Config) defaults() error {
-	if c.TokenSource == nil {
-		return fmt.Errorf("token source is required: %w", pkgerrors.ErrNotValid)
-	}
 	if c.BaseURL == "" {
 		return fmt.Errorf("base url is required: %w", pkgerrors.ErrNotValid)
 	}
@@ -93,11 +90,13 @@ func (p *Provider) Call(ctx context.Context, req llm.Request) (*llm.Response, er
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
-	token, err := p.tokenSrc.Token(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("getting auth token: %w", err)
+	if p.tokenSrc != nil {
+		token, err := p.tokenSrc.Token(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("getting auth token: %w", err)
+		}
+		httpReq.Header.Set("Authorization", "Bearer "+token)
 	}
-	httpReq.Header.Set("Authorization", "Bearer "+token)
 
 	httpResp, err := p.client.Do(httpReq)
 	if err != nil {
