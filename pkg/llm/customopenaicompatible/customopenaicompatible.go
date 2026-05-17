@@ -19,7 +19,6 @@ type Config struct {
 	Model           string
 	ContextWindow   int
 	MaxOutputTokens int
-	APIKey          string
 	TokenSource     TokenSource
 	ProviderID      string
 	Client          *http.Client
@@ -40,14 +39,6 @@ func (c *Config) defaults() (model.LLMModelInfo, error) {
 
 	if c.MaxOutputTokens <= 0 {
 		return model.LLMModelInfo{}, fmt.Errorf("max output tokens must be > 0: %w", pkgerrors.ErrNotValid)
-	}
-
-	if strings.TrimSpace(c.APIKey) != "" && c.TokenSource != nil {
-		return model.LLMModelInfo{}, fmt.Errorf("api key and token source are mutually exclusive: %w", pkgerrors.ErrNotValid)
-	}
-
-	if strings.TrimSpace(c.APIKey) != "" {
-		c.TokenSource = NewAPIKeyTokenSource(c.APIKey)
 	}
 
 	if strings.TrimSpace(c.ProviderID) == "" {

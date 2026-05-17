@@ -24,8 +24,8 @@ func TestNew(t *testing.T) {
 		"Valid config without auth should succeed.": {
 			cfg: customopenaicompatible.Config{BaseURL: "http://example.com/v1", Model: "Qwen3.6", ContextWindow: 131072, MaxOutputTokens: 8192},
 		},
-		"Valid config with api key should succeed.": {
-			cfg: customopenaicompatible.Config{BaseURL: "http://example.com/v1", Model: "Qwen3.6", ContextWindow: 131072, MaxOutputTokens: 8192, APIKey: "secret"},
+		"Valid config with token source should succeed.": {
+			cfg: customopenaicompatible.Config{BaseURL: "http://example.com/v1", Model: "Qwen3.6", ContextWindow: 131072, MaxOutputTokens: 8192, TokenSource: customopenaicompatible.NewAPIKeyTokenSource("secret")},
 		},
 		"Missing base URL should fail.": {
 			cfg:    customopenaicompatible.Config{Model: "Qwen3.6", ContextWindow: 131072, MaxOutputTokens: 8192},
@@ -41,10 +41,6 @@ func TestNew(t *testing.T) {
 		},
 		"Missing max output tokens should fail.": {
 			cfg:    customopenaicompatible.Config{BaseURL: "http://example.com/v1", Model: "Qwen3.6", ContextWindow: 131072},
-			expErr: true,
-		},
-		"API key and token source together should fail.": {
-			cfg:    customopenaicompatible.Config{BaseURL: "http://example.com/v1", Model: "Qwen3.6", ContextWindow: 131072, MaxOutputTokens: 8192, APIKey: "secret", TokenSource: customopenaicompatible.NewAPIKeyTokenSource("other")},
 			expErr: true,
 		},
 	}
@@ -79,8 +75,8 @@ func TestProviderCall(t *testing.T) {
 				assert.Empty(t, r.Header.Get("Authorization"))
 			},
 		},
-		"API key should send bearer header.": {
-			cfg: customopenaicompatible.Config{BaseURL: "ignored", Model: "Qwen3.6", ContextWindow: 131072, MaxOutputTokens: 8192, APIKey: "secret"},
+		"Token source should send bearer header.": {
+			cfg: customopenaicompatible.Config{BaseURL: "ignored", Model: "Qwen3.6", ContextWindow: 131072, MaxOutputTokens: 8192, TokenSource: customopenaicompatible.NewAPIKeyTokenSource("secret")},
 			assertRequest: func(t *testing.T, r *http.Request) {
 				t.Helper()
 				assert.Equal(t, "Bearer secret", r.Header.Get("Authorization"))

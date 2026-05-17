@@ -124,12 +124,17 @@ func run(ctx context.Context) error {
 		return err
 	}
 
+	var tokenSource customopenaicompatible.TokenSource
+	if cfg.apiKey != "" {
+		tokenSource = customopenaicompatible.NewAPIKeyTokenSource(cfg.apiKey)
+	}
+
 	provider, err := customopenaicompatible.New(customopenaicompatible.Config{
 		BaseURL:         cfg.baseURL,
 		Model:           cfg.modelID,
 		ContextWindow:   cfg.contextWindow,
 		MaxOutputTokens: cfg.maxOutputTokens,
-		APIKey:          cfg.apiKey,
+		TokenSource:     tokenSource,
 	})
 	if err != nil {
 		return fmt.Errorf("creating provider: %w", err)
