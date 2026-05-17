@@ -3,7 +3,7 @@
 // Usage:
 //
 //	go run ./examples/opencode-go --api-key <key>
-//	go run ./examples/opencode-go --api-key <key> --model minimax-m2.5
+//	go run ./examples/opencode-go --api-key <key> --model deepseek-v4-flash
 //
 // Get your API key at: https://opencode.ai/auth
 package main
@@ -40,7 +40,7 @@ type config struct {
 func loadConfig() (config, error) {
 	var cfg config
 	flag.StringVar(&cfg.apiKey, "api-key", os.Getenv("OPENCODE_GO_API_KEY"), "OpenCode Go API key (or set OPENCODE_GO_API_KEY)")
-	flag.StringVar(&cfg.modelID, "model", defaultString(os.Getenv("OPENCODE_GO_MODEL"), opencodego.ModelKimiK25), "OpenCode Go model ID")
+	flag.StringVar(&cfg.modelID, "model", defaultString(os.Getenv("OPENCODE_GO_MODEL"), opencodego.ModelDeepseekV4Flash), "OpenCode Go model ID")
 	flag.StringVar(&cfg.prompt, "prompt", "Create a file called hello.py with a Python hello world program, then use the shell to run it with python3.", "Prompt to execute")
 	flag.StringVar(&cfg.systemPrompt, "system-prompt", "You are a helpful coding assistant. Use the available tools to complete tasks. Be concise.", "System prompt")
 	flag.IntVar(&cfg.maxIterations, "max-iterations", 10, "Maximum LLM iterations per turn")

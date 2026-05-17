@@ -20,11 +20,14 @@ type chatRequest struct {
 }
 
 type chatMessage struct {
-	Role       string          `json:"role"`
-	Content    json.RawMessage `json:"content,omitempty"`
-	ToolCalls  []chatToolCall  `json:"tool_calls,omitempty"`
-	ToolCallID string          `json:"tool_call_id,omitempty"`
+	Role             string          `json:"role"`
+	Content          json.RawMessage `json:"content,omitempty"`
+	ToolCalls        []chatToolCall  `json:"tool_calls,omitempty"`
+	ToolCallID       string          `json:"tool_call_id,omitempty"`
+	ReasoningContent string          `json:"reasoning_content,omitempty"`
 }
+
+const providerDataReasoningContentKey = "reasoning_content"
 
 type chatContentPart struct {
 	Type     string        `json:"type"`
@@ -143,6 +146,9 @@ func convertLLMMessage(msg model.Message) *chatMessage {
 			cm.ToolCalls[i] = chatToolCall{ID: tc.ID, Type: "function", Function: chatFunctionCall{Name: tc.ToolID, Arguments: string(tc.Arguments)}}
 		}
 	}
+	if msg.Metadata != nil {
+		cm.ReasoningContent = strings.TrimSpace(msg.Metadata.ProviderInternalData[providerDataReasoningContentKey])
+	}
 	return cm
 }
 
@@ -219,6 +225,9 @@ func convertResponse(resp chatResponse) model.Message {
 		return msg
 	}
 	choice := resp.Choices[0]
+	if choice.Message.ReasoningContent != "" {
+		msg.Metadata.ProviderInternalData = map[string]string{providerDataReasoningContentKey: choice.Message.ReasoningContent}
+	}
 	msg.Metadata.StopReason = convertStopReason(choice.FinishReason)
 	var text string
 	if choice.Message.Content != nil {

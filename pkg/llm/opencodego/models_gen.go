@@ -13,27 +13,77 @@ const (
 )
 
 const (
-	ModelGlm5       = "glm-5"
-	ModelKimiK25    = "kimi-k2.5"
-	ModelMinimaxM25 = "minimax-m2.5"
-	ModelMinimaxM27 = "minimax-m2.7"
+	ModelDeepseekV4Flash = "deepseek-v4-flash"
+	ModelDeepseekV4Pro   = "deepseek-v4-pro"
+	ModelGlm5            = "glm-5"
+	ModelGlm51           = "glm-5.1"
+	ModelKimiK25         = "kimi-k2.5"
+	ModelKimiK26         = "kimi-k2.6"
+	ModelMimoV2Omni      = "mimo-v2-omni"
+	ModelMimoV2Pro       = "mimo-v2-pro"
+	ModelMimoV25         = "mimo-v2.5"
+	ModelMimoV25Pro      = "mimo-v2.5-pro"
+	ModelMinimaxM25      = "minimax-m2.5"
+	ModelMinimaxM27      = "minimax-m2.7"
+	ModelQwen35Plus      = "qwen3.5-plus"
+	ModelQwen36Plus      = "qwen3.6-plus"
 )
 
 var modelIDs = []string{
+	"deepseek-v4-flash",
+	"deepseek-v4-pro",
 	"glm-5",
+	"glm-5.1",
 	"kimi-k2.5",
+	"kimi-k2.6",
+	"mimo-v2-omni",
+	"mimo-v2-pro",
+	"mimo-v2.5",
+	"mimo-v2.5-pro",
 	"minimax-m2.5",
 	"minimax-m2.7",
+	"qwen3.5-plus",
+	"qwen3.6-plus",
 }
 
 var modelsByID = map[string]model.LLMModelInfo{
+	"deepseek-v4-flash": {
+		ID:               "deepseek-v4-flash",
+		Name:             "DeepSeek V4 Flash",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    1000000,
+		MaxOutputTokens:  384000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"deepseek-v4-pro": {
+		ID:               "deepseek-v4-pro",
+		Name:             "DeepSeek V4 Pro",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    1000000,
+		MaxOutputTokens:  384000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
 	"glm-5": {
 		ID:               "glm-5",
 		Name:             "GLM-5",
 		Reasoning:        true,
 		ToolCall:         true,
-		ContextWindow:    204800,
-		MaxOutputTokens:  131072,
+		ContextWindow:    202752,
+		MaxOutputTokens:  32768,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"glm-5.1": {
+		ID:               "glm-5.1",
+		Name:             "GLM-5.1",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    202752,
+		MaxOutputTokens:  32768,
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},
@@ -47,13 +97,63 @@ var modelsByID = map[string]model.LLMModelInfo{
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityText, model.LLMModelInputModalityVideo},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},
+	"kimi-k2.6": {
+		ID:               "kimi-k2.6",
+		Name:             "Kimi K2.6",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    262144,
+		MaxOutputTokens:  65536,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityText, model.LLMModelInputModalityVideo},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"mimo-v2-omni": {
+		ID:               "mimo-v2-omni",
+		Name:             "MiMo V2 Omni",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    262144,
+		MaxOutputTokens:  128000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityAudio, model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"mimo-v2-pro": {
+		ID:               "mimo-v2-pro",
+		Name:             "MiMo V2 Pro",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    1048576,
+		MaxOutputTokens:  128000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"mimo-v2.5": {
+		ID:               "mimo-v2.5",
+		Name:             "MiMo V2.5",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    1000000,
+		MaxOutputTokens:  128000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityAudio, model.LLMModelInputModalityImage, model.LLMModelInputModalityText, model.LLMModelInputModalityVideo},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"mimo-v2.5-pro": {
+		ID:               "mimo-v2.5-pro",
+		Name:             "MiMo V2.5 Pro",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    1048576,
+		MaxOutputTokens:  128000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
 	"minimax-m2.5": {
 		ID:               "minimax-m2.5",
 		Name:             "MiniMax M2.5",
 		Reasoning:        true,
 		ToolCall:         true,
 		ContextWindow:    204800,
-		MaxOutputTokens:  131072,
+		MaxOutputTokens:  65536,
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},
@@ -67,9 +167,39 @@ var modelsByID = map[string]model.LLMModelInfo{
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},
+	"qwen3.5-plus": {
+		ID:               "qwen3.5-plus",
+		Name:             "Qwen3.5 Plus",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    262144,
+		MaxOutputTokens:  65536,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityText, model.LLMModelInputModalityVideo},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"qwen3.6-plus": {
+		ID:               "qwen3.6-plus",
+		Name:             "Qwen3.6 Plus",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    262144,
+		MaxOutputTokens:  65536,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityText, model.LLMModelInputModalityVideo},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
 }
 
 var modelFormatsByID = map[string]modelAPIFormat{
+	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
+	// We use it as the canonical signal for the underlying API shape this model expects.
+	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
+	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
+	"deepseek-v4-flash": modelAPIFormatOpenAICompatible,
+	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
+	// We use it as the canonical signal for the underlying API shape this model expects.
+	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
+	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
+	"deepseek-v4-pro": modelAPIFormatOpenAICompatible,
 	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
 	// We use it as the canonical signal for the underlying API shape this model expects.
 	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
@@ -79,7 +209,37 @@ var modelFormatsByID = map[string]modelAPIFormat{
 	// We use it as the canonical signal for the underlying API shape this model expects.
 	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
 	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
+	"glm-5.1": modelAPIFormatOpenAICompatible,
+	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
+	// We use it as the canonical signal for the underlying API shape this model expects.
+	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
+	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
 	"kimi-k2.5": modelAPIFormatOpenAICompatible,
+	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
+	// We use it as the canonical signal for the underlying API shape this model expects.
+	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
+	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
+	"kimi-k2.6": modelAPIFormatOpenAICompatible,
+	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
+	// We use it as the canonical signal for the underlying API shape this model expects.
+	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
+	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
+	"mimo-v2-omni": modelAPIFormatOpenAICompatible,
+	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
+	// We use it as the canonical signal for the underlying API shape this model expects.
+	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
+	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
+	"mimo-v2-pro": modelAPIFormatOpenAICompatible,
+	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
+	// We use it as the canonical signal for the underlying API shape this model expects.
+	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
+	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
+	"mimo-v2.5": modelAPIFormatOpenAICompatible,
+	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
+	// We use it as the canonical signal for the underlying API shape this model expects.
+	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
+	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
+	"mimo-v2.5-pro": modelAPIFormatOpenAICompatible,
 	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
 	// We use it as the canonical signal for the underlying API shape this model expects.
 	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
@@ -89,7 +249,17 @@ var modelFormatsByID = map[string]modelAPIFormat{
 	// We use it as the canonical signal for the underlying API shape this model expects.
 	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
 	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"minimax-m2.7": modelAPIFormatAnthropic,
+	"minimax-m2.7": modelAPIFormatOpenAICompatible,
+	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
+	// We use it as the canonical signal for the underlying API shape this model expects.
+	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
+	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
+	"qwen3.5-plus": modelAPIFormatOpenAICompatible,
+	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
+	// We use it as the canonical signal for the underlying API shape this model expects.
+	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
+	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
+	"qwen3.6-plus": modelAPIFormatOpenAICompatible,
 }
 
 // IsSupportedModel returns true if model ID exists in the OpenCode Go catalog.

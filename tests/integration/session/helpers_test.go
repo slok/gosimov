@@ -38,7 +38,7 @@ func (c *Config) defaults() error {
 	}
 
 	if c.Model == "" {
-		c.Model = opencodego.ModelMinimaxM25
+		c.Model = opencodego.ModelDeepseekV4Flash
 	}
 
 	if !opencodego.IsSupportedModel(c.Model) {

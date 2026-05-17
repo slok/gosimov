@@ -112,6 +112,29 @@ func TestProviderRoutesByModelFormat(t *testing.T) {
 				assert.Equal("hello from minimax", resp.Message.Content[0].Text)
 			},
 		},
+		"Qwen model should call chat completions with bearer auth.": {
+			model:   opencodego.ModelQwen35Plus,
+			expPath: "/chat/completions",
+			handler: jsonHandler(200, map[string]any{
+				"model": opencodego.ModelQwen35Plus,
+				"choices": []map[string]any{{
+					"message":       map[string]any{"role": "assistant", "content": "hello from qwen"},
+					"finish_reason": "stop",
+				}},
+			}),
+			expAuthHeader: "Authorization",
+			assertResp: func(t *testing.T, resp *llm.Response) {
+				t.Helper()
+				assert := assert.New(t)
+				require := require.New(t)
+
+				require.NotNil(resp.Message.Metadata)
+				assert.Equal("opencode-go", resp.Message.Metadata.Provider)
+				assert.Equal(model.StopReasonComplete, resp.Message.Metadata.StopReason)
+				require.Len(resp.Message.Content, 1)
+				assert.Equal("hello from qwen", resp.Message.Content[0].Text)
+			},
+		},
 	}
 
 	for name, test := range tests {
@@ -259,6 +282,69 @@ func TestOpenAICompatibleRouteSendsPromptCacheKeyWhenEnabled(t *testing.T) {
 	cacheKey, ok := payload["prompt_cache_key"].(string)
 	require.True(ok)
 	assert.Equal("gosimov-sess-sess-cache-1", cacheKey)
+}
+
+func TestOpenAICompatibleRouteRoundTripsReasoningContentAcrossToolTurns(t *testing.T) {
+	assert := assert.New(t)
+	require := require.New(t)
+
+	requestBodies := [][]byte{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, err := io.ReadAll(r.Body)
+		require.NoError(err)
+		_ = r.Body.Close()
+		requestBodies = append(requestBodies, body)
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		if len(requestBodies) == 1 {
+			_, _ = w.Write([]byte(`{"model":"deepseek-v4-flash","choices":[{"message":{"role":"assistant","reasoning_content":"hidden-thoughts","tool_calls":[{"id":"call-1","type":"function","function":{"name":"ls","arguments":"{}"}}]},"finish_reason":"tool_calls"}]}`))
+			return
+		}
+
+		_, _ = w.Write([]byte(`{"model":"deepseek-v4-flash","choices":[{"message":{"role":"assistant","content":"smoke-ok"},"finish_reason":"stop"}]}`))
+	}))
+	defer server.Close()
+
+	provider, err := opencodego.New(opencodego.Config{
+		TokenSource: opencodego.NewAPIKeyTokenSource("go-key"),
+		BaseURL:     server.URL,
+		Model:       opencodego.ModelDeepseekV4Flash,
+		Client:      server.Client(),
+	})
+	require.NoError(err)
+
+	firstResp, err := provider.Call(context.Background(), llm.Request{
+		Messages: []model.Message{{
+			Kind:    model.MessageKindUser,
+			Content: []model.ContentPart{model.NewContentText("use ls")},
+		}},
+	})
+	require.NoError(err)
+	require.NotNil(firstResp.Message.Metadata)
+	assert.Equal("hidden-thoughts", firstResp.Message.Metadata.ProviderInternalData["reasoning_content"])
+	require.Len(firstResp.Message.ToolCallRequests, 1)
+
+	_, err = provider.Call(context.Background(), llm.Request{
+		Messages: []model.Message{
+			{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("use ls")}},
+			firstResp.Message,
+			{Kind: model.MessageKindToolResult, ToolCallID: firstResp.Message.ToolCallRequests[0].ID, Content: []model.ContentPart{model.NewContentText(".")}},
+		},
+	})
+	require.NoError(err)
+	require.Len(requestBodies, 2)
+
+	var payload struct {
+		Messages []struct {
+			Role             string `json:"role"`
+			ReasoningContent string `json:"reasoning_content"`
+		} `json:"messages"`
+	}
+	require.NoError(json.Unmarshal(requestBodies[1], &payload))
+	require.Len(payload.Messages, 3)
+	assert.Equal("assistant", payload.Messages[1].Role)
+	assert.Equal("hidden-thoughts", payload.Messages[1].ReasoningContent)
 }
 
 func TestAnthropicRouteSendsCacheControlWhenEnabled(t *testing.T) {

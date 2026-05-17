@@ -49,5 +49,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           OPENCODE_GO_API_KEY: ${{ secrets.OPENCODE_GO_API_KEY }}
-          OPENCODE_GO_MODEL: minimax-m2.7
+          OPENCODE_GO_MODEL: deepseek-v4-flash
         run: go run ./examples/pr-review --work-dir "$GITHUB_WORKSPACE"

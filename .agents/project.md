@@ -798,7 +798,7 @@ Integration tests live in `tests/integration/session/` and test full sessions ag
 |-----|----------|---------|-------------|
 | `GOSIMOV_INTEGRATION` | Yes | — | Must be `"true"` to run integration tests |
 | `INTEGRATION_OPENCODE_GO_API_KEY` | Yes | — | OpenCode Go API key |
-| `INTEGRATION_OPENCODE_GO_MODEL` | No | `minimax-m2.5` | Model for conversation |
+| `INTEGRATION_OPENCODE_GO_MODEL` | No | `deepseek-v4-flash` | Model for conversation |
 | `OPENCODEGO_INTEGRATION_SUMMARY_MODEL` | No | same as model | Model for compaction summarization |
 | `OPENCODEGO_INTEGRATION_TIMEOUT` | No | `3m` | Per-prompt timeout (Go duration) |
 

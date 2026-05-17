@@ -438,7 +438,7 @@ var modelFormatsByID = map[string]modelAPIFormat{
 	// We use it as the canonical signal for the underlying API shape this model expects.
 	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
 	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	{{ printf "%q" .ID }}: {{ if eq .ProviderNPM "@ai-sdk/anthropic" }}modelAPIFormatAnthropic{{ else }}modelAPIFormatOpenAICompatible{{ end }},
+	{{ printf "%q" .ID }}: {{ if or (eq .ID "minimax-m2.7") (eq .ID "qwen3.5-plus") (eq .ID "qwen3.6-plus") }}modelAPIFormatOpenAICompatible{{ else if eq .ProviderNPM "@ai-sdk/anthropic" }}modelAPIFormatAnthropic{{ else }}modelAPIFormatOpenAICompatible{{ end }},
 {{- end }}
 }
 

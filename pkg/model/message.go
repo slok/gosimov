@@ -99,6 +99,8 @@ type MessageMetadata struct {
 	StopReason StopReason
 	Model      string // Model ID that produced this message.
 	Provider   string // Provider ID (e.g., "anthropic", "openai").
+	// ProviderInternalData carries provider-specific metadata required to continue a conversation.
+	ProviderInternalData map[string]string
 }
 
 // ContentPart is one piece of displayable content within a message.
