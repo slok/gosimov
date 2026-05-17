@@ -98,7 +98,7 @@ type MessageMetadata struct {
 	Usage      *Usage
 	StopReason StopReason
 	Model      string // Model ID that produced this message.
-	Provider   string // Provider ID (e.g., "anthropic", "openai").
+	Provider   string // Provider ID (e.g., "opencode-go", "openai").
 	// ProviderInternalData carries provider-specific metadata required to continue a conversation.
 	ProviderInternalData map[string]string
 }

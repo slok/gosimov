@@ -11,15 +11,13 @@
 //	go run ./examples/chat --provider opencode-go --api-key <key>
 //	go run ./examples/chat --provider openai --api-key <key>
 //	go run ./examples/chat --provider codex --auth-file /tmp/gosimov-chat-auth.json
-//	go run ./examples/chat --provider anthropic --api-key <key>
-//	go run ./examples/chat --provider claude --auth-file /tmp/gosimov-chat-auth.json
 //
 // Optional flags:
 //   - --addr (default :8080)
 //   - --debug (default false)
 //   - --provider (default zen)
 //   - --api-key (required unless --auth-file is set)
-//   - --auth-file (only for codex/claude providers)
+//   - --auth-file (only for codex provider)
 //   - --model (default depends on provider)
 //   - --system-prompt (optional)
 //   - --max-iterations (default 100)
@@ -39,7 +37,6 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/slok/gosimov/pkg/agent/context/simple"
 	"github.com/slok/gosimov/pkg/llm"
-	"github.com/slok/gosimov/pkg/llm/anthropic"
 	"github.com/slok/gosimov/pkg/llm/openai"
 	"github.com/slok/gosimov/pkg/llm/opencodego"
 	"github.com/slok/gosimov/pkg/llm/zen"
@@ -177,20 +174,6 @@ func buildProvider(cfg config, apiKey string, tokenSrc openai.TokenSource, model
 			return nil, err
 		}
 		return openai.NewChatGPT(openai.ChatGPTConfig{TokenSource: ts, Model: modelID})
-
-	case providerAnthropic:
-		ts, err := resolveTokenSource(anthropic.NewAPIKeyTokenSource)
-		if err != nil {
-			return nil, err
-		}
-		return anthropic.NewAnthropic(anthropic.Config{TokenSource: ts, Model: modelID})
-
-	case providerClaude:
-		ts, err := resolveTokenSource(anthropic.NewAPIKeyTokenSource)
-		if err != nil {
-			return nil, err
-		}
-		return anthropic.NewClaude(anthropic.ClaudeConfig{TokenSource: ts, Model: modelID})
 
 	default:
 		return nil, fmt.Errorf("unsupported provider %q", cfg.provider)

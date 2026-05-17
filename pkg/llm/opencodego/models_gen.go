@@ -5,13 +5,6 @@ package opencodego
 
 import "github.com/slok/gosimov/pkg/model"
 
-type modelAPIFormat string
-
-const (
-	modelAPIFormatOpenAICompatible modelAPIFormat = "openai-compatible"
-	modelAPIFormatAnthropic        modelAPIFormat = "anthropic"
-)
-
 const (
 	ModelDeepseekV4Flash = "deepseek-v4-flash"
 	ModelDeepseekV4Pro   = "deepseek-v4-pro"
@@ -23,7 +16,6 @@ const (
 	ModelMimoV2Pro       = "mimo-v2-pro"
 	ModelMimoV25         = "mimo-v2.5"
 	ModelMimoV25Pro      = "mimo-v2.5-pro"
-	ModelMinimaxM25      = "minimax-m2.5"
 	ModelMinimaxM27      = "minimax-m2.7"
 	ModelQwen35Plus      = "qwen3.5-plus"
 	ModelQwen36Plus      = "qwen3.6-plus"
@@ -40,7 +32,6 @@ var modelIDs = []string{
 	"mimo-v2-pro",
 	"mimo-v2.5",
 	"mimo-v2.5-pro",
-	"minimax-m2.5",
 	"minimax-m2.7",
 	"qwen3.5-plus",
 	"qwen3.6-plus",
@@ -147,16 +138,6 @@ var modelsByID = map[string]model.LLMModelInfo{
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},
-	"minimax-m2.5": {
-		ID:               "minimax-m2.5",
-		Name:             "MiniMax M2.5",
-		Reasoning:        true,
-		ToolCall:         true,
-		ContextWindow:    204800,
-		MaxOutputTokens:  65536,
-		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
-		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
-	},
 	"minimax-m2.7": {
 		ID:               "minimax-m2.7",
 		Name:             "MiniMax M2.7",
@@ -189,79 +170,6 @@ var modelsByID = map[string]model.LLMModelInfo{
 	},
 }
 
-var modelFormatsByID = map[string]modelAPIFormat{
-	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
-	// We use it as the canonical signal for the underlying API shape this model expects.
-	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
-	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"deepseek-v4-flash": modelAPIFormatOpenAICompatible,
-	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
-	// We use it as the canonical signal for the underlying API shape this model expects.
-	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
-	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"deepseek-v4-pro": modelAPIFormatOpenAICompatible,
-	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
-	// We use it as the canonical signal for the underlying API shape this model expects.
-	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
-	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"glm-5": modelAPIFormatOpenAICompatible,
-	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
-	// We use it as the canonical signal for the underlying API shape this model expects.
-	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
-	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"glm-5.1": modelAPIFormatOpenAICompatible,
-	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
-	// We use it as the canonical signal for the underlying API shape this model expects.
-	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
-	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"kimi-k2.5": modelAPIFormatOpenAICompatible,
-	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
-	// We use it as the canonical signal for the underlying API shape this model expects.
-	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
-	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"kimi-k2.6": modelAPIFormatOpenAICompatible,
-	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
-	// We use it as the canonical signal for the underlying API shape this model expects.
-	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
-	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"mimo-v2-omni": modelAPIFormatOpenAICompatible,
-	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
-	// We use it as the canonical signal for the underlying API shape this model expects.
-	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
-	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"mimo-v2-pro": modelAPIFormatOpenAICompatible,
-	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
-	// We use it as the canonical signal for the underlying API shape this model expects.
-	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
-	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"mimo-v2.5": modelAPIFormatOpenAICompatible,
-	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
-	// We use it as the canonical signal for the underlying API shape this model expects.
-	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
-	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"mimo-v2.5-pro": modelAPIFormatOpenAICompatible,
-	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
-	// We use it as the canonical signal for the underlying API shape this model expects.
-	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
-	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"minimax-m2.5": modelAPIFormatAnthropic,
-	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
-	// We use it as the canonical signal for the underlying API shape this model expects.
-	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
-	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"minimax-m2.7": modelAPIFormatOpenAICompatible,
-	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
-	// We use it as the canonical signal for the underlying API shape this model expects.
-	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
-	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"qwen3.5-plus": modelAPIFormatOpenAICompatible,
-	// ProviderNPM comes from models.dev (provider-level npm or model-level override).
-	// We use it as the canonical signal for the underlying API shape this model expects.
-	// - @ai-sdk/anthropic         -> Anthropic Messages API shape (/messages)
-	// - everything else for Go now -> OpenAI-compatible Chat API shape (/chat/completions)
-	"qwen3.6-plus": modelAPIFormatOpenAICompatible,
-}
-
 // IsSupportedModel returns true if model ID exists in the OpenCode Go catalog.
 func IsSupportedModel(modelID string) bool {
 	_, ok := modelsByID[modelID]
@@ -271,12 +179,6 @@ func IsSupportedModel(modelID string) bool {
 // ModelByID returns model metadata when present.
 func ModelByID(modelID string) (model.LLMModelInfo, bool) {
 	v, ok := modelsByID[modelID]
-	return v, ok
-}
-
-// ModelFormatByID returns API format metadata when present.
-func ModelFormatByID(modelID string) (modelAPIFormat, bool) {
-	v, ok := modelFormatsByID[modelID]
 	return v, ok
 }
 

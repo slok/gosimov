@@ -24,9 +24,6 @@ func TestNew(t *testing.T) {
 		"Valid openai-compatible model should succeed.": {
 			cfg: opencodego.Config{TokenSource: opencodego.NewAPIKeyTokenSource("test-key"), Model: opencodego.ModelKimiK25},
 		},
-		"Valid anthropic-compatible model should succeed.": {
-			cfg: opencodego.Config{TokenSource: opencodego.NewAPIKeyTokenSource("test-key"), Model: opencodego.ModelMinimaxM25},
-		},
 		"Missing token source should fail.": {
 			cfg:    opencodego.Config{Model: opencodego.ModelKimiK25},
 			expErr: true,
@@ -86,30 +83,6 @@ func TestProviderRoutesByModelFormat(t *testing.T) {
 				assert.Equal(model.StopReasonComplete, resp.Message.Metadata.StopReason)
 				require.Len(resp.Message.Content, 1)
 				assert.Equal("hello from glm", resp.Message.Content[0].Text)
-			},
-		},
-		"Anthropic-compatible model should call messages with x-api-key auth.": {
-			model:   opencodego.ModelMinimaxM25,
-			expPath: "/messages",
-			handler: jsonHandler(200, map[string]any{
-				"model":       opencodego.ModelMinimaxM25,
-				"stop_reason": "end_turn",
-				"content": []map[string]any{{
-					"type": "text",
-					"text": "hello from minimax",
-				}},
-			}),
-			expAuthHeader: "x-api-key",
-			assertResp: func(t *testing.T, resp *llm.Response) {
-				t.Helper()
-				assert := assert.New(t)
-				require := require.New(t)
-
-				require.NotNil(resp.Message.Metadata)
-				assert.Equal("opencode-go", resp.Message.Metadata.Provider)
-				assert.Equal(model.StopReasonComplete, resp.Message.Metadata.StopReason)
-				require.Len(resp.Message.Content, 1)
-				assert.Equal("hello from minimax", resp.Message.Content[0].Text)
 			},
 		},
 		"Qwen model should call chat completions with bearer auth.": {
@@ -205,40 +178,6 @@ func TestProviderModelInfo(t *testing.T) {
 	assert.Equal(opencodego.ModelKimiK25, info.ID)
 	assert.Greater(info.ContextWindow, 0)
 	assert.Greater(info.MaxOutputTokens, 0)
-}
-
-func TestAnthropicRouteReadsToolMessagesEndpointPayload(t *testing.T) {
-	assert := assert.New(t)
-	require := require.New(t)
-
-	var capturedBody []byte
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var err error
-		capturedBody, err = io.ReadAll(r.Body)
-		require.NoError(err)
-		_ = r.Body.Close()
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"model":"minimax-m2.5","stop_reason":"end_turn","content":[{"type":"text","text":"ok"}]}`))
-	}))
-	defer server.Close()
-
-	provider, err := opencodego.New(opencodego.Config{
-		TokenSource: opencodego.NewAPIKeyTokenSource("go-key"),
-		BaseURL:     server.URL,
-		Model:       opencodego.ModelMinimaxM25,
-		Client:      server.Client(),
-	})
-	require.NoError(err)
-
-	_, err = provider.Call(context.Background(), llm.Request{Messages: []model.Message{{Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("ping")}}}})
-	require.NoError(err)
-
-	var payload map[string]any
-	require.NoError(json.Unmarshal(capturedBody, &payload))
-	assert.Equal(opencodego.ModelMinimaxM25, payload["model"])
-	assert.Contains(payload, "max_tokens")
 }
 
 func TestOpenAICompatibleRouteSendsPromptCacheKeyWhenEnabled(t *testing.T) {
@@ -345,69 +284,4 @@ func TestOpenAICompatibleRouteRoundTripsReasoningContentAcrossToolTurns(t *testi
 	require.Len(payload.Messages, 3)
 	assert.Equal("assistant", payload.Messages[1].Role)
 	assert.Equal("hidden-thoughts", payload.Messages[1].ReasoningContent)
-}
-
-func TestAnthropicRouteSendsCacheControlWhenEnabled(t *testing.T) {
-	assert := assert.New(t)
-	require := require.New(t)
-
-	var capturedBody []byte
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var err error
-		capturedBody, err = io.ReadAll(r.Body)
-		require.NoError(err)
-		_ = r.Body.Close()
-
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write([]byte(`{"model":"minimax-m2.5","stop_reason":"end_turn","content":[{"type":"text","text":"ok"}]}`))
-	}))
-	defer server.Close()
-
-	provider, err := opencodego.New(opencodego.Config{
-		TokenSource: opencodego.NewAPIKeyTokenSource("go-key"),
-		BaseURL:     server.URL,
-		Model:       opencodego.ModelMinimaxM25,
-		Client:      server.Client(),
-	})
-	require.NoError(err)
-
-	_, err = provider.Call(context.Background(), llm.Request{
-		SystemPrompt: "be concise",
-		Messages: []model.Message{{
-			Kind:    model.MessageKindUser,
-			Content: []model.ContentPart{model.NewContentText("ping")},
-		}},
-		Config: llm.RequestConfig{EnablePromptCache: true},
-	})
-	require.NoError(err)
-
-	var payload struct {
-		System []struct {
-			Type         string `json:"type"`
-			Text         string `json:"text"`
-			CacheControl struct {
-				Type string `json:"type"`
-			} `json:"cache_control"`
-		} `json:"system"`
-		Messages []struct {
-			Role    string `json:"role"`
-			Content []struct {
-				Type         string `json:"type"`
-				Text         string `json:"text"`
-				CacheControl struct {
-					Type string `json:"type"`
-				} `json:"cache_control"`
-			} `json:"content"`
-		} `json:"messages"`
-	}
-	require.NoError(json.Unmarshal(capturedBody, &payload))
-
-	require.NotEmpty(payload.System)
-	assert.Equal("ephemeral", payload.System[0].CacheControl.Type)
-
-	require.NotEmpty(payload.Messages)
-	last := payload.Messages[len(payload.Messages)-1]
-	require.NotEmpty(last.Content)
-	assert.Equal("ephemeral", last.Content[len(last.Content)-1].CacheControl.Type)
 }

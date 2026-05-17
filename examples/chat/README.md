@@ -26,13 +26,8 @@ go run ./examples/chat --provider opencode-go --api-key <key>
 
 go run ./examples/chat --provider openai --api-key <key>
 
-go run ./examples/chat --provider anthropic --api-key <key>
-
 # OAuth file flow (Codex)
 go run ./examples/chat --provider codex --auth-file /tmp/gosimov-chat-auth.json
-
-# OAuth file flow (Claude Pro/Max)
-go run ./examples/chat --provider claude --auth-file /tmp/gosimov-chat-auth.json
 ```
 
 Then open `http://localhost:8080`.
@@ -41,9 +36,9 @@ Optional flags:
 
 - `--addr` (default `:8080`)
 - `--debug` (default `false`, enables SDK debug logs)
-- `--provider` (default `zen`; one of `zen`, `opencode-go`, `openai`, `codex`, `anthropic`, `claude`)
+- `--provider` (default `zen`; one of `zen`, `opencode-go`, `openai`, `codex`)
 - `--api-key` (required unless `--auth-file` is set)
-- `--auth-file` (OAuth credentials file path; only for `codex`/`claude` providers)
+- `--auth-file` (OAuth credentials file path; only for `codex` provider)
 - `--model` (default depends on `--provider`)
 - `--system-prompt` (optional)
 - `--max-iterations` (default `100`)
