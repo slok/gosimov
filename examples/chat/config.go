@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/slok/gosimov/pkg/llm/anthropic"
 	"github.com/slok/gosimov/pkg/llm/openai"
 )
 
@@ -22,8 +21,6 @@ const (
 	providerOpenCodeGo providerKind = "opencode-go"
 	providerOpenAI     providerKind = "openai"
 	providerCodex      providerKind = "codex"
-	providerAnthropic  providerKind = "anthropic"
-	providerClaude     providerKind = "claude"
 )
 
 const (
@@ -35,13 +32,6 @@ const (
 	openAITokenURL      = "https://auth.openai.com/oauth/token"
 	openAIRedirectURL   = "http://localhost:1455/auth/callback"
 	openAIScopes        = "openid profile email offline_access"
-
-	anthropicOAuthStoreKey = "anthropic"
-	anthropicClientID      = "9d1c250a-e61b-44d9-88ed-5944d1962f5e"
-	anthropicAuthURL       = "https://claude.ai/oauth/authorize"
-	anthropicTokenURL      = "https://console.anthropic.com/v1/oauth/token"
-	anthropicRedirectURL   = "https://console.anthropic.com/oauth/code/callback"
-	anthropicScopes        = "org:create_api_key user:profile user:inference"
 )
 
 var defaultModelByProvider = map[providerKind]string{
@@ -49,8 +39,6 @@ var defaultModelByProvider = map[providerKind]string{
 	providerOpenCodeGo: "deepseek-v4-flash",
 	providerOpenAI:     "gpt-5",
 	providerCodex:      "gpt-5.3-codex",
-	providerAnthropic:  "claude-sonnet-4-6",
-	providerClaude:     "claude-sonnet-4-6",
 }
 
 type config struct {
@@ -74,9 +62,9 @@ func loadConfig() (config, error) {
 	var cfg config
 	flag.StringVar(&cfg.addr, "addr", ":8080", "HTTP listen address")
 	flag.BoolVar(&cfg.debug, "debug", false, "Enable debug logs")
-	flag.StringVar(&provider, "provider", string(providerZen), "LLM provider: zen|opencode-go|openai|codex|anthropic|claude")
+	flag.StringVar(&provider, "provider", string(providerZen), "LLM provider: zen|opencode-go|openai|codex")
 	flag.StringVar(&cfg.apiKey, "api-key", "", "Provider API key/token (required unless --auth-file is set)")
-	flag.StringVar(&cfg.authFile, "auth-file", "", "OAuth credentials file path (only for codex/claude providers)")
+	flag.StringVar(&cfg.authFile, "auth-file", "", "OAuth credentials file path (only for codex provider)")
 	flag.StringVar(&cfg.modelID, "model", "", "LLM model ID (defaults depend on --provider)")
 	flag.StringVar(&cfg.systemPrompt, "system-prompt", "", "System prompt for new sessions")
 	flag.IntVar(&cfg.maxIterations, "max-iterations", 100, "Maximum LLM iterations per turn")
@@ -93,7 +81,7 @@ func loadConfig() (config, error) {
 	cfg.modelID = strings.TrimSpace(cfg.modelID)
 
 	if !isSupportedProvider(cfg.provider) {
-		return config{}, fmt.Errorf("unsupported --provider %q (allowed: zen, opencode-go, openai, codex, anthropic, claude)", provider)
+		return config{}, fmt.Errorf("unsupported --provider %q (allowed: zen, opencode-go, openai, codex)", provider)
 	}
 
 	if cfg.modelID == "" {
@@ -109,7 +97,7 @@ func loadConfig() (config, error) {
 	}
 
 	if cfg.authFile != "" && !cfg.provider.usesOAuth() {
-		return config{}, fmt.Errorf("--auth-file is only supported by codex and claude providers")
+		return config{}, fmt.Errorf("--auth-file is only supported by codex")
 	}
 
 	if cfg.maxIterations <= 0 {
@@ -176,34 +164,8 @@ func buildAuth(cfg config) (string, openai.TokenSource, string, error) {
 
 		return "", ts, status, nil
 
-	case providerClaude:
-		store, err := anthropic.NewFileCredentialsStore(cfg.authFile)
-		if err != nil {
-			return "", nil, "", fmt.Errorf("creating oauth credentials store: %w", err)
-		}
-
-		ts, err := anthropic.NewClaudeOAuthTokenSource(anthropic.ClaudeOAuthTokenSourceConfig{
-			ClientID:         anthropicClientID,
-			AuthorizationURL: anthropicAuthURL,
-			TokenURL:         anthropicTokenURL,
-			RedirectURL:      anthropicRedirectURL,
-			Scopes:           parseScopes(anthropicScopes),
-			Store:            store,
-			StoreKey:         anthropicOAuthStoreKey,
-		})
-		if err != nil {
-			return "", nil, "", fmt.Errorf("creating oauth token source: %w", err)
-		}
-
-		status, err := ensureOAuthCredentials(context.Background(), ts, store, anthropicOAuthStoreKey)
-		if err != nil {
-			return "", nil, "", err
-		}
-
-		return "", ts, status, nil
-
 	default:
-		return "", nil, "", fmt.Errorf("--auth-file requires codex or claude provider")
+		return "", nil, "", fmt.Errorf("--auth-file requires codex provider")
 	}
 }
 
@@ -314,5 +276,5 @@ func isSupportedProvider(p providerKind) bool {
 }
 
 func (p providerKind) usesOAuth() bool {
-	return p == providerCodex || p == providerClaude
+	return p == providerCodex
 }

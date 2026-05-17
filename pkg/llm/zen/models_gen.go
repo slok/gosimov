@@ -7,14 +7,7 @@ import "github.com/slok/gosimov/pkg/model"
 
 const (
 	ModelBigPickle               = "big-pickle"
-	ModelClaude35Haiku           = "claude-3-5-haiku"
-	ModelClaudeHaiku45           = "claude-haiku-4-5"
-	ModelClaudeOpus41            = "claude-opus-4-1"
-	ModelClaudeOpus45            = "claude-opus-4-5"
-	ModelClaudeOpus46            = "claude-opus-4-6"
-	ModelClaudeSonnet4           = "claude-sonnet-4"
-	ModelClaudeSonnet45          = "claude-sonnet-4-5"
-	ModelClaudeSonnet46          = "claude-sonnet-4-6"
+	ModelDeepseekV4FlashFree     = "deepseek-v4-flash-free"
 	ModelGemini3Flash            = "gemini-3-flash"
 	ModelGemini3Pro              = "gemini-3-pro"
 	ModelGemini31Pro             = "gemini-3.1-pro"
@@ -23,6 +16,7 @@ const (
 	ModelGlm47Free               = "glm-4.7-free"
 	ModelGlm5                    = "glm-5"
 	ModelGlm5Free                = "glm-5-free"
+	ModelGlm51                   = "glm-5.1"
 	ModelGpt5                    = "gpt-5"
 	ModelGpt5Codex               = "gpt-5-codex"
 	ModelGpt5Nano                = "gpt-5-nano"
@@ -38,33 +32,34 @@ const (
 	ModelGpt54Mini               = "gpt-5.4-mini"
 	ModelGpt54Nano               = "gpt-5.4-nano"
 	ModelGpt54Pro                = "gpt-5.4-pro"
+	ModelGpt55                   = "gpt-5.5"
+	ModelGpt55Pro                = "gpt-5.5-pro"
 	ModelGrokCode                = "grok-code"
+	ModelHy3PreviewFree          = "hy3-preview-free"
 	ModelKimiK2                  = "kimi-k2"
 	ModelKimiK2Thinking          = "kimi-k2-thinking"
 	ModelKimiK25                 = "kimi-k2.5"
 	ModelKimiK25Free             = "kimi-k2.5-free"
+	ModelKimiK26                 = "kimi-k2.6"
+	ModelLing26FlashFree         = "ling-2.6-flash-free"
 	ModelMimoV2FlashFree         = "mimo-v2-flash-free"
 	ModelMimoV2OmniFree          = "mimo-v2-omni-free"
 	ModelMimoV2ProFree           = "mimo-v2-pro-free"
 	ModelMinimaxM21              = "minimax-m2.1"
 	ModelMinimaxM21Free          = "minimax-m2.1-free"
-	ModelMinimaxM25              = "minimax-m2.5"
-	ModelMinimaxM25Free          = "minimax-m2.5-free"
+	ModelMinimaxM27              = "minimax-m2.7"
 	ModelNemotron3SuperFree      = "nemotron-3-super-free"
 	ModelQwen3Coder              = "qwen3-coder"
+	ModelQwen35Plus              = "qwen3.5-plus"
+	ModelQwen36Plus              = "qwen3.6-plus"
+	ModelQwen36PlusFree          = "qwen3.6-plus-free"
+	ModelRing261tFree            = "ring-2.6-1t-free"
 	ModelTrinityLargePreviewFree = "trinity-large-preview-free"
 )
 
 var modelIDs = []string{
 	"big-pickle",
-	"claude-3-5-haiku",
-	"claude-haiku-4-5",
-	"claude-opus-4-1",
-	"claude-opus-4-5",
-	"claude-opus-4-6",
-	"claude-sonnet-4",
-	"claude-sonnet-4-5",
-	"claude-sonnet-4-6",
+	"deepseek-v4-flash-free",
 	"gemini-3-flash",
 	"gemini-3-pro",
 	"gemini-3.1-pro",
@@ -73,6 +68,7 @@ var modelIDs = []string{
 	"glm-4.7-free",
 	"glm-5",
 	"glm-5-free",
+	"glm-5.1",
 	"gpt-5",
 	"gpt-5-codex",
 	"gpt-5-nano",
@@ -88,20 +84,28 @@ var modelIDs = []string{
 	"gpt-5.4-mini",
 	"gpt-5.4-nano",
 	"gpt-5.4-pro",
+	"gpt-5.5",
+	"gpt-5.5-pro",
 	"grok-code",
+	"hy3-preview-free",
 	"kimi-k2",
 	"kimi-k2-thinking",
 	"kimi-k2.5",
 	"kimi-k2.5-free",
+	"kimi-k2.6",
+	"ling-2.6-flash-free",
 	"mimo-v2-flash-free",
 	"mimo-v2-omni-free",
 	"mimo-v2-pro-free",
 	"minimax-m2.1",
 	"minimax-m2.1-free",
-	"minimax-m2.5",
-	"minimax-m2.5-free",
+	"minimax-m2.7",
 	"nemotron-3-super-free",
 	"qwen3-coder",
+	"qwen3.5-plus",
+	"qwen3.6-plus",
+	"qwen3.6-plus-free",
+	"ring-2.6-1t-free",
 	"trinity-large-preview-free",
 }
 
@@ -116,84 +120,14 @@ var modelsByID = map[string]model.LLMModelInfo{
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},
-	"claude-3-5-haiku": {
-		ID:               "claude-3-5-haiku",
-		Name:             "Claude Haiku 3.5",
-		Reasoning:        false,
-		ToolCall:         true,
-		ContextWindow:    200000,
-		MaxOutputTokens:  8192,
-		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
-		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
-	},
-	"claude-haiku-4-5": {
-		ID:               "claude-haiku-4-5",
-		Name:             "Claude Haiku 4.5",
+	"deepseek-v4-flash-free": {
+		ID:               "deepseek-v4-flash-free",
+		Name:             "DeepSeek V4 Flash Free",
 		Reasoning:        true,
 		ToolCall:         true,
 		ContextWindow:    200000,
-		MaxOutputTokens:  64000,
-		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
-		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
-	},
-	"claude-opus-4-1": {
-		ID:               "claude-opus-4-1",
-		Name:             "Claude Opus 4.1",
-		Reasoning:        true,
-		ToolCall:         true,
-		ContextWindow:    200000,
-		MaxOutputTokens:  32000,
-		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
-		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
-	},
-	"claude-opus-4-5": {
-		ID:               "claude-opus-4-5",
-		Name:             "Claude Opus 4.5",
-		Reasoning:        true,
-		ToolCall:         true,
-		ContextWindow:    200000,
-		MaxOutputTokens:  64000,
-		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
-		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
-	},
-	"claude-opus-4-6": {
-		ID:               "claude-opus-4-6",
-		Name:             "Claude Opus 4.6",
-		Reasoning:        true,
-		ToolCall:         true,
-		ContextWindow:    1000000,
 		MaxOutputTokens:  128000,
-		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
-		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
-	},
-	"claude-sonnet-4": {
-		ID:               "claude-sonnet-4",
-		Name:             "Claude Sonnet 4",
-		Reasoning:        true,
-		ToolCall:         true,
-		ContextWindow:    1000000,
-		MaxOutputTokens:  64000,
-		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
-		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
-	},
-	"claude-sonnet-4-5": {
-		ID:               "claude-sonnet-4-5",
-		Name:             "Claude Sonnet 4.5",
-		Reasoning:        true,
-		ToolCall:         true,
-		ContextWindow:    1000000,
-		MaxOutputTokens:  64000,
-		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
-		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
-	},
-	"claude-sonnet-4-6": {
-		ID:               "claude-sonnet-4-6",
-		Name:             "Claude Sonnet 4.6",
-		Reasoning:        true,
-		ToolCall:         true,
-		ContextWindow:    1000000,
-		MaxOutputTokens:  64000,
-		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},
 	"gemini-3-flash": {
@@ -269,6 +203,16 @@ var modelsByID = map[string]model.LLMModelInfo{
 	"glm-5-free": {
 		ID:               "glm-5-free",
 		Name:             "GLM-5 Free",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    204800,
+		MaxOutputTokens:  131072,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"glm-5.1": {
+		ID:               "glm-5.1",
+		Name:             "GLM-5.1",
 		Reasoning:        true,
 		ToolCall:         true,
 		ContextWindow:    204800,
@@ -426,6 +370,26 @@ var modelsByID = map[string]model.LLMModelInfo{
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},
+	"gpt-5.5": {
+		ID:               "gpt-5.5",
+		Name:             "GPT-5.5",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    1050000,
+		MaxOutputTokens:  128000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"gpt-5.5-pro": {
+		ID:               "gpt-5.5-pro",
+		Name:             "GPT-5.5 Pro",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    1050000,
+		MaxOutputTokens:  128000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityPDF, model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
 	"grok-code": {
 		ID:               "grok-code",
 		Name:             "Grok Code Fast 1",
@@ -433,6 +397,16 @@ var modelsByID = map[string]model.LLMModelInfo{
 		ToolCall:         true,
 		ContextWindow:    256000,
 		MaxOutputTokens:  256000,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"hy3-preview-free": {
+		ID:               "hy3-preview-free",
+		Name:             "Hy3 preview Free",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    256000,
+		MaxOutputTokens:  64000,
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},
@@ -474,6 +448,26 @@ var modelsByID = map[string]model.LLMModelInfo{
 		ContextWindow:    262144,
 		MaxOutputTokens:  262144,
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityText, model.LLMModelInputModalityVideo},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"kimi-k2.6": {
+		ID:               "kimi-k2.6",
+		Name:             "Kimi K2.6",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    262144,
+		MaxOutputTokens:  65536,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityText, model.LLMModelInputModalityVideo},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"ling-2.6-flash-free": {
+		ID:               "ling-2.6-flash-free",
+		Name:             "Ling 2.6 Flash Free",
+		Reasoning:        false,
+		ToolCall:         true,
+		ContextWindow:    262100,
+		MaxOutputTokens:  32800,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},
 	"mimo-v2-flash-free": {
@@ -526,19 +520,9 @@ var modelsByID = map[string]model.LLMModelInfo{
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},
-	"minimax-m2.5": {
-		ID:               "minimax-m2.5",
-		Name:             "MiniMax M2.5",
-		Reasoning:        true,
-		ToolCall:         true,
-		ContextWindow:    204800,
-		MaxOutputTokens:  131072,
-		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
-		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
-	},
-	"minimax-m2.5-free": {
-		ID:               "minimax-m2.5-free",
-		Name:             "MiniMax M2.5 Free",
+	"minimax-m2.7": {
+		ID:               "minimax-m2.7",
+		Name:             "MiniMax M2.7",
 		Reasoning:        true,
 		ToolCall:         true,
 		ContextWindow:    204800,
@@ -551,7 +535,7 @@ var modelsByID = map[string]model.LLMModelInfo{
 		Name:             "Nemotron 3 Super Free",
 		Reasoning:        true,
 		ToolCall:         true,
-		ContextWindow:    1000000,
+		ContextWindow:    204800,
 		MaxOutputTokens:  128000,
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
@@ -563,6 +547,46 @@ var modelsByID = map[string]model.LLMModelInfo{
 		ToolCall:         true,
 		ContextWindow:    262144,
 		MaxOutputTokens:  65536,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"qwen3.5-plus": {
+		ID:               "qwen3.5-plus",
+		Name:             "Qwen3.5 Plus",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    262144,
+		MaxOutputTokens:  65536,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityText, model.LLMModelInputModalityVideo},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"qwen3.6-plus": {
+		ID:               "qwen3.6-plus",
+		Name:             "Qwen3.6 Plus",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    262144,
+		MaxOutputTokens:  65536,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityText, model.LLMModelInputModalityVideo},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"qwen3.6-plus-free": {
+		ID:               "qwen3.6-plus-free",
+		Name:             "Qwen3.6 Plus Free",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    262144,
+		MaxOutputTokens:  65536,
+		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityImage, model.LLMModelInputModalityText, model.LLMModelInputModalityVideo},
+		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
+	},
+	"ring-2.6-1t-free": {
+		ID:               "ring-2.6-1t-free",
+		Name:             "Ring 2.6 1T Free",
+		Reasoning:        true,
+		ToolCall:         true,
+		ContextWindow:    262000,
+		MaxOutputTokens:  66000,
 		InputModalities:  []model.LLMModelInputModality{model.LLMModelInputModalityText},
 		OutputModalities: []model.LLMModelOutputModality{model.LLMModelOutputModalityText},
 	},

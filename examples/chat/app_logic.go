@@ -36,8 +36,8 @@ func loadAllMessages(ctx context.Context, repo store.MessageRepository, sessionI
 
 // trimLoadedMessages keeps a bounded tail of loaded history and then sanitizes
 // tool-use/tool-result structure so resumed sessions are valid for strict
-// providers (Anthropic requires each tool_use to be immediately followed by
-// matching tool_result blocks).
+// providers that require each tool use to be immediately followed by the
+// matching tool result blocks.
 func trimLoadedMessages(messages []model.Message, max int) []model.Message {
 	if max <= 0 || len(messages) <= max {
 		trimmed := make([]model.Message, len(messages))
@@ -64,8 +64,8 @@ func sanitizeLoadedMessages(messages []model.Message) []model.Message {
 	//
 	// Why: persisted sessions can contain interrupted tails (e.g. after crashes or
 	// cancellation) where tool_use blocks are incomplete. Sending those back to
-	// Anthropic yields a 400 because tool_result blocks must immediately follow the
-	// corresponding tool_use.
+	// strict providers yields a 400 because tool_result blocks must immediately
+	// follow the corresponding tool_use.
 	if len(messages) == 0 {
 		return nil
 	}

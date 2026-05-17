@@ -12,7 +12,7 @@ Build your own agentic developer/operator experience directly in your Go systems
 
 - Simple session API (`Prompt`, `Continue`, `Compact`) with minimal setup.
 - Built-in tool-calling loop with JSON schema contracts and structured tool results.
-- Multi-provider support (Zen, OpenCode Go, OpenAI, ChatGPT/Codex, Anthropic/Claude).
+- Multi-provider support (Zen, OpenCode Go, OpenAI, ChatGPT/Codex).
 - Optional persistence backends (`memory`, `jsonl`) plus live subscriptions via `subscriber`.
 - Context compaction support for long-running conversations.
 - Runtime state + usage tracking for observability and UI integration.

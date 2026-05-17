@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/slok/gosimov/pkg/llm"
-	"github.com/slok/gosimov/pkg/llm/internal/anthropicmsg"
 	"github.com/slok/gosimov/pkg/llm/internal/openaichat"
 	"github.com/slok/gosimov/pkg/pkgerrors"
 )
@@ -58,37 +57,12 @@ func New(cfg Config) (llm.Provider, error) {
 		return nil, fmt.Errorf("unsupported opencode-go model %q: %w", cfg.Model, pkgerrors.ErrNotValid)
 	}
 
-	format, ok := ModelFormatByID(cfg.Model)
-	if !ok {
-		return nil, fmt.Errorf("missing api format for opencode-go model %q: %w", cfg.Model, pkgerrors.ErrNotValid)
-	}
-
-	switch format {
-	case modelAPIFormatOpenAICompatible:
-		return openaichat.New(openaichat.Config{
-			TokenSource: cfg.TokenSource,
-			BaseURL:     cfg.BaseURL,
-			Model:       cfg.Model,
-			ModelInfo:   info,
-			ProviderID:  providerID,
-			Client:      cfg.Client,
-		})
-
-	case modelAPIFormatAnthropic:
-		return anthropicmsg.New(anthropicmsg.Config{
-			TokenSource: cfg.TokenSource,
-			BaseURL:     cfg.BaseURL,
-			Model:       cfg.Model,
-			ModelInfo:   info,
-			Client:      cfg.Client,
-			Options: anthropicmsg.Options{
-				ProviderID:       providerID,
-				AuthMode:         anthropicmsg.AuthModeAPIKey,
-				DefaultMaxTokens: info.MaxOutputTokens,
-			},
-		})
-
-	default:
-		return nil, fmt.Errorf("unsupported api format %q for opencode-go model %q: %w", format, cfg.Model, pkgerrors.ErrNotValid)
-	}
+	return openaichat.New(openaichat.Config{
+		TokenSource: cfg.TokenSource,
+		BaseURL:     cfg.BaseURL,
+		Model:       cfg.Model,
+		ModelInfo:   info,
+		ProviderID:  providerID,
+		Client:      cfg.Client,
+	})
 }
