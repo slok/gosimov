@@ -82,6 +82,59 @@ func TestProviderCall(t *testing.T) {
 				assert.Equal(t, "Bearer secret", r.Header.Get("Authorization"))
 			},
 		},
+		"Qwen top-level thinking should be sent when configured.": {
+			cfg: customopenaicompatible.Config{BaseURL: "ignored", Model: "Qwen3.6", ContextWindow: 131072, MaxOutputTokens: 8192, ProviderOptions: customopenaicompatible.NewProviderOptions().WithQwenThinking(false)},
+			assertRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
+				var body map[string]any
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				assert.Equal(t, false, body["enable_thinking"])
+			},
+		},
+		"Qwen chat template thinking should be sent when configured.": {
+			cfg: customopenaicompatible.Config{BaseURL: "ignored", Model: "Qwen3.6", ContextWindow: 131072, MaxOutputTokens: 8192, ProviderOptions: customopenaicompatible.NewProviderOptions().WithQwenChatTemplateThinking(false)},
+			assertRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
+				var body map[string]any
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				kwargs, ok := body["chat_template_kwargs"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, false, kwargs["enable_thinking"])
+			},
+		},
+		"Qwen preserve thinking should be sent when configured.": {
+			cfg: customopenaicompatible.Config{BaseURL: "ignored", Model: "Qwen3.6", ContextWindow: 131072, MaxOutputTokens: 8192, ProviderOptions: customopenaicompatible.NewProviderOptions().WithQwenChatTemplatePreserveThinking(true)},
+			assertRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
+				var body map[string]any
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				kwargs, ok := body["chat_template_kwargs"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, true, kwargs["preserve_thinking"])
+			},
+		},
+		"Raw chat template kwargs should be merged with typed Qwen chat template options.": {
+			cfg: customopenaicompatible.Config{BaseURL: "ignored", Model: "Qwen3.6", ContextWindow: 131072, MaxOutputTokens: 8192, ProviderOptions: customopenaicompatible.NewProviderOptions().WithRawRequestField("chat_template_kwargs", map[string]any{"foo": "bar"}).WithQwenChatTemplateThinking(true).WithQwenChatTemplatePreserveThinking(true)},
+			assertRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
+				var body map[string]any
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				kwargs, ok := body["chat_template_kwargs"].(map[string]any)
+				require.True(t, ok)
+				assert.Equal(t, "bar", kwargs["foo"])
+				assert.Equal(t, true, kwargs["enable_thinking"])
+				assert.Equal(t, true, kwargs["preserve_thinking"])
+			},
+		},
+		"Raw request fields should be sent when configured.": {
+			cfg: customopenaicompatible.Config{BaseURL: "ignored", Model: "Qwen3.6", ContextWindow: 131072, MaxOutputTokens: 8192, ProviderOptions: customopenaicompatible.NewProviderOptions().WithRawRequestField("service_tier", "default")},
+			assertRequest: func(t *testing.T, r *http.Request) {
+				t.Helper()
+				var body map[string]any
+				require.NoError(t, json.NewDecoder(r.Body).Decode(&body))
+				assert.Equal(t, "default", body["service_tier"])
+			},
+		},
 	}
 
 	for name, test := range tests {

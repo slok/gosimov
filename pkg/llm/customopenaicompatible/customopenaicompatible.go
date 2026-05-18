@@ -19,6 +19,7 @@ type Config struct {
 	Model           string
 	ContextWindow   int
 	MaxOutputTokens int
+	ProviderOptions ProviderOptions
 	TokenSource     TokenSource
 	ProviderID      string
 	Client          *http.Client
@@ -65,11 +66,12 @@ func New(cfg Config) (llm.Provider, error) {
 	}
 
 	return openaichat.New(openaichat.Config{
-		TokenSource: cfg.TokenSource,
-		BaseURL:     cfg.BaseURL,
-		Model:       cfg.Model,
-		ModelInfo:   info,
-		ProviderID:  cfg.ProviderID,
-		Client:      cfg.Client,
+		TokenSource:     cfg.TokenSource,
+		BaseURL:         cfg.BaseURL,
+		Model:           cfg.Model,
+		ModelInfo:       info,
+		ProviderID:      cfg.ProviderID,
+		Client:          cfg.Client,
+		ExtraBodyFields: cfg.ProviderOptions.requestBodyFields(),
 	})
 }
