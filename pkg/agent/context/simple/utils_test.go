@@ -192,27 +192,48 @@ func TestFilterFromLatestCompactionMessage(t *testing.T) {
 	}
 }
 
-func TestLatestSummaryText(t *testing.T) {
+func TestExtractLatestSummaryText(t *testing.T) {
 	tests := map[string]struct {
-		msgs []model.Message
-		exp  string
+		msgs      []model.Message
+		expText   string
+		expRemain int
 	}{
-		"No checkpoint should return empty.": {
-			msgs: []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
-			exp:  "",
+		"No checkpoint should return empty and unchanged messages.": {
+			msgs:      []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
+			expText:   "",
+			expRemain: 1,
 		},
-		"Latest checkpoint should return first text.": {
+		"Latest checkpoint should return first text and remove it from slice.": {
 			msgs: []model.Message{
 				{ID: "c1", Kind: model.MessageKindCompaction, Content: []model.ContentPart{model.NewContentText("old")}, Compaction: &model.CompactionData{FirstKeptID: "m1"}},
 				{ID: "c2", Kind: model.MessageKindCompaction, Content: []model.ContentPart{model.NewContentText("new")}, Compaction: &model.CompactionData{FirstKeptID: "m2"}},
 			},
-			exp: "new",
+			expText:   "new",
+			expRemain: 1,
+		},
+		"Single compaction message should return text and empty slice.": {
+			msgs: []model.Message{
+				{ID: "c1", Kind: model.MessageKindCompaction, Content: []model.ContentPart{model.NewContentText("summary")}, Compaction: &model.CompactionData{FirstKeptID: "m1"}},
+			},
+			expText:   "summary",
+			expRemain: 0,
+		},
+		"Compaction in the middle should be removed correctly.": {
+			msgs: []model.Message{
+				{ID: "m1", Kind: model.MessageKindUser, Content: []model.ContentPart{model.NewContentText("hello")}},
+				{ID: "c1", Kind: model.MessageKindCompaction, Content: []model.ContentPart{model.NewContentText("checkpoint")}, Compaction: &model.CompactionData{FirstKeptID: "m0"}},
+				{ID: "m2", Kind: model.MessageKindLLM, Content: []model.ContentPart{model.NewContentText("world")}},
+			},
+			expText:   "checkpoint",
+			expRemain: 2,
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			assert.Equal(t, test.exp, latestSummaryText(test.msgs))
+			gotText, gotRemain := extractLatestSummaryText(test.msgs)
+			assert.Equal(t, test.expText, gotText)
+			assert.Equal(t, test.expRemain, len(gotRemain))
 		})
 	}
 }

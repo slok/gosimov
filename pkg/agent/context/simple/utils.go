@@ -168,14 +168,27 @@ func latestCompactionMsg(messages []model.Message) (int, *model.Message) {
 	return -1, nil
 }
 
-// latestSummaryText returns the summary text from the latest compaction.
-func latestSummaryText(messages []model.Message) string {
-	_, checkpoint := latestCompactionMsg(messages)
+// extractLatestSummaryText returns the summary text from the latest compaction
+// checkpoint and the messages slice with that compaction message removed.
+//
+// If no compaction message exists, returns ("", messages unchanged).
+//
+// This is used by the compactor to pass the previous summary to the LLM
+// without also including the compaction message in the conversation text
+// (which would duplicate content and waste tokens).
+func extractLatestSummaryText(messages []model.Message) (string, []model.Message) {
+	idx, checkpoint := latestCompactionMsg(messages)
 	if checkpoint == nil {
-		return ""
+		return "", messages
 	}
 
-	return firstText(*checkpoint)
+	summary := firstText(*checkpoint)
+
+	remaining := make([]model.Message, 0, len(messages)-1)
+	remaining = append(remaining, messages[:idx]...)
+	remaining = append(remaining, messages[idx+1:]...)
+
+	return summary, remaining
 }
 
 // firstMessageID returns the first non-empty message ID from a slice.
