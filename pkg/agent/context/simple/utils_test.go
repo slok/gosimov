@@ -194,9 +194,9 @@ func TestFilterFromLatestCompactionMessage(t *testing.T) {
 
 func TestExtractLatestSummaryText(t *testing.T) {
 	tests := map[string]struct {
-		msgs       []model.Message
-		expText    string
-		expRemain  int
+		msgs      []model.Message
+		expText   string
+		expRemain int
 	}{
 		"No checkpoint should return empty and unchanged messages.": {
 			msgs:      []model.Message{{ID: "m1", Kind: model.MessageKindUser}},
