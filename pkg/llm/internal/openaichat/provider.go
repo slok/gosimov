@@ -18,12 +18,13 @@ import (
 )
 
 type Config struct {
-	TokenSource llmauth.TokenSource
-	BaseURL     string
-	Model       string
-	ModelInfo   model.LLMModelInfo
-	ProviderID  string
-	Client      *http.Client
+	TokenSource     llmauth.TokenSource
+	BaseURL         string
+	Model           string
+	ModelInfo       model.LLMModelInfo
+	ProviderID      string
+	Client          *http.Client
+	ExtraBodyFields map[string]any
 }
 
 func (c *Config) defaults() error {
@@ -43,12 +44,13 @@ func (c *Config) defaults() error {
 }
 
 type Provider struct {
-	tokenSrc   llmauth.TokenSource
-	baseURL    string
-	model      string
-	modelInfo  model.LLMModelInfo
-	providerID string
-	client     *http.Client
+	tokenSrc        llmauth.TokenSource
+	baseURL         string
+	model           string
+	modelInfo       model.LLMModelInfo
+	providerID      string
+	client          *http.Client
+	extraBodyFields map[string]any
 }
 
 func New(cfg Config) (llm.Provider, error) {
@@ -57,12 +59,13 @@ func New(cfg Config) (llm.Provider, error) {
 	}
 
 	return &Provider{
-		tokenSrc:   cfg.TokenSource,
-		baseURL:    cfg.BaseURL,
-		model:      cfg.Model,
-		modelInfo:  cfg.ModelInfo,
-		providerID: cfg.ProviderID,
-		client:     cfg.Client,
+		tokenSrc:        cfg.TokenSource,
+		baseURL:         cfg.BaseURL,
+		model:           cfg.Model,
+		modelInfo:       cfg.ModelInfo,
+		providerID:      cfg.ProviderID,
+		client:          cfg.Client,
+		extraBodyFields: cfg.ExtraBodyFields,
 	}, nil
 }
 
@@ -79,9 +82,9 @@ func (p *Provider) Call(ctx context.Context, req llm.Request) (*llm.Response, er
 		body.PromptCacheKey = promptCacheKeyFromRequest(req)
 	}
 
-	bodyBytes, err := json.Marshal(body)
+	bodyBytes, err := marshalRequestBody(body, p.extraBodyFields)
 	if err != nil {
-		return nil, fmt.Errorf("marshaling request: %w", err)
+		return nil, fmt.Errorf("marshaling request body: %w", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, strings.TrimRight(p.baseURL, "/")+"/chat/completions", bytes.NewReader(bodyBytes))
@@ -124,6 +127,28 @@ func (p *Provider) Call(ctx context.Context, req llm.Request) (*llm.Response, er
 	msg.Metadata.Provider = p.providerID
 
 	return &llm.Response{Message: msg}, nil
+}
+
+func marshalRequestBody(body chatRequest, extraFields map[string]any) ([]byte, error) {
+	if len(extraFields) == 0 {
+		return json.Marshal(body)
+	}
+
+	b, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+
+	var payload map[string]any
+	if err := json.Unmarshal(b, &payload); err != nil {
+		return nil, err
+	}
+
+	for k, v := range extraFields {
+		payload[k] = v
+	}
+
+	return json.Marshal(payload)
 }
 
 func promptCacheKeyFromRequest(req llm.Request) string {
