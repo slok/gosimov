@@ -109,8 +109,10 @@ func (c *Compactor) Compact(ctx context.Context, messages []model.Message, opts 
 
 	// If there is a previous checkpoint inside the summarized window,
 	// feed its summary to the LLM so it can update incrementally.
-	previousSummary := latestSummaryText(split.toSummarize)
-	summary, usage, err := c.summarize(ctx, split.toSummarize, previousSummary, opts.CustomInstructions)
+	// extractLatestSummaryText also removes the compaction message from
+	// toSummarize so it's not duplicated in the conversation text.
+	previousSummary, toSummarize := extractLatestSummaryText(split.toSummarize)
+	summary, usage, err := c.summarize(ctx, toSummarize, previousSummary, opts.CustomInstructions)
 	if err != nil {
 		return nil, fmt.Errorf("summarizing context: %w", err)
 	}
