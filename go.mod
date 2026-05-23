@@ -6,7 +6,7 @@ require (
 	github.com/invopop/jsonschema v0.13.0
 	github.com/modelcontextprotocol/go-sdk v1.6.1
 	github.com/oklog/ulid/v2 v2.1.1
-	github.com/rs/zerolog v1.33.0
+	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.11.1
 	github.com/yuin/goldmark v1.7.16
 )
@@ -17,8 +17,8 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/google/jsonschema-go v0.4.3 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
-	github.com/mattn/go-colorable v0.1.13 // indirect
-	github.com/mattn/go-isatty v0.0.19 // indirect
+	github.com/mattn/go-colorable v0.1.14 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
