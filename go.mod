@@ -5,7 +5,7 @@ go 1.25.0
 require (
 	github.com/invopop/jsonschema v0.14.0
 	github.com/modelcontextprotocol/go-sdk v1.6.1
-	github.com/oklog/ulid/v2 v2.1.1
+	github.com/oklog/ulid/v2 v2.1.2
 	github.com/rs/zerolog v1.35.1
 	github.com/stretchr/testify v1.11.1
 	github.com/yuin/goldmark v1.8.2
